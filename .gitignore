@@ -1,0 +1,9 @@
+
+target
+/test-lmdb/
+
+Cargo.lock
+launch.json
+.vscode
+*.swp
+
