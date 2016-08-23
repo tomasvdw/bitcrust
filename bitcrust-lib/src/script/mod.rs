@@ -1,3 +1,5 @@
+//!
+
 
 pub mod context;
 
@@ -5,8 +7,8 @@ pub mod opcode;
 
 pub mod stack;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ScriptError {
-    Pop_Empty_Stack,
-    Numeric_Overflow,
+    StackUnderflow,
+    NumericOverflow,
 }

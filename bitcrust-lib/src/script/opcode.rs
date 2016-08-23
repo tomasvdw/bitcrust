@@ -13,10 +13,27 @@ use script::context::Context;
 
 struct OpCode {
         
-    name:     &'static str,
-    execute:  fn(&mut Context) -> Result<(), ScriptError>,
-    display:  fn(ctx: &mut Context, writer: &mut io::Write) -> io::Result<()>
+    name:        &'static str,
+    execute:     fn(&mut Context) -> Result<(), ScriptError>,
+    skip:        fn(ctx: &mut Context) -> Result<(), ScriptError>,
+    can_succeed: fn(ctx: &mut Context) -> Result<(), ScriptError>,
+    display:     fn(ctx: &mut Context, writer: &mut io::Write) -> io::Result<()>    
 }
+
+fn skip_none(ctx: &mut Context) -> Result<(), ScriptError> {
+    Ok(())
+}
+
+fn can_succeed_yes(ctx: &mut Context) -> Result<(), ScriptError> {
+    Ok(())
+}
+
+
+fn disp_name(ctx: &mut Context, writer: &mut io::Write) -> io::Result<()> {
+    let opcode = &OPCODES[ctx.script1[ctx.ip] as usize];
+    write!(writer, "{} ", opcode.name)
+}
+
 
 
 fn op_false(ctx: &mut Context) -> Result<(), ScriptError> {
@@ -31,7 +48,9 @@ fn op_add(ctx: &mut Context) -> Result<(), ScriptError> {
     
     
 }
-
+fn skip_pushdata(ctx: &mut Context) -> Result<(), ScriptError> {
+    Ok(())
+}
 
 fn op_pushdata(ctx: &mut Context) -> Result<(), ScriptError> {
     Ok(())
@@ -41,38 +60,35 @@ fn disp_pushdata(ctx: &mut Context,  writer: &mut io::Write) -> io::Result<()> {
     
     // the size of the data to push is count
     let count = ctx.script1[ctx.ip];
-    Result::Ok(())
+    
+    Ok(())
     
 }
 
-
-
-fn disp_name(ctx: &mut Context, writer: &mut io::Write) -> io::Result<()> {
-    let opcode = &OPCODES[ctx.script1[ctx.ip] as usize];
-    write!(writer, "{} ", opcode.name)
+pub fn run()  {
+    println!("{}", OPCODES[0].name);
 }
-
-static OP_FALSE : OpCode = OpCode { 
-    name:    "OP_FALSE",
-    display: disp_name,
-    execute: op_false,
- };
-
-
-static OP_PUSHDATA : OpCode = OpCode { 
-    name: "OP_PUSHDATA",     
-    execute: op_pushdata,        
-    display: disp_pushdata 
-};
-
-
-
-static OPCODES: [&'static OpCode; 16] = [
-    OpCode { name: "OP_FALSE",    display: disp_name,    execute: op_false,    skip: skip_single,   can_succeed: verify
- }
     
-    &OP_FALSE,    &OP_PUSHDATA, &OP_PUSHDATA, &OP_PUSHDATA, &OP_PUSHDATA, &OP_PUSHDATA, &OP_PUSHDATA, &OP_PUSHDATA,
-    &OP_PUSHDATA, &OP_PUSHDATA, &OP_PUSHDATA, &OP_PUSHDATA, &OP_PUSHDATA, &OP_PUSHDATA, &OP_PUSHDATA, &OP_PUSHDATA,
+
+
+
+static OPCODES: [OpCode; 16] = [
+    OpCode { name: "OP_FALSE",    display: disp_name,     execute: op_false,    skip: skip_none,     can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
+    OpCode { name: "OP_PUSHDATA", display: disp_pushdata, execute: op_pushdata, skip: skip_pushdata, can_succeed: can_succeed_yes },
 ];
 
 

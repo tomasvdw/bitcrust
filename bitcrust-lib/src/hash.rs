@@ -20,8 +20,8 @@ impl Debug for Hash256 {
             .map(|n| format!("{:02x}", n))
             .collect::<Vec<_>>()
             .concat();
-        try!(fmt.write_str(&x));
-        Ok(())
+            
+        fmt.write_str(&x)
     }
 }
 
