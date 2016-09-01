@@ -16,8 +16,11 @@ pub fn decode<T: serde::de::Deserialize>(buf: &[u8]) -> Result<T, DeserializeErr
     let mut deser = BinDeserializer::new(&mut cur);
     let result    = try!(T::deserialize(&mut deser));
     
+    
     // verify entire buffer has been consumed
     if deser.reader.position() != buf.len() as u64 {
+        println!("ERR: {}, {}", deser.reader.position(), buf.len());
+        
         Err(DeserializeError::IncorrectLength)
     }
     else {

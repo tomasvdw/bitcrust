@@ -46,7 +46,7 @@ fn read_block(rdr: &mut Read) -> Result<block::Block, std::io::Error> {
     let length     = try!(rdr.read_u32::<LittleEndian>());
     let mut buffer = vec![0; length as usize];
     
-    try!(rdr.read(&mut buffer));
+    try!(rdr.read_exact(&mut buffer));
     Ok(decode(&buffer).unwrap())
     
 }
@@ -55,10 +55,10 @@ fn read_block(rdr: &mut Read) -> Result<block::Block, std::io::Error> {
 
 fn main() {
     
-    let f = File::open("/home/tomas/.bitcoin/blocks/blk00000.dat").unwrap();
+    let f = File::open("/home/tomas/.bitcoin/blocks/blk00020.dat").unwrap();
     let mut rdr = BufReader::new(f);
 
-    for _ in 0..100 {
+    for _ in 0..1000 {
         let blk = read_block(&mut rdr).unwrap();
         
         println!("{:?}", blk);
@@ -68,7 +68,7 @@ fn main() {
         //println!("{}", serialized);
 
         
-        let hex = encode(&blk).unwrap();
+        //let hex = encode(&blk).unwrap();
         
         
         //println!("Block: {:?}", hex);

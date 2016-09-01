@@ -1,7 +1,7 @@
 
 use super::ScriptError;
 
-pub struct Stack(Vec<Vec<u8>>);
+pub struct Stack(Vec<Box<[u8]>>);
         
 
 impl Stack {
@@ -10,19 +10,33 @@ impl Stack {
         Stack(Vec::new())
     }
     
-    pub fn pop(&mut self) -> Result<Vec<u8>, ScriptError> {
+    /// Pops the top byte-vector from the stack
+    ///
+    /// Returns a StackUnderflow if no items are available
+    pub fn pop(&mut self) -> Result<Box<[u8]>, ScriptError> {
         self.0.pop()
-            .ok_or(ScriptError::StackUnderflow)
-         
+            .ok_or(ScriptError::StackUnderflow)         
     }
     
-    pub fn push(&mut self, data: Vec<u8>) -> Result<(), ScriptError> {
+    /// Pushes the given byte-array on the stack
+    ///
+    /// Does not return an error; stack-overflows should be handled by the caller
+    pub fn push(&mut self, data: Box<[u8]>) -> Result<(), ScriptError> {
         self.0.push(data);
         Ok(())
     }
     
     /// Pops a value of the stack, interprets its as a scriptnum
     /// and returns it as a i64
+    ///
+    /// The stack contains byte-arrays.
+    /// Scriptnums are stored as little-endian, sign-and-magnitude
+    /// which means that the highest bit of the last byte of the stack-item
+    /// determines the sign.
+    /// Numbers larger then 4 bytes can be pushed but not popped
+    /// This gives a range of -0x7fffffff to +0x7fffffff
+    ///
+    /// Can return a stack-underflow if no items are on the stack
     ///
     pub fn pop_scriptnum(&mut self) -> Result<i64, ScriptError> {
         let bytes = try!(self.pop());
@@ -56,10 +70,15 @@ impl Stack {
         )   
     }
     
+    /// Stores a scriptnum on the stack
+    /// in signed-magnitude format (see pop_scriptnum)
+    /// 
+    /// If the value is more then 4-bytes,
+    /// it will not be possible to read it back as a scriptnum 
     pub fn push_scriptnum(&mut self, n: i64) -> Result<(), ScriptError> {
         
         if n == 0 {
-            self.0.push(vec![]);
+            self.0.push(Box::new([]));
             return Ok(());
         }
 
@@ -78,7 +97,7 @@ impl Stack {
         // push last with sign-byte
         result.push(((magnitude & 0xFF) as u8) | sign_byte);
         
-        self.0.push(result);
+        self.0.push(result.into_boxed_slice());
         Ok(())
     }
     
@@ -90,9 +109,6 @@ mod test {
     use super::*;
     use script::ScriptError;
     
-    
-
-
     #[test]
     fn test_push() {
         let mut stack = Stack::new();

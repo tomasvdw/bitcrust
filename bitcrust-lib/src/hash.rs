@@ -17,6 +17,7 @@ impl Debug for Hash256 {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
         let x = self.0
             .iter()
+            .rev()
             .map(|n| format!("{:02x}", n))
             .collect::<Vec<_>>()
             .concat();
