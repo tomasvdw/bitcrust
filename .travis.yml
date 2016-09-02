@@ -1,3 +1,4 @@
 language: rust
 rust:
- - nightly
+  - 1.8.0
+
