@@ -85,7 +85,7 @@ mod tests {
     use std::fs::File;
     use std::io::{Read, BufReader, Error, Cursor};
    // use rustc_serialize::hex::ToHex;
-    
+    /*
     #[test]
     fn test_read_block() {
         let f = File::open("/home/tomas/.bitcoin/blocks/blk00000.dat").unwrap();
@@ -105,4 +105,5 @@ mod tests {
         
         });
     }
+    */
 }
