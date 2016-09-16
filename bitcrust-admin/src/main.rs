@@ -58,10 +58,11 @@ fn main() {
     let f = File::open("/home/tomas/.bitcoin/blocks/blk00020.dat").unwrap();
     let mut rdr = BufReader::new(f);
 
-    for _ in 0..1000 {
+    for _ in 0..10000 {
         let blk = read_block(&mut rdr).unwrap();
         
-        println!("{:?}", blk);
+        
+        //println!("{:?}", blk);
        
         let serialized = serde_json::to_string(&blk.header).unwrap();
 
@@ -90,5 +91,10 @@ mod tests {
         
         let serialized = super::serde_json::to_string(&blk.header).unwrap();
 
+    }
+
+    #[bench]
+    fn bench_read(b: &mut Bencher) {
+        
     }
 }

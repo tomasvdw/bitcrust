@@ -109,8 +109,8 @@ mod tests {
         let script = vec![0x00];
         let ctx = Context::new(&script);
         
-        ctx.xx();
-        ctx.xx();
+        
+        
         
     }
 }

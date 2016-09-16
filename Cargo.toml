@@ -9,12 +9,12 @@ name = "bitcrust_lib"
 path = "bitcrust-lib/src/lib.rs"
 
 [dependencies]
+lmdb-rs = "0.7"
+serde = "0.8"
+serde_json = "0.8"
+serde_macros = "0.8"
+byteorder = "0.5"
 rustc-serialize = "0.3"
-byteorder = "0.4"
-lmdb-rs = "0.5"
-serde = "0.7"
-serde_json = "0.7"
-serde_macros = "0.7"
 
 [[bin]]
 name = "bitcrust_admin"

@@ -3,14 +3,12 @@
 
 /// 2016 Tomas, no rights reserved, no warranties given
 
-extern crate rustc_serialize;
 
 
 use hash::{Hash256};
 use transaction::{Transaction};
 
 use serde::{Serializer,Deserializer};
-
 
 
 /// BlockHeader represents the header of a block
@@ -41,8 +39,9 @@ pub struct Block {
 
 #[cfg(test)]
 mod tests {
+    extern crate rustc_serialize;
     use std::io::Cursor;
-    use super::rustc_serialize::hex::FromHex;
+    use self::rustc_serialize::hex::FromHex;
     use std::mem;
     use lmdb_rs::{EnvBuilder, DbFlags};
     use decode;
@@ -59,7 +58,7 @@ mod tests {
                    1967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4\
                    f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000";
                    
-        let blk_bytes   = super::rustc_serialize::hex::FromHex::from_hex(hex).unwrap();     
+        let blk_bytes   = rustc_serialize::hex::FromHex::from_hex(hex).unwrap();     
         let blk1: super::Block = decode::decode(&blk_bytes).unwrap();
         
         assert_eq!(blk1.header.version, 1);

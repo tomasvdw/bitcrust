@@ -30,7 +30,6 @@ extern crate serde;
 extern crate serde_json;
 
 extern crate lmdb_rs;
-extern crate byteorder;
 
 
 mod decode;

@@ -112,10 +112,10 @@ mod test {
     #[test]
     fn test_push() {
         let mut stack = Stack::new();
-        stack.push(Vec::new()).unwrap();
+        stack.push(Vec::new().into_boxed_slice()).unwrap();
         
         assert_eq!(1, stack.0.len());
-        assert!(stack.0[0].eq(&Vec::new()));
+        assert!(stack.0[0].eq(&Vec::new().into_boxed_slice()));
     }
 
     #[test]
@@ -134,7 +134,7 @@ mod test {
         assert_eq!(1, stack.0.last().unwrap().len());
         assert_eq!(0x81_u8, stack.0.last().unwrap()[0]);
 
-        assert!(stack.0.last().unwrap().eq(&vec![0x81u8]));
+        assert!(stack.0.last().unwrap().eq(&vec![0x81u8].into_boxed_slice()));
         
     
     }
@@ -142,16 +142,16 @@ mod test {
     #[test]
     fn test_pop_scriptnum() {
         let mut stack = Stack::new();
-        stack.push(vec![]).unwrap();
+        stack.push(vec![].into_boxed_slice()).unwrap();
         assert_eq!(0,stack.pop_scriptnum().unwrap());
 
-        stack.push(vec![0x81]).unwrap();
+        stack.push(vec![0x81].into_boxed_slice()).unwrap();
         assert_eq!(-1,stack.pop_scriptnum().unwrap());
         
-        stack.push(vec![0x03,0x81]).unwrap();
+        stack.push(vec![0x03,0x81].into_boxed_slice()).unwrap();
         assert_eq!(-259,stack.pop_scriptnum().unwrap());
 
-        stack.push(vec![0x03,0x81,0x04,0x01,0xde]).unwrap();
+        stack.push(vec![0x03,0x81,0x04,0x01,0xde].into_boxed_slice()).unwrap();
         assert_eq!(Err(ScriptError::NumericOverflow), stack.pop_scriptnum());
     }
 

@@ -168,6 +168,15 @@ impl<'a, 'b: 'a, R: io::Read + 'b> serde::de::SeqVisitor for SeqDeserializer<'a,
     }
 }
 
+/// Adds a function that is required but not implemented
+macro_rules! implement_unimplemented( ($func:ident) => {
+    fn $func<V>(&mut self, mut visitor: V) -> Result<V::Value, Self::Error> 
+        where V: serde::de::Visitor, 
+    {
+        unimplemented!();
+    }
+    
+};);
 
 
 // Implementation of the deserialization methods from Serde
@@ -182,6 +191,28 @@ impl<'a, T: io::Read > serde::Deserializer for BinDeserializer<'a, T> {
     {        
         unimplemented!();
     }
+
+    implement_unimplemented!(deserialize_bool);
+    implement_unimplemented!(deserialize_usize);
+    implement_unimplemented!(deserialize_isize);
+    implement_unimplemented!(deserialize_i8);
+    implement_unimplemented!(deserialize_i16);
+    implement_unimplemented!(deserialize_f32);
+    implement_unimplemented!(deserialize_f64);
+    implement_unimplemented!(deserialize_char);
+    implement_unimplemented!(deserialize_str);
+    implement_unimplemented!(deserialize_string);
+    implement_unimplemented!(deserialize_unit);
+    implement_unimplemented!(deserialize_option);
+    implement_unimplemented!(deserialize_bytes);
+    implement_unimplemented!(deserialize_map);
+    implement_unimplemented!(deserialize_ignored_any);
+    
+    
+   
+    
+    
+    
     
     // all needed primitives:
     
@@ -220,8 +251,14 @@ impl<'a, T: io::Read > serde::Deserializer for BinDeserializer<'a, T> {
     {
         visitor.visit_i64(read_primitive!(i64, self.reader , 8))
     }
+
+    fn deserialize_u64<V>(&mut self, mut visitor: V) -> Result<V::Value, Self::Error>
+            where V: serde::de::Visitor,
+    {
+        visitor.visit_u64(read_primitive!(u64, self.reader , 8))
+    }
         
-    fn deserialize_fixed_size_array<V>(&mut self,
+    fn deserialize_seq_fixed_size<V>(&mut self,
                                        _len: usize,
                                        mut visitor: V) -> Result<V::Value, Self::Error>
         where V: serde::de::Visitor,
@@ -260,7 +297,6 @@ impl<'a, T: io::Read > serde::Deserializer for BinDeserializer<'a, T> {
     
     // A tuple struct; same as struct but we mark it, such that 
     // seqs are will not be length prefixed inside 
-    #[inline]
     fn deserialize_tuple_struct<V>(&mut self,
                        _name: &'static str,
                        _: usize,
@@ -268,6 +304,51 @@ impl<'a, T: io::Read > serde::Deserializer for BinDeserializer<'a, T> {
         where V: serde::de::Visitor,
     {
        self.deserialize_struct(_name, &[], visitor)
+    }
+
+    fn deserialize_tuple<V>(&mut self,
+                      _len: usize,
+                      mut visitor: V) -> Result<V::Value, Self::Error>
+        where V: serde::de::Visitor,
+    {
+        unimplemented!();
+        
+    }
+
+    fn deserialize_unit_struct<V>(&mut self,
+                      name: &'static str,
+                      mut visitor: V) -> Result<V::Value, Self::Error>
+        where V: serde::de::Visitor,
+    {
+        unimplemented!();
+        
+    }
+
+    fn deserialize_newtype_struct<V>(&mut self,
+                      name: &'static str,
+                      mut visitor: V) -> Result<V::Value, Self::Error>
+        where V: serde::de::Visitor,
+    {
+        visitor.visit_newtype_struct(self)
+        
+    }
+
+    fn deserialize_struct_field<V>(&mut self,
+                      mut visitor: V) -> Result<V::Value, Self::Error>
+        where V: serde::de::Visitor,
+    {
+        unimplemented!();
+        
+    }
+
+    fn deserialize_enum<V>(&mut self,
+                       _enum: &'static str,
+                       _variants: &'static [&'static str],
+                      mut visitor: V) -> Result<V::Value, Self::Error>
+        where V: serde::de::EnumVisitor,
+    {
+        unimplemented!();
+        
     }
 }
 
