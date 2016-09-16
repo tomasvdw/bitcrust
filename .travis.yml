@@ -16,7 +16,7 @@ script:
   - |
       travis-cargo build &&
       travis-cargo test &&
-      travis-cargo bench &&
+      travis-cargo bench 
 
 after_success:
   # upload the documentation from the build with stable (automatically only actually
