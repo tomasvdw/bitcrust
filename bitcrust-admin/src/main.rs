@@ -1,3 +1,4 @@
+#![feature(test)]
 
 
 
@@ -79,6 +80,8 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    extern crate test;
+    use self::test::Bencher;
     use std::fs::File;
     use std::io::{Read, BufReader, Error, Cursor};
    // use rustc_serialize::hex::ToHex;
@@ -95,6 +98,11 @@ mod tests {
 
     #[bench]
     fn bench_read(b: &mut Bencher) {
+        b.iter(|| {
+            let f = File::open("/home/tomas/.bitcoin/blocks/blk00020.dat").unwrap();
+            let mut rdr = BufReader::new(f);
+            let _ = super::read_block(&mut rdr).unwrap();
         
+        });
     }
 }
