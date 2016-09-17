@@ -18,7 +18,7 @@ pub struct BlockHeader {
     version:     u32,
     prev_hash:   Hash256,
     merkle_root: Hash256,
-    time:        u32,
+    pub time:        u32,
     bits:        u32,
     nonce:       u32,    
 }
@@ -35,7 +35,11 @@ pub struct Block {
     pub txs:    Vec<Transaction>,
 }
 
+impl Block {
 
+
+
+}
 
 #[cfg(test)]
 mod tests {
@@ -75,7 +79,7 @@ mod tests {
         assert_eq!(it.next().unwrap(), &3);
                  
     }
-    /*
+
     #[test]
     fn test_blockheader_store()  {
         let hex = "0100000000000000000000000000000000000000000000000000000000000000\
@@ -110,5 +114,5 @@ mod tests {
             
         let name = db.get::<&str>(&"test").unwrap();
         assert_eq!(&name, &"aa");
-    }*/
+    }
 }

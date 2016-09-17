@@ -7,6 +7,7 @@ use serde;
 
 
 
+
 /// Decodes a slice encoded using bitcoin-protocol conventions
 /// into an in memory object 
 /// 
@@ -19,8 +20,7 @@ pub fn decode<T: serde::de::Deserialize>(buf: &[u8]) -> Result<T, DeserializeErr
     
     // verify entire buffer has been consumed
     if deser.reader.position() != buf.len() as u64 {
-        println!("ERR: {}, {}", deser.reader.position(), buf.len());
-        
+
         Err(DeserializeError::IncorrectLength)
     }
     else {

@@ -38,6 +38,7 @@ mod encode;
 pub use decode::decode;
 pub use encode::encode;
 
+pub use block::Block;
 
 mod hash;
 
@@ -45,6 +46,12 @@ pub mod transaction;
 pub mod block;
 pub mod script;
 
+mod store;
+
+mod config;
+
 use lmdb_rs::{Environment};
 
+pub fn block_store() {}
 
+}
