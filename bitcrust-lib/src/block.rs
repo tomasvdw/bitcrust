@@ -80,6 +80,8 @@ mod tests {
                  
     }
 
+
+    /*
     #[test]
     fn test_blockheader_store()  {
         let hex = "0100000000000000000000000000000000000000000000000000000000000000\
@@ -115,4 +117,5 @@ mod tests {
         let name = db.get::<&str>(&"test").unwrap();
         assert_eq!(&name, &"aa");
     }
+    */
 }

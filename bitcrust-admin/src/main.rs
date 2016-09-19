@@ -1,4 +1,4 @@
-
+#![feature(test)]
 use std::io;
 
 /*#![feature(custom_derive, plugin)]

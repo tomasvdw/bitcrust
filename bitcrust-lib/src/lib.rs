@@ -52,6 +52,4 @@ mod config;
 
 use lmdb_rs::{Environment};
 
-pub fn block_store() {}
 
-}
