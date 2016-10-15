@@ -5,50 +5,66 @@
 
 
 
-use hash::{Hash256};
-use transaction::{Transaction};
 
-use serde::{Serializer,Deserializer};
+use hash;
+use decode;
+//use transaction::{Transaction};
+
+
 
 
 /// BlockHeader represents the header of a block
-#[derive(Serialize, Deserialize, Debug)]
-pub struct BlockHeader {
-    
+pub struct BlockHeader<'a> {
+
     version:     u32,
-    prev_hash:   Hash256,
-    merkle_root: Hash256,
-    pub time:        u32,
+    prev_hash:   hash::Hash32<'a>,
+    merkle_root: hash::Hash32<'a>,
+    pub time:    u32,
     bits:        u32,
     nonce:       u32,    
 }
 
-pub enum BlockStatus {
-    Verified,
-    Unverified
+pub struct Block<'a> {
+
+    raw:        &'a[u8],
+
+    header:     BlockHeader<'a>,
+    txcount:    usize,
+
+    txs:        &'a[u8]
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Block {
-    pub header: BlockHeader,
-    pub txs:    Vec<Transaction>,
+impl<'a> decode::Parse<'a> for BlockHeader<'a> {
+
+    fn parse(buffer: &mut decode::Buffer<'a>) -> Result<BlockHeader<'a>, decode::EndOfBufferError> {
+
+        Ok(BlockHeader {
+            version:     try!(u32::parse(buffer)),
+            prev_hash:   try!(hash::Hash32::parse(buffer)),
+            merkle_root: try!(hash::Hash32::parse(buffer)),
+            time:        try!(u32::parse(buffer)),
+            bits:        try!(u32::parse(buffer)),
+            nonce:       try!(u32::parse(buffer))
+        })
+    }
 }
 
-impl Block {
 
-
-
-}
 
 #[cfg(test)]
 mod tests {
+
     extern crate rustc_serialize;
+
+    use super::*;
     use std::io::Cursor;
     use self::rustc_serialize::hex::FromHex;
     use std::mem;
     use lmdb_rs::{EnvBuilder, DbFlags};
+    use decode::Parse;
     use decode;
+    use transaction;
 
     #[test]
     fn test_blockheader_read()  {
@@ -61,23 +77,22 @@ mod tests {
                    6f722062616e6b73ffffffff0100f2052a01000000434104678afdb0fe554827\
                    1967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4\
                    f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000";
-                   
-        let blk_bytes   = rustc_serialize::hex::FromHex::from_hex(hex).unwrap();     
-        let blk1: super::Block = decode::decode(&blk_bytes).unwrap();
+
+        let slice = &rustc_serialize::hex::FromHex::from_hex(hex).unwrap();
+        let mut buf = decode::Buffer::new(slice);
+
+        let hdr = BlockHeader::parse(&mut buf).unwrap();
+        let txs: Vec<transaction::ParsedTx> = Vec::parse(&mut buf).unwrap();
+
+        for tx in &txs {
+            tx.verify_syntax().unwrap();
+        }
         
-        assert_eq!(blk1.header.version, 1);
-        assert_eq!(blk1.txs.len(), 1);
-        //assert_eq!(blk.txs[0].txs_in.len(), 1);
-        //assert_eq!(blk.txs[0].txs_out.len(), 1);
-        
-        let xx = [3u8; 16];
-        let mut st: u8;
-        
-        //let y = &xx;
-        let mut it = xx.iter();
-        st = *it.next().unwrap();
-        assert_eq!(it.next().unwrap(), &3);
-                 
+        assert_eq!(hdr.version, 1);
+        assert_eq!(txs.len(), 1);
+        assert_eq!(txs[0].txs_in.len(), 1);
+        assert_eq!(txs[0].txs_out.len(), 1);
+
     }
 
 

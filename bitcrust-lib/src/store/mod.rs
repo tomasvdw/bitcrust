@@ -6,10 +6,20 @@ use config;
 
 use std::path::Path;
 
+mod txfile;
+
+mod flatfile;
 
 struct Store {
+
+    // Indexes
     pub db_env: lmdb_rs::Environment,
-    pub db_handle: lmdb_rs::DbHandle
+    pub db_handle: lmdb_rs::DbHandle,
+
+    // Flat files
+    pub tx_file: txfile::TxFile
+
+
 }
 
 
@@ -24,8 +34,22 @@ impl Store {
 
         Store {
             db_env: env,
-            db_handle: handle
+            db_handle: handle,
+
+            tx_file: txfile::TxFile::new(path)
 
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::Store;
+    use config;
+
+    #[test]
+    fn test_store_new() {
+        let store = Store::new(&config::Config::new_test());
     }
 }

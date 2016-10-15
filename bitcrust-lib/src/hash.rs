@@ -1,19 +1,23 @@
 
 
 extern crate serde_json;
-
+use decode;
 use std::fmt::{Debug,Formatter,Error};
-use serde::{Serializer,Deserializer};
-
-#[derive(Serialize, Deserialize)]
-pub struct Hash256(
-    [u8; 32]);
 
 
+#[derive(PartialEq)]
+pub struct Hash32<'a>(pub &'a[u8]);
+
+impl<'a> decode::Parse<'a> for Hash32<'a> {
+    fn parse(buffer: &mut decode::Buffer<'a>) -> Result<Hash32<'a>, decode::EndOfBufferError> {
+        Ok(
+            Hash32(try!(buffer.parse_bytes(32)))
+        )
+    }
+}
 
 
-
-impl Debug for Hash256 {
+impl<'a> Debug for Hash32<'a> {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
         let x = self.0
             .iter()
@@ -32,9 +36,9 @@ mod test {
     use super::*;
     
     #[test]
-    fn test_format_hash256() {
+    fn test_format_hash32() {
         
-        println!("{:?}", Hash256([0;32]));
+        println!("{:?}", Hash32(&[0;32]));
     }
 }
 

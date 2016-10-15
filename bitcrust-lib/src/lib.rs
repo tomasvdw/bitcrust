@@ -25,18 +25,16 @@
 /// db.transactions.insert(tx);
 
 
-
+extern crate memmap;
 extern crate serde;
 extern crate serde_json;
 
 extern crate lmdb_rs;
-
+extern crate itertools;
 
 mod decode;
-mod encode;
+//mod encode;
 
-pub use decode::decode;
-pub use encode::encode;
 
 pub use block::Block;
 
@@ -52,4 +50,11 @@ mod config;
 
 use lmdb_rs::{Environment};
 
+pub fn add_block(_: &[u8]) {
+
+}
+
+pub fn add_transaction(_: &[u8]) {
+
+}
 

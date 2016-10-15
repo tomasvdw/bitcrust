@@ -30,8 +30,10 @@ pub fn read_block(rdr: &mut io::Read) -> Result<bitcrust_lib::Block, io::Error> 
 
     // TODO: We should actually make the error convertable
     // once we change decode to use streaming
-    bitcrust_lib::decode(&buffer)
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Incorrect length"))
+    unimplemented!();
+
+    //bitcrust_lib::decode(&buffer)
+    //    .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Incorrect length"))
 
 }
 

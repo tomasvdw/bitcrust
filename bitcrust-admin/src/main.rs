@@ -36,7 +36,6 @@ use std::io::{Read, BufReader};
 use std::fs::File;
 use byteorder::{ReadBytesExt, LittleEndian};
 use std::result::Result;
-use bitcrust_lib::{decode,encode};
 use bitcrust_lib::block;
 
 mod blk_file;
@@ -54,7 +53,7 @@ fn main() {
         
         //println!("{:?}", blk);
        
-        let serialized = serde_json::to_string(&blk.header).unwrap();
+        //let serialized = serde_json::to_string(&blk.header).unwrap();
 
         //println!("{}", serialized);
 
