@@ -1,14 +1,15 @@
 
-use std::fs;
+
 
 use lmdb_rs;
 use config;
 
 use std::path::Path;
 
-mod txfile;
 
+mod txfile;
 mod flatfile;
+mod flatfileset;
 
 struct Store {
 
@@ -25,7 +26,7 @@ struct Store {
 
 impl Store {
 
-    pub fn new(cfg: &config::Config) -> Store {
+    pub fn new(_: &config::Config) -> Store {
         let path = Path::new("test-lmdb");
 
         let env = lmdb_rs::EnvBuilder::new().open(&path, 0o777).unwrap();

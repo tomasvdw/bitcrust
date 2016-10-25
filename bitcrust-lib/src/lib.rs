@@ -1,7 +1,11 @@
 
 
 #![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
+#![feature(question_mark)]
+
+#![allow(dead_code)]
+
+
 
 //!
 //! Bitcrust main documentation
@@ -26,8 +30,6 @@
 
 
 extern crate memmap;
-extern crate serde;
-extern crate serde_json;
 
 extern crate lmdb_rs;
 extern crate itertools;
@@ -48,7 +50,6 @@ mod store;
 
 mod config;
 
-use lmdb_rs::{Environment};
 
 pub fn add_block(_: &[u8]) {
 

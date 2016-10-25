@@ -1,119 +1,140 @@
-
-use std::path::{Path,PathBuf};
-use std::mem;
-use std::slice;
 use std::fs;
-use std::io;
+use std::slice;
+use std::mem;
+use std::ptr;
 
+use std::path::{Path};
 use memmap;
 
+extern crate nix;
+use std::os::unix::io::AsRawFd;
+use self::nix::fcntl::{flock, FlockArg};
 
+pub struct FlatFile {
+    pub file: fs::File,
+    pub map:  memmap::Mmap,
+    pub ptr:  *mut u8
 
-///
-pub struct FlatFileSet {
-    path:       PathBuf,
-    prefix:     &'static str,
-    first_file: i16,
-    last_file:  i16,
-    maps:       Vec<Option<memmap::Mmap>>,
-
-    max_size:   u32,
-
-    start_size: u32,
 }
 
+impl FlatFile {
+    pub fn open(path: &Path) -> Self {
 
-struct FilenameParseError;
+        let file = fs::OpenOptions::new().read(true).write(true).append(true).open(path)
+            .expect(&format!("Failed to open file {:?} for writing", path));
 
-impl FlatFileSet {
+        let mut map = memmap::Mmap::open(&file, memmap::Protection::ReadWrite)
+            .expect("Failed to open memory map");
 
+        let ptr = map.mut_ptr();
 
-    /// Interprets the given name as
-    /// prefixNNNN where NNNN is big-endian
-    /// 16-bit signed int, and returns the number
-    fn filename_to_fileno(&self, name: &Path) -> Result<i16, FilenameParseError> {
-
-        fn charToHex(byte: u8) -> Result<i16, FilenameParseError> {
-            Ok(match byte {
-                b'A' ... b'F' => byte - b'A' + 10,
-                b'a' ... b'f' => byte - b'a' + 10,
-                b'0' ... b'9' => byte - b'0',
-                _             => return Err(FilenameParseError)
-            } as i16)
-        }
-
-        let name = name.file_name().ok_or(FilenameParseError);
-
-        return Ok(3);
-    }
-
-    /// Loads a fileset
-    ///
-    /// max_size is the size _after_ which to stop writing
-    /// this means it needs enough space
-    pub fn new(
-        path:   &Path,
-        prefix: &'static str,
-        max_size: u32,
-        start_size: u32) -> FlatFileSet {
-
-        if start_size == 0 || start_size > max_size {
-            panic!("Invalid start_size");
-        }
-
-        let dir = path
-            .read_dir()
-            .expect("Cannot read from data directory")
-            .map   (|direntry| direntry.unwrap().path())
-            .filter(|direntry| direntry.starts_with(prefix))
-            .map   (|direntry| direntry.starts_with(prefix))
-        ;
-
-
-
-        FlatFileSet {
-            path: PathBuf::from(path),
-            prefix: prefix,
-            max_size: max_size,
-            start_size: start_size,
-            maps: Vec::new(),
-            first_file: 0,
-            last_file: 0
+        FlatFile {
+            file: file,
+            map: map,
+            ptr: ptr
         }
     }
 
-    fn load_map(&self, fileno: i16) -> &memmap::Mmap {
-        unimplemented!();
+    pub fn lock(&mut self) {
+
+        let fd = self.file.as_raw_fd();
+        flock(fd, FlockArg::LockExclusive).unwrap();
     }
 
-    pub fn write(buffer: &[u8]) -> u64 {
+    pub fn unlock(&mut self) {
 
-        unimplemented!();
+        let fd = self.file.as_raw_fd();
+        flock(fd, FlockArg::Unlock).unwrap();
     }
 
-    pub fn read(&mut self, pos: u64) -> &[u8] {
+    pub fn get<T>(&self, filepos: usize) -> &'static T {
 
-        let file = (((pos >> 32) & 0xFFFF) as i32 - self.first_file as i32) as i16;
-        let filepos = (pos & 0x7FFFFFFF) as isize;
+        unsafe {
+            mem::transmute( self.ptr.offset(filepos as isize))
+        }
+    }
 
-        let map = match self.maps[file as usize] {
+    pub fn put<T>(&self, value: &T, filepos: usize) {
 
-            None        => { self.load_map(file) },
-            Some(ref m) => m
+        let target: &mut T = unsafe {
+            mem::transmute( self.ptr.offset(filepos as isize))
         };
 
-        let p = map.ptr();
-        let len: usize = unsafe {
-            (*p.offset(filepos) as usize) |
-            (*p.offset(filepos + 1) as usize) << 8 |
-            (*p.offset(filepos + 1) as usize) << 16 |
-            (*p.offset(filepos + 1) as usize) << 24
+        unsafe {
+            ptr::copy_nonoverlapping(value, target, 1);
+        };
+    }
+
+    pub fn get_bytes(&self, filepos: usize, size: usize) -> &'static [u8] {
+        unsafe {
+            slice::from_raw_parts(self.ptr.offset(filepos as isize), size)
+        }
+
+    }
+
+    pub fn put_bytes(&self, value: &[u8], filepos: usize) {
+
+        let target: &mut u8 = unsafe {
+            mem::transmute( self.ptr.offset(filepos as isize))
         };
 
-
-        let result = unsafe { slice::from_raw_parts(p, len) };
-
-        result
+        unsafe {
+            ptr::copy_nonoverlapping(value.get_unchecked(0), target, value.len());
+        };
     }
+
+    pub fn put_size(&self, size: u32) {
+        self.put(&size, 4)
+    }
+
+    pub fn get_size(&self) -> u32 {
+        *self.get(4)
+    }
+
 }
 
+#[cfg(test)]
+mod tests {
+    extern crate tempdir;
+
+    use std::path;
+    use std::path::PathBuf;
+    use std::fs;
+    use std::io::{Write};
+
+    use super::*;
+
+    #[test]
+    fn test_get() {
+        let buf = [1_u8, 0, 0, 0];
+
+        let dir = tempdir::TempDir::new("test1").unwrap();
+        let path = dir.path();
+        {
+            let _ = fs::File::create(path.join("tx-0001")).unwrap().write_all(&buf).unwrap();
+        }
+        let flatfile = FlatFile::open(&path.join("tx-0001"));
+
+        let val: &u32 = flatfile.get(0);
+        assert_eq!(*val, 1);
+
+    }
+
+    #[test]
+    fn test_seq() {
+        let buf = [1_u8, 0, 0, 0];
+
+        let dir = tempdir::TempDir::new("test1").unwrap();
+        let path = PathBuf::from(".");
+        {
+            let _ = fs::File::create(path.join("tx-0001")).unwrap().write_all(&buf).unwrap();
+        }
+        let flatfile = FlatFile::open(&path.join("tx-0001"));
+
+        let inval: u32 = 12;
+        flatfile.put(&inval, 100);
+        let val: &u32 = flatfile.get(100);
+        assert_eq!(*val, inval);
+
+    }
+}

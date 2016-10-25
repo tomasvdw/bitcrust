@@ -24,11 +24,11 @@ pub struct OpCode {
 }
 
 
-fn skip_none(ctx: &mut Context) -> Result<(), ScriptError> {
+fn skip_none(_: &mut Context) -> Result<(), ScriptError> {
     Ok(())
 }
 
-fn skip_invalid(ctx: &mut Context) -> Result<(), ScriptError> {
+fn skip_invalid(_: &mut Context) -> Result<(), ScriptError> {
     Err(ScriptError::InvalidOpcode)
 }
 
@@ -65,16 +65,16 @@ pub fn run()  {
     println!("{}", OPCODES[0].name);
 }
     
-fn op_unimplemented(ctx: &mut Context) -> Result<(), ScriptError> {
+fn op_unimplemented(_: &mut Context) -> Result<(), ScriptError> {
     unimplemented!()
 }
 
-fn skip_unimplemented(ctx: &mut Context) -> Result<(), ScriptError> {
+fn skip_unimplemented(_: &mut Context) -> Result<(), ScriptError> {
     unimplemented!()
 }
 
 
-fn op_invalid(ctx: &mut Context) -> Result<(), ScriptError> {
+fn op_invalid(_: &mut Context) -> Result<(), ScriptError> {
     Err(ScriptError::InvalidOpcode)
 }
 

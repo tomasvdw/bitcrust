@@ -1,5 +1,3 @@
-#![feature(test)]
-use std::io;
 
 /*#![feature(custom_derive, plugin)]
 #![plugin(serde_macros)]
@@ -25,7 +23,6 @@ fn main() {
 }
 
 */
-extern crate serde_json;
 
 extern crate bitcrust_lib;
 
@@ -34,7 +31,6 @@ extern crate byteorder;
 
 use std::io::{Read, BufReader};
 use std::fs::File;
-use byteorder::{ReadBytesExt, LittleEndian};
 use std::result::Result;
 use bitcrust_lib::block;
 
@@ -68,10 +64,6 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    extern crate test;
-    use self::test::Bencher;
-    use std::fs::File;
-    use std::io::{Read, BufReader, Error, Cursor};
    // use rustc_serialize::hex::ToHex;
     /*
     #[test]

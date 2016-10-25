@@ -1,5 +1,0 @@
-
-
-
-struct FlatFilePtr(u64);
-
