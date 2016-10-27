@@ -16,7 +16,7 @@ const MAGIC: u32 = 0xD9B4BEF9;
 
 /// Reads a block from a blk_file as used by
 /// bitcoin-core and various other implementations
-pub fn read_block(rdr: &mut io::Read) -> Result<bitcrust_lib::Block, io::Error> {
+pub fn read_block(rdr: &mut io::Read) -> Result<Vec<u8>, io::Error> {
 
     let magicnr    = try!(rdr.read_u32::<LittleEndian>());
     let length     = try!(rdr.read_u32::<LittleEndian>());
@@ -28,9 +28,10 @@ pub fn read_block(rdr: &mut io::Read) -> Result<bitcrust_lib::Block, io::Error> 
 
     try!(rdr.read_exact(&mut buffer));
 
-    // TODO: We should actually make the error convertable
-    // once we change decode to use streaming
-    unimplemented!();
+
+    Ok(buffer)
+
+
 
     //bitcrust_lib::decode(&buffer)
     //    .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Incorrect length"))

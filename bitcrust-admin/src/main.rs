@@ -40,13 +40,14 @@ mod blk_file;
 fn main() {
 
 
-    let f = File::open("/home/tomas/.bitcoin/blocks/blk00020.dat").unwrap();
+    let f = File::open("/home/tomas/.bitcoin/blocks/blk00000.dat").unwrap();
     let mut rdr = BufReader::new(f);
 
-    for _ in 0..100 {
+    for _ in 0..1000 {
         let blk = blk_file::read_block(&mut rdr).unwrap();
         
-        
+        bitcrust_lib::add_block(&blk);
+
         //println!("{:?}", blk);
        
         //let serialized = serde_json::to_string(&blk.header).unwrap();

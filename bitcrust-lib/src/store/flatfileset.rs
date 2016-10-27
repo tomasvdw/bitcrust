@@ -44,7 +44,7 @@ const MAGIC_FILEID:u32 = 0x62634D4B;
 
 /// A FilePtr consists of a 16-bits signed filenumber and a 32-bits unsigned file-position
 /// The first 16 bits are ignored
-#[derive(Copy,Clone,PartialEq)]
+#[derive(Copy,Clone,PartialEq,Eq,Hash)]
 pub struct FilePtr(u64);
 
 impl FilePtr {
@@ -127,9 +127,7 @@ fn find_min_max_filenumbers(path: &Path, prefix: &str) -> (i16,i16) {
         .read_dir()
         .expect("Cannot read from data directory")
         .map   (|direntry| direntry.unwrap().path())
-        .filter_map(|direntry|
-            filename_to_fileno(prefix, &direntry).ok())
-
+        .filter_map(|direntry| filename_to_fileno(prefix, &direntry).ok())
         .minmax();
 
     match minmax {
@@ -194,12 +192,12 @@ impl FlatFileSet {
     }
 
     // Creates the next file on disk
-    fn create_next_file(&self) {
+    fn create_next_file(&mut self) {
 
         let path = fileno_to_filename(
             &self.path,
             self.prefix,
-            self.last_file-1
+            self.last_file
         );
 
         // Create file on disk
@@ -214,7 +212,8 @@ impl FlatFileSet {
             flatfile.put_size(16);
         }
 
-
+        self.last_file += 1;
+        self.maps.push(None);
 
     }
 
@@ -223,28 +222,26 @@ impl FlatFileSet {
     /// Internally, this will ensure proper locking and creation of new files
     pub fn write(&mut self, buffer: &[u8]) -> FilePtr {
 
-        // Step one: if there are no files create one
+        // if there are no files at all, create the first
+        // note that this is not guarded by a lock,
+        // but it will happen only once.
         if self.first_file == self.last_file {
 
-            self.last_file += 1;
-            self.maps.push(None);
-
             self.create_next_file();
-
         }
 
         let fileno = self.last_file - 1;
 
-        // lock the file
+        // Lock the last-file
         self.get_flatfile(fileno).lock();
 
 
         let write_pos = self.get_flatfile(fileno).get_size();
 
+        // Not enough room?
         let result = if write_pos >= self.max_size {
 
             // create another file
-            self.last_file += 1;
             self.create_next_file();
 
             // call self recursively
@@ -255,17 +252,16 @@ impl FlatFileSet {
         } else {
 
             // we have enough room;
+            let flatfile = &mut self.get_flatfile(fileno);
 
-            // write length
+            // write length & data
             let len = buffer.len() as u32;
-            self.get_flatfile(fileno).put(&len, write_pos as usize);
-
-            // write value
-            self.get_flatfile(fileno).put_bytes(buffer, (write_pos + 4) as usize);
+            flatfile.put(&len, write_pos as usize);
+            flatfile.put_bytes(buffer, (write_pos + 4) as usize);
 
             // write new write-position
             let new_write_pos: u32 = write_pos + 4 + buffer.len() as u32;
-            self.get_flatfile(fileno).put_size(new_write_pos);
+            flatfile.put_size(new_write_pos);
 
             FilePtr::new(fileno, write_pos  )
         };
@@ -276,6 +272,7 @@ impl FlatFileSet {
 
     }
 
+    /// Reads the length-prefixed buffer at the given position
     pub fn read(&mut self, pos: FilePtr) -> &[u8] {
 
         let fileno   = pos.file_number();
@@ -328,11 +325,15 @@ fn test_fileno_to_filename() {
 #[cfg(test)]
 mod tests {
     extern crate tempdir;
+    extern crate rand;
+
 
     use std::fs;
+    use std::thread;
+    use std::collections;
     use std::path;
     use std::path::PathBuf;
-
+    use self::rand::Rng;
     use super::*;
 
 
@@ -357,6 +358,45 @@ mod tests {
 
     #[test]
     fn test_concurrent() {
+        let handles = (0..1000).map(|_|
+            thread::spawn(|| {
+                let mut rng = rand::thread_rng();
 
+                let dir = tempdir::TempDir::new("test1").unwrap();
+                let path = dir.path();
+                let mut ff = FlatFileSet::new(&path, "tx2-", 10_000_000, 9_000_000);
+
+                let mut map: collections::HashMap<FilePtr,  Vec<u8>> = collections::HashMap::new();
+
+                for _ in 0..10 {
+
+                    // create some nice data
+                    let size: usize = rng.gen_range(10, 10000);
+                    let mut buf = vec![0; size];
+                    rng.fill_bytes(&mut buf.as_mut_slice());
+
+                    let x = ff.write(buf.as_slice());
+
+                    map.insert(x, buf);
+
+
+                    // 3 gets
+                    for _ in 0..3 {
+                        let n: usize = rng.gen_range(0, map.len());
+
+                        let v = map.values().nth(n).unwrap().as_slice();
+                        let k = map.keys().nth(n).unwrap();
+
+                        assert_eq!(v, ff.read(*k));
+                    }
+
+                }
+            })
+        );
+
+        for h in handles {
+            h.join().unwrap();
+
+        }
     }
 }

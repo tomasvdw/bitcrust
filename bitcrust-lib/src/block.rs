@@ -8,12 +8,14 @@
 
 use hash;
 use decode;
-//use transaction::{Transaction};
+use decode::Parse;
+use transaction::ParsedTx;
 
 
 
 
 /// BlockHeader represents the header of a block
+#[derive(Debug)]
 pub struct BlockHeader<'a> {
 
     version:     u32,
@@ -24,15 +26,45 @@ pub struct BlockHeader<'a> {
     nonce:       u32,    
 }
 
+#[derive(Debug)]
 pub struct Block<'a> {
 
-    raw:        &'a[u8],
 
     header:     BlockHeader<'a>,
     txcount:    usize,
 
-    txs:        &'a[u8]
+    txs:        &'a[u8],
+    raw:        &'a[u8]
+
 }
+
+impl<'a> Block<'a> {
+
+    pub fn new(raw: &'a[u8]) -> Result<Block<'a>, decode::EndOfBufferError> {
+
+        let mut buf = decode::Buffer::new(raw);
+
+        Ok(Block {
+            raw:    raw,
+            header:   BlockHeader::parse(&mut buf)?,
+            txcount:  buf.parse_compact_size()?,
+            txs:      buf.inner
+        })
+    }
+
+    pub fn process_transactions<F>(&self, callback: F) -> Result<(), decode::EndOfBufferError>
+        where F : Fn(ParsedTx<'a>) -> Result<(), decode::EndOfBufferError> {
+
+        let mut buffer = decode::Buffer::new(self.txs);
+        for _ in 0..self.txcount {
+
+            callback(ParsedTx::parse(&mut buffer)?);
+        }
+
+        Ok(())
+    }
+}
+
 
 
 impl<'a> decode::Parse<'a> for BlockHeader<'a> {
@@ -49,6 +81,7 @@ impl<'a> decode::Parse<'a> for BlockHeader<'a> {
         })
     }
 }
+
 
 
 
@@ -77,6 +110,7 @@ mod tests {
                    6f722062616e6b73ffffffff0100f2052a01000000434104678afdb0fe554827\
                    1967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4\
                    f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000";
+
 
         let slice = &rustc_serialize::hex::FromHex::from_hex(hex).unwrap();
         let mut buf = decode::Buffer::new(slice);

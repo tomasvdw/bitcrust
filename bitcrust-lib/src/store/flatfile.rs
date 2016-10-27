@@ -6,18 +6,20 @@ use std::ptr;
 use std::path::{Path};
 use memmap;
 
+// nix used for locking
 extern crate nix;
 use std::os::unix::io::AsRawFd;
 use self::nix::fcntl::{flock, FlockArg};
 
 pub struct FlatFile {
-    pub file: fs::File,
-    pub map:  memmap::Mmap,
-    pub ptr:  *mut u8
-
+    file: fs::File,
+    map:  memmap::Mmap,
+    ptr:  *mut u8
 }
 
 impl FlatFile {
+
+    /// Opens the flatfile with the given path and loads the corresponding memory map
     pub fn open(path: &Path) -> Self {
 
         let file = fs::OpenOptions::new().read(true).write(true).append(true).open(path)

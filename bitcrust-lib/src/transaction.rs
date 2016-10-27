@@ -35,6 +35,7 @@ pub struct RawTx<'a> {
     raw: &'a[u8]
 }
 
+#[derive(Debug)]
 pub struct ParsedTx<'a> {
     pub version:   i32,
     pub txs_in:    Vec<TxInput<'a>>,
@@ -128,8 +129,8 @@ impl<'a> decode::Parse<'a> for TxOutput<'a> {
     fn parse(buffer: &mut decode::Buffer<'a>) -> Result<TxOutput<'a>, decode::EndOfBufferError> {
 
         Ok(TxOutput {
-            value:      try!(i64::parse(buffer)),
-            pk_script:  try!(buffer.parse_compact_size_bytes())
+            value:      i64::parse(buffer)?,
+            pk_script:  buffer.parse_compact_size_bytes()?
 
         })
     }
@@ -140,8 +141,8 @@ impl<'a> decode::Parse<'a> for TxOutput<'a> {
 
 impl<'a> fmt::Debug for TxInput<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        try!(write!(fmt, "Prev-TX:{:?}, idx={:?}, sq={:?} ", 
-            self.prev_tx_out.0,
+        try!(write!(fmt, "Prev-TX:{:?}, idx={:?}, seq={:?} script=",
+            self.prev_tx_out,
             self.prev_tx_out_idx,
             self.sequence));
         

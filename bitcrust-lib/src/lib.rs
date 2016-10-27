@@ -34,6 +34,8 @@ extern crate memmap;
 extern crate lmdb_rs;
 extern crate itertools;
 
+mod ffi;
+
 mod decode;
 //mod encode;
 
@@ -51,7 +53,20 @@ mod store;
 mod config;
 
 
-pub fn add_block(_: &[u8]) {
+pub fn add_block(buffer: &[u8]) {
+
+    let block = Block::new(buffer).unwrap();
+
+    println!("{:?}", block);
+
+    block.process_transactions(|tx| {
+
+        println!("{:?}", tx);
+
+        Ok(())
+
+    }).unwrap();
+
 
 }
 
@@ -59,3 +74,8 @@ pub fn add_transaction(_: &[u8]) {
 
 }
 
+pub mod test {
+    pub fn xx() {
+
+    }
+}

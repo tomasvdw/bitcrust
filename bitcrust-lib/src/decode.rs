@@ -6,7 +6,7 @@ pub struct EndOfBufferError;
 
 #[derive(Clone,Copy,Debug)]
 pub struct Buffer<'a> {
-    inner: &'a[u8]
+    pub inner: &'a[u8]
 }
 
 
@@ -35,6 +35,7 @@ impl<'a> Buffer<'a> {
     pub fn len(self) -> usize {
         self.inner.len()
     }
+
 
     pub fn consumed_since(self, original: Buffer) -> Buffer {
         let len = original.inner.len() - self.inner.len();

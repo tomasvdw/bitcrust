@@ -3,7 +3,6 @@ name = "bitcrust"
 version = "0.1.0"
 authors = ["Tomas van der Wansem <tomas@tomasvdw.nl>"]
 
-
 [lib]
 name = "bitcrust_lib"
 path = "bitcrust-lib/src/lib.rs"
@@ -19,6 +18,7 @@ nix = "0.7.0"
 
 [dev-dependencies]
 tempdir = "0.3"
+rand = "0.3"
 
 
 

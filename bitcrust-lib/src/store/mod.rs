@@ -1,4 +1,6 @@
 
+mod flatfile;
+mod flatfileset;
 
 
 use lmdb_rs;
@@ -6,41 +8,53 @@ use config;
 
 use std::path::Path;
 
+use self::flatfileset::FlatFileSet;
 
-mod txfile;
-mod flatfile;
-mod flatfileset;
+
 
 struct Store {
 
     // Indexes
-    pub db_env: lmdb_rs::Environment,
+    pub db_env:    lmdb_rs::Environment,
     pub db_handle: lmdb_rs::DbHandle,
 
     // Flat files
-    pub tx_file: txfile::TxFile
-
+    pub file_transactions: FlatFileSet,
+//    pub file_blockheaders: FlatFileSet,
+//    pub file_spenttree:    FlatFileSet,
 
 }
 
 
 impl Store {
 
-    pub fn new(_: &config::Config) -> Store {
-        let path = Path::new("test-lmdb");
+    pub fn new(cfg: &config::Config) -> Store {
+
+
+        let path = &cfg.root;
 
         let env = lmdb_rs::EnvBuilder::new().open(&path, 0o777).unwrap();
-
         let handle = env.get_default_db(lmdb_rs::DbFlags::empty()).unwrap();
 
         Store {
             db_env: env,
             db_handle: handle,
 
-            tx_file: txfile::TxFile::new(path)
+            file_transactions: FlatFileSet::new(
+                &cfg.root.clone().join("transactions"),
+                "tx-",
+                1024 * 1024 * 1024,
+                1024 * 1024 * 1024 - 10 * 1024 * 1024
+            )
 
         }
     }
+}
+
+
+#[cfg(test)]
+pub fn test_store() {
+
 }
 
 
