@@ -24,19 +24,20 @@ pub trait Parse<'a>
 
 impl<'a> Buffer<'a> {
 
+    /// Constructs a buffer from a slice
+    /// The buffer makes the slice Copyable
     pub fn new(slice: &'a[u8]) -> Self {
         Buffer {
             inner: slice
         }
     }
 
-
-
     pub fn len(self) -> usize {
         self.inner.len()
     }
 
-
+    /// Returns the buffer of what is contained in `original` that is no longer
+    /// in self. That is: returns whatever is consumed since original
     pub fn consumed_since(self, original: Buffer) -> Buffer {
         let len = original.inner.len() - self.inner.len();
         Buffer {
@@ -44,6 +45,8 @@ impl<'a> Buffer<'a> {
         }
     }
 
+    /// Parse a compact size
+    /// This can be 1-8 bytes; see bitcoin-spec for details
     pub fn parse_compact_size(&mut self) -> Result<usize, EndOfBufferError> {
         let byte1 = { try!(u8::parse(self)) };
         Ok(match byte1 {
@@ -54,11 +57,13 @@ impl<'a> Buffer<'a> {
         })
     }
 
+    /// Parses given amount of bytes
     pub fn parse_bytes(&mut self, count: usize) -> Result<&'a[u8], EndOfBufferError> {
         if self.inner.len() < count {
             return Err(EndOfBufferError);
         }
 
+        // split in result, and remaining
         let result = &self.inner[..count];
         self.inner = &self.inner[count..];
 
@@ -76,6 +81,8 @@ impl<'a> Buffer<'a> {
 
 
 impl<'a, T : Parse<'a>> Parse<'a> for Vec<T> {
+
+    /// Parses a compact-size prefix vector of parsable stuff
     fn parse(buffer: &mut Buffer<'a>) -> Result<Vec<T>, EndOfBufferError> {
 
         let count = try!(buffer.parse_compact_size());

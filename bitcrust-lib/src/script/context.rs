@@ -32,13 +32,10 @@ impl<'a> Context<'a> {
     }
     
     pub fn run(&mut self) -> Result<(), ScriptError> {
-        Ok(())
+        unimplemented!();
     }
 
-    pub fn xx(&mut self) {
-        self.ip += 1;
-    }
-    
+
     /// Returns the bytes of the script pointed to by the current
     /// ip (instruction pointer), and increases the ip to the last
     /// byte returned

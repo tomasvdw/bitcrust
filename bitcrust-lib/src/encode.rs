@@ -1,3 +1,8 @@
+// Experimental serializer using Serde
+
+// CURRENTLY UNUSED
+
+
 use std::io;
 use std::mem;
 use std::error;

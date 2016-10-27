@@ -7,7 +7,10 @@ use std::fmt::{Debug,Formatter,Error};
 #[derive(PartialEq)]
 pub struct Hash32<'a>(pub &'a[u8]);
 
+
 impl<'a> decode::Parse<'a> for Hash32<'a> {
+
+    /// Parses the hash from a buffer; with 0-copy
     fn parse(buffer: &mut decode::Buffer<'a>) -> Result<Hash32<'a>, decode::EndOfBufferError> {
         Ok(
             Hash32(try!(buffer.parse_bytes(32)))
