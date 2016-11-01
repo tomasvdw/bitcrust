@@ -9,6 +9,13 @@ pub struct Buffer<'a> {
     pub inner: &'a[u8]
 }
 
+/// Trait implemented for types that can be converted to a raw slice
+/// Normally this is done by keeping the raw slice as part of the data structur
+pub trait ToRaw<'a>
+{
+    fn to_raw(&self) -> &[u8];
+}
+
 
 /// Trait implemented for types that can read itself from a Buffer
 ///

@@ -34,6 +34,8 @@ extern crate memmap;
 extern crate lmdb_rs;
 extern crate itertools;
 
+use std::sync;
+
 mod ffi;
 
 mod decode;
@@ -51,17 +53,27 @@ pub mod script;
 mod store;
 
 mod config;
+use store::Store;
 
+use decode::*;
 
-pub fn add_block(buffer: &[u8]) {
+pub fn init() -> Store {
+    let config = config::Config::new_test();
+    Store::new(&config)
+}
+
+pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
     let block = Block::new(buffer).unwrap();
+    //let store = sync::Mutex::new(store);
 
     println!("{:?}", block);
 
     block.process_transactions(|tx| {
 
         println!("{:?}", tx);
+
+        store.file_transactions.write(tx.to_raw());
 
         Ok(())
 

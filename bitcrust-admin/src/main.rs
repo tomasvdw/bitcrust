@@ -45,8 +45,9 @@ fn main() {
 
     for _ in 0..1000 {
         let blk = blk_file::read_block(&mut rdr).unwrap();
-        
-        bitcrust_lib::add_block(&blk);
+
+        let mut store = bitcrust_lib::init();
+        bitcrust_lib::add_block(&mut store, &blk);
 
         //println!("{:?}", blk);
        

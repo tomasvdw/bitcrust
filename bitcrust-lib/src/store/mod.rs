@@ -12,7 +12,7 @@ use self::flatfileset::FlatFileSet;
 
 
 
-struct Store {
+pub struct Store {
 
     // Indexes
     pub db_env:    lmdb_rs::Environment,

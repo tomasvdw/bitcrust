@@ -14,18 +14,18 @@ impl Config {
         unimplemented!();
     }
 }
-
+impl Config {
+    pub fn new_test() -> Config {
+        Config {
+            root: PathBuf::from("tmp")
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    impl Config {
-        pub fn new_test() -> Config {
-            Config {
-                root: PathBuf::from("tmp")
-            }
-        }
-    }
+
 }

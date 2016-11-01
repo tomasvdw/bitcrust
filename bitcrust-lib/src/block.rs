@@ -21,7 +21,7 @@ pub struct BlockHeader<'a> {
     version:     u32,
     prev_hash:   hash::Hash32<'a>,
     merkle_root: hash::Hash32<'a>,
-    pub time:    u32,
+    time:        u32,
     bits:        u32,
     nonce:       u32,    
 }
@@ -33,13 +33,19 @@ pub struct Block<'a> {
     header:     BlockHeader<'a>,
     txcount:    usize,
 
+    // unparsed slice containing all transactions
     txs:        &'a[u8],
+
+    // the full block as slice
     raw:        &'a[u8]
 
 }
 
 impl<'a> Block<'a> {
 
+    /// Parses the block from a raw blob
+    ///
+    /// The transactions will not be parsed yet, and simply stored as a slice
     pub fn new(raw: &'a[u8]) -> Result<Block<'a>, decode::EndOfBufferError> {
 
         let mut buf = decode::Buffer::new(raw);
@@ -52,8 +58,10 @@ impl<'a> Block<'a> {
         })
     }
 
-    pub fn process_transactions<F>(&self, callback: F) -> Result<(), decode::EndOfBufferError>
-        where F : Fn(ParsedTx<'a>) -> Result<(), decode::EndOfBufferError> {
+    /// Parses each transaction in the block, and executes the callback for each
+    ///
+    pub fn process_transactions<F>(&self, mut callback: F) -> Result<(), decode::EndOfBufferError>
+        where F : FnMut(ParsedTx<'a>) -> Result<(), decode::EndOfBufferError> {
 
         let mut buffer = decode::Buffer::new(self.txs);
         for _ in 0..self.txcount {
@@ -61,14 +69,21 @@ impl<'a> Block<'a> {
             callback(ParsedTx::parse(&mut buffer)?);
         }
 
-        Ok(())
+        if buffer.len() > 0  {
+
+            // Buffer not fully consumed
+            Err(decode::EndOfBufferError)
+        }
+        else {
+            Ok(())
+        }
     }
 }
 
 
-
 impl<'a> decode::Parse<'a> for BlockHeader<'a> {
 
+    /// Parses the block-header
     fn parse(buffer: &mut decode::Buffer<'a>) -> Result<BlockHeader<'a>, decode::EndOfBufferError> {
 
         Ok(BlockHeader {

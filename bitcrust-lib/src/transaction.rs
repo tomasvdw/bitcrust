@@ -66,6 +66,12 @@ impl<'a> decode::Parse<'a> for ParsedTx<'a> {
     }
 }
 
+impl<'a> decode::ToRaw<'a> for ParsedTx<'a> {
+    fn to_raw(&self) -> &[u8] {
+        self.raw.inner
+    }
+}
+
 impl<'a> ParsedTx<'a> {
 
     /// Performs basic syntax checks on the transaction
@@ -92,6 +98,11 @@ impl<'a> ParsedTx<'a> {
         }
 
         Ok(())
+    }
+
+    pub fn is_coinbase(&self) -> bool {
+
+        self.txs_in.len() == 1 && self.txs_in[0].prev_tx_out.is_null()
     }
 
 

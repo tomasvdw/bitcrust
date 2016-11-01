@@ -209,11 +209,16 @@ impl FlatFileSet {
         // Set length value in header
         {
             let mut flatfile = FlatFile::open(&path);
+            flatfile.put(&MAGIC_FILEID, 0);
             flatfile.put_size(16);
         }
 
         self.last_file += 1;
         self.maps.push(None);
+
+    }
+
+    pub fn something(&self) {
 
     }
 

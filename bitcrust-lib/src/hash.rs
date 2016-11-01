@@ -18,6 +18,14 @@ impl<'a> decode::Parse<'a> for Hash32<'a> {
     }
 }
 
+impl<'a> Hash32<'a> {
+
+    /// Returns true if this hash consists only of zeros
+    pub fn is_null(&self) -> bool {
+        self.0.iter().all(|x| *x == 0)
+    }
+}
+
 
 impl<'a> Debug for Hash32<'a> {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
