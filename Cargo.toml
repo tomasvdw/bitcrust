@@ -14,7 +14,6 @@ rustc-serialize = "0.3"
 itertools = "0.5.1"
 memmap = "0.4"
 libc = "0.2.16"
-nix = "0.7.0"
 rand = "0.3"
 
 [dev-dependencies]

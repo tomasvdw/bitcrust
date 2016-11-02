@@ -5,19 +5,15 @@ use std::ptr;
 use std::thread;
 use std::time;
 use std::sync::atomic;
-use std::sync::atomic::AtomicU32;
 use std::io::Write;
 
 
 use std::path::{Path};
 use memmap;
 
-use rand;
-use rand::Rng;
-
-const WRITEPOS_OFFSET: isize = 4;
-const MAGIC_FILEID:u32       = 0x62634D4B;
-const INITIAL_WRITEPOS:u32   = 0x10;
+const WRITEPOS_OFFSET  : isize = 4;
+const MAGIC_FILEID     : u32   = 0x62634D4B;
+const INITIAL_WRITEPOS : u32   = 0x10;
 
 pub struct FlatFile {
 
@@ -53,7 +49,7 @@ impl FlatFile {
     fn open_or_create(path: &Path, size: u32) -> fs::File {
 
         // first we try creating a new file
-        let mut create_result = fs::OpenOptions::new().read(true).write(true).create_new(true).open(path);
+        let create_result = fs::OpenOptions::new().read(true).write(true).create_new(true).open(path);
 
         if let Ok(mut new_file) = create_result {
 
@@ -62,10 +58,16 @@ impl FlatFile {
             // we use transmute to ensure we're using native-endianness
             let magic:    &[u8;4] = unsafe { mem::transmute( &MAGIC_FILEID) };
             let writepos: &[u8;4] = unsafe { mem::transmute( &INITIAL_WRITEPOS) };
-            new_file.write_all(magic);
-            new_file.write_all(writepos);
 
-            new_file.set_len(size as u64);
+            new_file.write_all(magic)
+                .expect(&format!("Could not write header to {}", path.to_str().unwrap_or("")));
+
+            new_file.write_all(writepos)
+                .expect(&format!("Could not write header to {}", path.to_str().unwrap_or("")));
+
+
+            new_file.set_len(size as u64)
+                .expect(&format!("Could not allocate {} bytes for {}", size, path.to_str().unwrap_or("")));
 
             return new_file;
         }
@@ -161,8 +163,6 @@ impl FlatFile {
 mod tests {
     extern crate tempdir;
 
-    use std::path;
-    use std::path::PathBuf;
     use std::fs;
     use std::io::{Write};
 

@@ -2,15 +2,11 @@
 
 
 
-store_transaction()
+Binary:
 
-  Save transanction in tx.dat
+256 million = 2 ^ 32
 
-  S
+32 levels deep
 
-store_block()
-
-  store_transaction() new txs
-
-  store blockheader in
+https://en.wikipedia.org/wiki/Hopscotch_hashing
 

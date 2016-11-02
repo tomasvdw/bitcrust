@@ -29,10 +29,8 @@ extern crate bitcrust_lib;
 extern crate byteorder;
 
 
-use std::io::{Read, BufReader};
+use std::io::BufReader;
 use std::fs::File;
-use std::result::Result;
-use bitcrust_lib::block;
 
 mod blk_file;
 

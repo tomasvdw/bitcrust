@@ -4,7 +4,7 @@
 //! Each file of the set has a fixed size
 //! The header of a file consists of 16 bytes
 //! Byte 0-3 are a magic number
-//! Byte 4-7 indicate the current write position as a host-endian 32-bit integer
+//! Byte 4-7 indicate the current write position as a native-endian 32-bit integer
 //! The other bytes of the header are reserved
 //!
 //! The flatfiles are suffixed with 4 hex-digits indicating the filenumber
@@ -13,15 +13,9 @@
 //!
 
 use std::path::{Path,PathBuf};
-use std::slice;
-use std::fs;
-use std::io;
-
-use std::io::{Write};
 
 use itertools::Itertools;
 use itertools::MinMaxResult::{NoElements, OneElement, MinMax};
-
 
 use store::flatfile::FlatFile;
 
@@ -34,7 +28,7 @@ pub struct FlatFileSet {
     prefix:     &'static str,
     first_file: i16,
     last_file:  i16,
-    maps:       Vec<Option<FlatFile>>,
+    files:       Vec<Option<FlatFile>>,
 
     start_size: u32,
     max_size:   u32,
@@ -42,7 +36,8 @@ pub struct FlatFileSet {
 
 
 /// A FilePtr consists of a 16-bits signed filenumber and a 32-bits unsigned file-position
-/// The first 16 bits are ignored
+/// This in memorry representation is 64-bit where the first 16 bits are ignored
+
 #[derive(Copy,Clone,PartialEq,Eq,Hash,Debug)]
 pub struct FilePtr(u64);
 
@@ -107,7 +102,7 @@ fn filename_to_fileno(prefix: &str, name: &Path) -> Result<i16, FilenameParseErr
     )
 }
 
-/// Constructs a pathname from a fileno
+/// Constructs a pathname from a filenumber
 fn fileno_to_filename(path: &Path, prefix: &str, fileno: i16) -> PathBuf {
 
     PathBuf::from(path)
@@ -143,23 +138,25 @@ impl FlatFileSet {
     /// Loads a fileset
     ///
     /// max_size is the size _after_ which to stop writing
-    /// this means it needs enough space the largest possible write
+    /// this means that files_size-max_size must be big enough to hold the largest possible write
     pub fn new(
         path:   &Path,
         prefix: &'static str,
-        start_size: u32,
+        file_size: u32,
         max_size: u32)
-    -> FlatFileSet {
+        -> FlatFileSet {
 
+        assert!(file_size >= max_size);
+
+        // Find the range of files currently on disk
         let (min,max) = find_min_max_filenumbers(path, prefix);
-
 
         FlatFileSet {
             path:       PathBuf::from(path),
             prefix:     prefix,
-            start_size: start_size,
+            start_size: file_size,
             max_size:   max_size,
-            maps:       (min..max).map(|_| None).collect(),
+            files:       (min..max).map(|_| None).collect(),
             first_file: min,
             last_file:  max
         }
@@ -167,13 +164,13 @@ impl FlatFileSet {
 
     /// Returns a mutable reference to the given Flatfile
     ///
-    /// Opens it first if needed
+    /// Opens it if needed
     fn get_flatfile(&mut self, fileno: i16) -> &mut FlatFile {
 
         // convert filenumber to index in file-vector
         let file_idx = (fileno - self.first_file) as usize;
 
-        if self.maps[file_idx].is_none() {
+        if self.files[file_idx].is_none() {
 
             let name = fileno_to_filename(
                 &self.path,
@@ -181,19 +178,19 @@ impl FlatFileSet {
                 fileno
             );
 
-            self.maps[file_idx] = Some(FlatFile::open(
+            self.files[file_idx] = Some(FlatFile::open(
                 &name,
                 self.start_size
             ));
         }
 
-        self.maps[file_idx].as_mut().unwrap()
+        self.files[file_idx].as_mut().unwrap()
 
     }
 
     /// Appends the slice to the flatfileset and returns a filepos
     ///
-    /// Internally, this will ensure proper locking and creation of new files
+    /// Internally, this will ensure creation of new files
     pub fn write(&mut self, buffer: &[u8]) -> FilePtr {
 
 
@@ -211,8 +208,8 @@ impl FlatFileSet {
         match write_pos {
             None => {
 
-                // create another file
-                self.maps.push(None);
+                // we will create space for another file
+                self.files.push(None);
                 self.last_file += 1;
 
                 // call self using the new new last_file
@@ -221,10 +218,9 @@ impl FlatFileSet {
             }
 
             Some(pos) => {
-                // we have enough room;
-                let flatfile = &mut self.get_flatfile(fileno);
 
-                // write length & data
+                // We have enough room; write length & data
+                let flatfile = &mut self.get_flatfile(fileno);
                 flatfile.put(&buffer_len, pos as usize);
                 flatfile.put_bytes(buffer, (pos + 4) as usize);
 
@@ -290,10 +286,8 @@ mod tests {
     extern crate rand;
 
 
-    use std::fs;
     use std::thread;
     use std::collections;
-    use std::path;
     use std::path::PathBuf;
     use self::rand::Rng;
     use super::*;

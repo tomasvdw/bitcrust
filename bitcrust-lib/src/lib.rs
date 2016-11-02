@@ -36,7 +36,6 @@ extern crate lmdb_rs;
 extern crate itertools;
 extern crate rand;
 
-use std::sync;
 
 mod ffi;
 
