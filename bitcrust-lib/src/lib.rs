@@ -36,6 +36,7 @@ extern crate lmdb_rs;
 extern crate itertools;
 extern crate rand;
 
+extern crate ring;
 
 mod ffi;
 
@@ -74,7 +75,11 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
         println!("{:?}", tx);
 
-        store.file_transactions.write(tx.to_raw());
+        let hash = hash::double_sha256(tx.to_raw());
+
+        let pos = store.file_transactions.write(tx.to_raw());
+
+        store.index.set(hash.as_ref(), pos);
 
         Ok(())
 

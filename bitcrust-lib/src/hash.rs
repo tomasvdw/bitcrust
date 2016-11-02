@@ -2,14 +2,23 @@
 
 use decode;
 use std::fmt::{Debug,Formatter,Error};
+use ring;
 
+
+/// Hashes the input twice with SHA256 and returns an owned buffer;
+/// The actual hash-value can be extracted with as_ref()
+pub fn double_sha256(input: &[u8]) -> ring::digest::Digest {
+    // TODO: I think we want to return a [u8;32] here but that doesn't work this way
+    let digest1 = ring::digest::digest(&ring::digest::SHA256, input);
+    let digest2 = ring::digest::digest(&ring::digest::SHA256, digest1.as_ref());
+    digest2
+}
 
 #[derive(PartialEq)]
 pub struct Hash32<'a>(pub &'a[u8]);
 
 
 impl<'a> decode::Parse<'a> for Hash32<'a> {
-
     /// Parses the hash from a buffer; with 0-copy
     fn parse(buffer: &mut decode::Buffer<'a>) -> Result<Hash32<'a>, decode::EndOfBufferError> {
         Ok(
@@ -24,7 +33,11 @@ impl<'a> Hash32<'a> {
     pub fn is_null(&self) -> bool {
         self.0.iter().all(|x| *x == 0)
     }
+
+
 }
+
+
 
 
 impl<'a> Debug for Hash32<'a> {
