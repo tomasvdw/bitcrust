@@ -40,11 +40,10 @@ pub struct FlatFileSet {
     max_size:   u32,
 }
 
-const MAGIC_FILEID:u32 = 0x62634D4B;
 
 /// A FilePtr consists of a 16-bits signed filenumber and a 32-bits unsigned file-position
 /// The first 16 bits are ignored
-#[derive(Copy,Clone,PartialEq,Eq,Hash)]
+#[derive(Copy,Clone,PartialEq,Eq,Hash,Debug)]
 pub struct FilePtr(u64);
 
 impl FilePtr {
@@ -131,7 +130,7 @@ fn find_min_max_filenumbers(path: &Path, prefix: &str) -> (i16,i16) {
         .minmax();
 
     match minmax {
-        NoElements    => (0,0),
+        NoElements    => (0,1),
         OneElement(n) => (n, n+1),
         MinMax(n,m)   => (n, m+1)
     }
@@ -183,42 +182,12 @@ impl FlatFileSet {
             );
 
             self.maps[file_idx] = Some(FlatFile::open(
-                &name
+                &name,
+                self.start_size
             ));
         }
 
         self.maps[file_idx].as_mut().unwrap()
-
-    }
-
-    // Creates the next file on disk
-    fn create_next_file(&mut self) {
-
-        let path = fileno_to_filename(
-            &self.path,
-            self.prefix,
-            self.last_file
-        );
-
-        // Create file on disk
-        {
-            let mut f = fs::File::create(path.clone()).unwrap();
-            f.set_len(self.start_size as u64);
-        }
-
-        // Set length value in header
-        {
-            let mut flatfile = FlatFile::open(&path);
-            flatfile.put(&MAGIC_FILEID, 0);
-            flatfile.put_size(16);
-        }
-
-        self.last_file += 1;
-        self.maps.push(None);
-
-    }
-
-    pub fn something(&self) {
 
     }
 
@@ -227,53 +196,41 @@ impl FlatFileSet {
     /// Internally, this will ensure proper locking and creation of new files
     pub fn write(&mut self, buffer: &[u8]) -> FilePtr {
 
-        // if there are no files at all, create the first
-        // note that this is not guarded by a lock,
-        // but it will happen only once.
-        if self.first_file == self.last_file {
 
-            self.create_next_file();
+        let fileno     = self.last_file - 1;
+        let max_size   = self.max_size;
+        let buffer_len = buffer.len() as u32;
+        let write_len  = buffer_len + 4; // including size-prefix
+
+        // allocate some space to write
+        let write_pos = self
+            .get_flatfile(fileno)
+            .alloc_write(write_len, max_size);
+
+
+        match write_pos {
+            None => {
+
+                // create another file
+                self.maps.push(None);
+                self.last_file += 1;
+
+                // call self using the new new last_file
+                self.write(buffer)
+
+            }
+
+            Some(pos) => {
+                // we have enough room;
+                let flatfile = &mut self.get_flatfile(fileno);
+
+                // write length & data
+                flatfile.put(&buffer_len, pos as usize);
+                flatfile.put_bytes(buffer, (pos + 4) as usize);
+
+                FilePtr::new(fileno, pos  )
+            }
         }
-
-        let fileno = self.last_file - 1;
-
-        // Lock the last-file
-        self.get_flatfile(fileno).lock();
-
-
-        let write_pos = self.get_flatfile(fileno).get_size();
-
-        // Not enough room?
-        let result = if write_pos >= self.max_size {
-
-            // create another file
-            self.create_next_file();
-
-            // call self recursively
-            // we keep this file locked
-            // so that we lock both the old last-file and the new last-file
-            self.write(buffer)
-
-        } else {
-
-            // we have enough room;
-            let flatfile = &mut self.get_flatfile(fileno);
-
-            // write length & data
-            let len = buffer.len() as u32;
-            flatfile.put(&len, write_pos as usize);
-            flatfile.put_bytes(buffer, (write_pos + 4) as usize);
-
-            // write new write-position
-            let new_write_pos: u32 = write_pos + 4 + buffer.len() as u32;
-            flatfile.put_size(new_write_pos);
-
-            FilePtr::new(fileno, write_pos  )
-        };
-
-        self.get_flatfile(fileno).unlock();
-
-        result
 
     }
 
@@ -363,20 +320,20 @@ mod tests {
 
     #[test]
     fn test_concurrent() {
-        let handles = (0..1000).map(|_|
+        let handles = (0..100).map(|_|
             thread::spawn(|| {
                 let mut rng = rand::thread_rng();
 
-                let dir = tempdir::TempDir::new("test1").unwrap();
-                let path = dir.path();
+                //let dir = ;//tempdir::TempDir::new("test1").unwrap();
+                let path = PathBuf::from(".");//dir.path();
                 let mut ff = FlatFileSet::new(&path, "tx2-", 10_000_000, 9_000_000);
 
                 let mut map: collections::HashMap<FilePtr,  Vec<u8>> = collections::HashMap::new();
 
-                for _ in 0..10 {
+                for _ in 0..50 {
 
                     // create some nice data
-                    let size: usize = rng.gen_range(10, 10000);
+                    let size: usize = rng.gen_range(10, 2000);
                     let mut buf = vec![0; size];
                     rng.fill_bytes(&mut buf.as_mut_slice());
 
@@ -386,13 +343,13 @@ mod tests {
 
 
                     // 3 gets
-                    for _ in 0..3 {
+                    for _ in 0..30 {
                         let n: usize = rng.gen_range(0, map.len());
 
                         let v = map.values().nth(n).unwrap().as_slice();
                         let k = map.keys().nth(n).unwrap();
-
                         assert_eq!(v, ff.read(*k));
+                        //assert_eq!(3,4);
                     }
 
                 }

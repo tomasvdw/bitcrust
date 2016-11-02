@@ -2,6 +2,7 @@
 
 #![feature(custom_derive, plugin)]
 #![feature(question_mark)]
+#![feature(integer_atomics)]
 
 #![allow(dead_code)]
 
@@ -33,6 +34,7 @@ extern crate memmap;
 
 extern crate lmdb_rs;
 extern crate itertools;
+extern crate rand;
 
 use std::sync;
 
