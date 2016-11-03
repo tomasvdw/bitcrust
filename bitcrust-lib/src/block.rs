@@ -66,7 +66,7 @@ impl<'a> Block<'a> {
         let mut buffer = decode::Buffer::new(self.txs);
         for _ in 0..self.txcount {
 
-            callback(ParsedTx::parse(&mut buffer)?);
+            callback(ParsedTx::parse(&mut buffer)?)?;
         }
 
         if buffer.len() > 0  {
