@@ -67,23 +67,29 @@ pub fn init() -> Store {
 pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
     let block = Block::new(buffer).unwrap();
+
+    let block_hash = hash::double_sha256(block.header.to_raw());
     //let store = sync::Mutex::new(store);
 
     println!("{:?}", block);
 
-    block.process_transactions(|tx| {
+    let mut total_amount = 0_u64;
 
+
+    block.process_transactions(|tx| {
         println!("{:?}", tx);
 
         let hash = hash::double_sha256(tx.to_raw());
 
-        let pos = store.file_transactions.write(tx.to_raw());
+        total_amount += 1;
 
+        let pos = store.file_transactions.write(tx.to_raw());
         store.index.set(hash.as_ref(), pos);
 
         Ok(())
 
     }).unwrap();
+
 
 
 }

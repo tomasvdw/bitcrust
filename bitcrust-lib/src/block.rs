@@ -4,15 +4,45 @@
 /// 2016 Tomas, no rights reserved, no warranties given
 
 
-
+use std::convert;
 
 use hash;
 use decode;
 use decode::Parse;
 use transaction::ParsedTx;
 
+#[derive(Debug)]
+pub enum BlockError {
+    NoTransanctions,
+    FirstNotCoinbase,
+    DoubleCoinbase,
+
+    UnexpectedEndOfBuffer,
+}
+
+impl convert::From<decode::EndOfBufferError> for BlockError {
+    fn from(_: decode::EndOfBufferError) -> BlockError {
+        BlockError::UnexpectedEndOfBuffer
+    }
+
+}
+
+type BlockResult<T> = Result<T, BlockError>;
 
 
+#[derive(Debug)]
+pub struct Block<'a> {
+
+
+    pub header: BlockHeader<'a>,
+
+    pub txcount: usize,
+
+    pub txs:    &'a[u8],
+
+    // the full block as slice
+    raw:        &'a[u8],
+}
 
 /// BlockHeader represents the header of a block
 #[derive(Debug)]
@@ -23,22 +53,9 @@ pub struct BlockHeader<'a> {
     merkle_root: hash::Hash32<'a>,
     time:        u32,
     bits:        u32,
-    nonce:       u32,    
-}
+    nonce:       u32,
 
-#[derive(Debug)]
-pub struct Block<'a> {
-
-
-    header:     BlockHeader<'a>,
-    txcount:    usize,
-
-    // unparsed slice containing all transactions
-    txs:        &'a[u8],
-
-    // the full block as slice
-    raw:        &'a[u8]
-
+    raw:         &'a[u8],
 }
 
 impl<'a> Block<'a> {
@@ -51,32 +68,62 @@ impl<'a> Block<'a> {
         let mut buf = decode::Buffer::new(raw);
 
         Ok(Block {
-            raw:    raw,
-            header:   BlockHeader::parse(&mut buf)?,
-            txcount:  buf.parse_compact_size()?,
-            txs:      buf.inner
+            raw:     raw,
+            header:  BlockHeader::parse(&mut buf)?,
+            txcount: buf.parse_compact_size()?,
+            txs:     buf.inner
+
         })
+    }
+
+
+    pub fn verify(&self) -> BlockResult<()> {
+
+
+
+        Ok(())
     }
 
     /// Parses each transaction in the block, and executes the callback for each
     ///
-    pub fn process_transactions<F>(&self, mut callback: F) -> Result<(), decode::EndOfBufferError>
-        where F : FnMut(ParsedTx<'a>) -> Result<(), decode::EndOfBufferError> {
+    /// This will also check whether only the first transaction is a coinbase
+    ///
+    pub fn process_transactions<F>(&self, mut callback: F) -> BlockResult<()>
+        where F : FnMut(ParsedTx<'a>) -> BlockResult<()> {
+
+        if self.txs.is_empty() {
+            return Err(BlockError::NoTransanctions);
+        }
+
 
         let mut buffer = decode::Buffer::new(self.txs);
-        for _ in 0..self.txcount {
 
-            callback(ParsedTx::parse(&mut buffer)?)?;
+        // check if the first is coinbase
+        let first_tx = ParsedTx::parse(&mut buffer)?;
+        if !first_tx.is_coinbase() {
+            return Err(BlockError::FirstNotCoinbase);
+        }
+
+        callback(first_tx)?;
+
+        for _ in 1..self.txcount {
+            let tx = ParsedTx::parse(&mut buffer)?;
+            if tx.is_coinbase() {
+
+                return Err(BlockError::DoubleCoinbase);
+            }
+
+            callback(tx)?;
         }
 
         if buffer.len() > 0  {
 
             // Buffer not fully consumed
-            Err(decode::EndOfBufferError)
+            Err(BlockError::UnexpectedEndOfBuffer)
         }
-        else {
-            Ok(())
-        }
+            else {
+                Ok(())
+            }
     }
 }
 
@@ -86,17 +133,26 @@ impl<'a> decode::Parse<'a> for BlockHeader<'a> {
     /// Parses the block-header
     fn parse(buffer: &mut decode::Buffer<'a>) -> Result<BlockHeader<'a>, decode::EndOfBufferError> {
 
+        let org_buffer = *buffer;
+
         Ok(BlockHeader {
-            version:     try!(u32::parse(buffer)),
+            version:     u32::parse(buffer)?,
             prev_hash:   try!(hash::Hash32::parse(buffer)),
             merkle_root: try!(hash::Hash32::parse(buffer)),
             time:        try!(u32::parse(buffer)),
             bits:        try!(u32::parse(buffer)),
-            nonce:       try!(u32::parse(buffer))
+            nonce:       try!(u32::parse(buffer)),
+
+            raw:         buffer.consumed_since(org_buffer).inner
         })
     }
 }
 
+impl<'a> decode::ToRaw<'a> for BlockHeader<'a> {
+    fn to_raw(&self) -> &[u8] {
+        self.raw
+    }
+}
 
 
 
