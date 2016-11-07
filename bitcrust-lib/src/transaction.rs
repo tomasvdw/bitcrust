@@ -2,8 +2,10 @@
 use std::fmt;
 use std::io;
 use decode;
+use decode::Parse;
 
 use script::context;
+use store::Store;
 
 use itertools::Itertools;
 
@@ -12,17 +14,29 @@ use hash;
 const MAX_TRANSACTION_SIZE: usize = 1000000;
 
 #[derive(Debug)]
-pub enum SyntaxError {
+pub enum TransactionError {
     UnexpectedEndOfData,
     TransactionTooLarge,
     NoInputs,
     NoOutputs,
-    DuplicateInputs
+    DuplicateInputs,
+
+    InputNotFound,
 }
 
-impl From<io::Error> for SyntaxError {
-    fn from(_: io::Error) -> SyntaxError {
-        SyntaxError::UnexpectedEndOfData
+pub enum TransactionOk {
+    AlreadyExists,
+
+    VerifiesAndStored,
+
+}
+
+type TransactionResult<T> = Result<T, TransactionError>;
+
+impl From<decode::EndOfBufferError> for TransactionError {
+    fn from(_: decode::EndOfBufferError) -> TransactionError {
+
+        TransactionError::UnexpectedEndOfData
 
     }
 }
@@ -75,18 +89,18 @@ impl<'a> decode::ToRaw<'a> for ParsedTx<'a> {
 impl<'a> ParsedTx<'a> {
 
     /// Performs basic syntax checks on the transaction
-    pub fn verify_syntax(&self) -> Result<(), SyntaxError> {
+    pub fn verify_syntax(&self) -> TransactionResult<()> {
 
         if self.raw.len() > MAX_TRANSACTION_SIZE {
-            return Err(SyntaxError::TransactionTooLarge);
+            return Err(TransactionError::TransactionTooLarge);
         }
 
         if self.txs_in.is_empty() {
-            return Err(SyntaxError::NoInputs);
+            return Err(TransactionError::NoInputs);
         }
 
         if self.txs_out.is_empty() {
-            return Err(SyntaxError::NoOutputs);
+            return Err(TransactionError::NoOutputs);
         }
 
         // No double inputs
@@ -94,7 +108,7 @@ impl<'a> ParsedTx<'a> {
                pair[0].prev_tx_out_idx == pair[1].prev_tx_out_idx
             && pair[0].prev_tx_out     == pair[1].prev_tx_out)
         {
-            return Err(SyntaxError::DuplicateInputs);
+            return Err(TransactionError::DuplicateInputs);
         }
 
         Ok(())
@@ -105,8 +119,50 @@ impl<'a> ParsedTx<'a> {
         self.txs_in.len() == 1 && self.txs_in[0].prev_tx_out.is_null()
     }
 
+    pub fn verify_and_store(&self, store: &mut Store) -> TransactionResult<TransactionOk> {
+
+        self.verify_syntax()?;
+
+        let hash = hash::double_sha256(self.raw.inner);
+
+        // First see if it already exists
+        if store.index.get(hash.as_ref()).is_some() {
+            return Ok(TransactionOk::AlreadyExists)
+        }
+
+        if !self.is_coinbase() {
+
+            self.verify_input_scripts(store)?;
+        }
+
+
+        Ok(TransactionOk::VerifiesAndStored)
+    }
+
+    pub fn verify_input_scripts(&self, store: &mut Store) -> TransactionResult<()> {
+
+        for input in &self.txs_in {
+
+            let output = store.index.get(input.prev_tx_out.0)
+                .ok_or(TransactionError::InputNotFound)?;
+
+
+            let mut org_tx = decode::Buffer::new(store.file_transactions.read(output));
+
+            let parsed_tx = ParsedTx::parse(&mut org_tx)?;
+
+
+        }
+
+        Ok(())
+    }
+
 
 }
+
+
+
+
 
 pub struct TxInput<'a> {
     prev_tx_out:     hash::Hash32<'a>,

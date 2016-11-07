@@ -65,12 +65,17 @@ impl Index {
         txn.commit().unwrap();
     }
 
-    pub fn get(&self, hash: &[u8]) -> flatfileset::FilePtr {
+    pub fn get(&self, hash: &[u8]) -> Option<flatfileset::FilePtr> {
 
         let txn = self.db_env.get_reader().unwrap();
         let db = txn.bind(&self.db_handle); // get a database bound to this transaction
 
-        db.get(&hash).unwrap()
+        match db.get(&hash) {
+            Ok(v) => Some(v),
+
+            Err(lmdb_rs::MdbError::NotFound) => None,
+            Err(e) => panic!("Error in index {:?}", e)
+        }
     }
 
 }

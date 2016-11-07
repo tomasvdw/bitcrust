@@ -9,7 +9,9 @@ use std::convert;
 use hash;
 use decode;
 use decode::Parse;
-use transaction::ParsedTx;
+use transaction::{ParsedTx, TransactionError};
+
+
 
 #[derive(Debug)]
 pub enum BlockError {
@@ -18,11 +20,20 @@ pub enum BlockError {
     DoubleCoinbase,
 
     UnexpectedEndOfBuffer,
+
+    TransactionError(TransactionError)
 }
 
 impl convert::From<decode::EndOfBufferError> for BlockError {
     fn from(_: decode::EndOfBufferError) -> BlockError {
         BlockError::UnexpectedEndOfBuffer
+    }
+
+}
+
+impl convert::From<TransactionError> for BlockError {
+    fn from(inner: TransactionError) -> BlockError {
+        BlockError::TransactionError(inner)
     }
 
 }

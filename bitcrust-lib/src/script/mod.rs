@@ -1,4 +1,6 @@
+//! SCRIPTING interface
 //!
+//! CURRENTLY UNUSED; libbitcoin-consensus is used instead
 
 
 pub mod context;
