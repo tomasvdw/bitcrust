@@ -1,8 +1,6 @@
 
 use std::fmt;
-use std::io;
-use decode;
-use decode::Parse;
+use buffer::*;
 
 use script::context;
 use store::Store;
@@ -11,7 +9,10 @@ use itertools::Itertools;
 
 use hash;
 
-const MAX_TRANSACTION_SIZE: usize = 1000000;
+use ffi;
+
+
+const MAX_TRANSACTION_SIZE: usize = 1_000_000;
 
 #[derive(Debug)]
 pub enum TransactionError {
@@ -21,55 +22,52 @@ pub enum TransactionError {
     NoOutputs,
     DuplicateInputs,
 
-    InputNotFound,
+    OutputTransactionNotFound,
+    OutputIndexNotFound,
+
 }
 
+#[derive(Debug)]
 pub enum TransactionOk {
     AlreadyExists,
 
-    VerifiesAndStored,
+    VerifiedAndStored,
 
 }
 
 type TransactionResult<T> = Result<T, TransactionError>;
 
-impl From<decode::EndOfBufferError> for TransactionError {
-    fn from(_: decode::EndOfBufferError) -> TransactionError {
+impl From<EndOfBufferError> for TransactionError {
+    fn from(_: EndOfBufferError) -> TransactionError {
 
         TransactionError::UnexpectedEndOfData
 
     }
 }
 
-/// A transaction is kept in memory as a byte slice
+/// A transaction represents a parsed transaction;
 ///
-/// The most common operations on a transaction are reading and writing
-/// for which (de-)serialization would be an unnecessary overhead
-pub struct RawTx<'a> {
-    raw: &'a[u8]
-}
-
 #[derive(Debug)]
-pub struct ParsedTx<'a> {
+pub struct Transaction<'a> {
     pub version:   i32,
     pub txs_in:    Vec<TxInput<'a>>,
     pub txs_out:   Vec<TxOutput<'a>>,
     pub lock_time: u32,
 
-    raw:           decode::Buffer<'a>,
+    raw:           Buffer<'a>,
 
 
 }
 
 
 
-impl<'a> decode::Parse<'a> for ParsedTx<'a> {
+impl<'a> Parse<'a> for Transaction<'a> {
     /// Parses the raw bytes into individual fields
     /// and perform basic syntax checks
-    fn parse(buffer: &mut decode::Buffer<'a>) -> Result<ParsedTx<'a>, decode::EndOfBufferError> {
+    fn parse(buffer: &mut Buffer<'a>) -> Result<Transaction<'a>, EndOfBufferError> {
 
         let org_buffer = *buffer;
-        Ok(ParsedTx {
+        Ok(Transaction {
             version:   try!(i32::parse(buffer)),
             txs_in:    try!(Vec::parse(buffer)),
             txs_out:   try!(Vec::parse(buffer)),
@@ -80,13 +78,13 @@ impl<'a> decode::Parse<'a> for ParsedTx<'a> {
     }
 }
 
-impl<'a> decode::ToRaw<'a> for ParsedTx<'a> {
+impl<'a> ToRaw<'a> for Transaction<'a> {
     fn to_raw(&self) -> &[u8] {
         self.raw.inner
     }
 }
 
-impl<'a> ParsedTx<'a> {
+impl<'a> Transaction<'a> {
 
     /// Performs basic syntax checks on the transaction
     pub fn verify_syntax(&self) -> TransactionResult<()> {
@@ -124,33 +122,56 @@ impl<'a> ParsedTx<'a> {
         self.verify_syntax()?;
 
         let hash = hash::double_sha256(self.raw.inner);
+        let hash_ref = hash.as_ref();
 
         // First see if it already exists
-        if store.index.get(hash.as_ref()).is_some() {
+        if store.index.get(hash_ref).is_some() {
             return Ok(TransactionOk::AlreadyExists)
         }
 
         if !self.is_coinbase() {
-
+            println!("**** NO COINBASE");
             self.verify_input_scripts(store)?;
         }
 
 
-        Ok(TransactionOk::VerifiesAndStored)
+        let ptr = store.file_transactions.write(self.to_raw());
+        store.index.set(hash_ref, ptr);
+
+
+        Ok(TransactionOk::VerifiedAndStored)
     }
 
     pub fn verify_input_scripts(&self, store: &mut Store) -> TransactionResult<()> {
 
-        for input in &self.txs_in {
+        for (index, input) in self.txs_in.iter().enumerate() {
+
+            println!("**** Searching: {:?}", input.prev_tx_out);
 
             let output = store.index.get(input.prev_tx_out.0)
-                .ok_or(TransactionError::InputNotFound)?;
+                .ok_or(TransactionError::OutputTransactionNotFound)?;
+            println!("**** Found: {:?} @ {:?}", input.prev_tx_out, output);
 
 
-            let mut org_tx = decode::Buffer::new(store.file_transactions.read(output));
+            let mut previous_tx_raw = Buffer::new(store.file_transactions.read(output));
+            println!("PREV TX {:?} {:?}", previous_tx_raw.len(), previous_tx_raw);
+            let previous_tx = Transaction::parse(&mut previous_tx_raw)?;
 
-            let parsed_tx = ParsedTx::parse(&mut org_tx)?;
+            let previous_tx_out = previous_tx.txs_out.get(input.prev_tx_out_idx as usize)
+                .ok_or(TransactionError::OutputIndexNotFound)?;
 
+
+            let flags = 0;
+            let result = unsafe { ffi::bitcoin_verify_script(
+                self.raw.inner.as_ptr(),
+                self.raw.inner.len(),
+                previous_tx_out.pk_script.as_ptr(),
+                previous_tx_out.pk_script.len(),
+                index as u32,
+                flags
+            ) };
+
+            println!("Script validation: {}", result);
 
         }
 
@@ -172,8 +193,8 @@ pub struct TxInput<'a> {
 }
 
 
-impl<'a> decode::Parse<'a> for TxInput<'a> {
-    fn parse(buffer: &mut decode::Buffer<'a>) -> Result<TxInput<'a>, decode::EndOfBufferError> {
+impl<'a> Parse<'a> for TxInput<'a> {
+    fn parse(buffer: &mut Buffer<'a>) -> Result<TxInput<'a>, EndOfBufferError> {
 
         let result = TxInput {
             prev_tx_out:     try!(hash::Hash32::parse(buffer)),
@@ -191,9 +212,9 @@ pub struct TxOutput<'a> {
     pk_script: &'a[u8]
 }
 
-impl<'a> decode::Parse<'a> for TxOutput<'a> {
+impl<'a> Parse<'a> for TxOutput<'a> {
 
-    fn parse(buffer: &mut decode::Buffer<'a>) -> Result<TxOutput<'a>, decode::EndOfBufferError> {
+    fn parse(buffer: &mut Buffer<'a>) -> Result<TxOutput<'a>, EndOfBufferError> {
 
         Ok(TxOutput {
             value:      i64::parse(buffer)?,

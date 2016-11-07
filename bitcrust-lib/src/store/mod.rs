@@ -1,15 +1,13 @@
-use std::mem;
+
 
 mod flatfile;
 mod flatfileset;
 mod index;
 
-extern crate libc;
 
-use lmdb_rs;
+
 use config;
 
-use std::path::Path;
 
 use self::flatfileset::FlatFileSet;
 
@@ -59,6 +57,6 @@ mod tests {
 
     #[test]
     fn test_store_new() {
-        let store = Store::new(&config::Config::new_test());
+        let _ = Store::new(&config::Config::new_test());
     }
 }

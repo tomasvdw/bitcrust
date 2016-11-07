@@ -1,3 +1,10 @@
+//! A buffer is used for decoding raw bytes
+//!
+//! It is represented by a copyable slice
+//!
+//! This is notmally important as buffer::* such that the
+//! pub's can be considered to be in the global namespace
+
 use std::mem;
 use std::marker;
 

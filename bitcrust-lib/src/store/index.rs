@@ -4,8 +4,6 @@ use std::mem;
 use lmdb_rs;
 use config;
 
-use std::path::Path;
-
 use store::flatfileset;
 
 /// Implement conversion for FilePtr (64-bit pointers) to values for lmdb

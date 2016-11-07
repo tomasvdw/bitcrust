@@ -1,8 +1,9 @@
 extern crate libc;
 
+#[link(name = "secp256k1")]
 #[link(name = "bitcoin-consensus")]
 extern {
-    pub fn bitcoinconsensus_verify_script(
+    pub fn bitcoin_verify_script(
         transaction:         *const u8,
         transaction_size:    libc::size_t,
         prevout_script:      *const u8,

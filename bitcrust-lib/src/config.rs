@@ -1,4 +1,5 @@
-
+//! Stub configutation
+//! Meant to wrap toml-config files
 
 use std::path::PathBuf;
 

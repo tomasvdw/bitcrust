@@ -40,8 +40,8 @@ extern crate ring;
 
 mod ffi;
 
-mod decode;
-//mod encode;
+mod buffer;
+use buffer::*;
 
 
 pub use block::Block;
@@ -57,21 +57,25 @@ mod store;
 mod config;
 use store::Store;
 
-use decode::*;
+
 
 pub fn init() -> Store {
+
     let config = config::Config::new_test();
     Store::new(&config)
 }
 
+/// Validates and stores a block;
+///
+/// Currently used to collect what needs to be done;
+/// TODO: distibute over different mods
 pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
     let block = Block::new(buffer).unwrap();
 
     let block_hash = hash::double_sha256(block.header.to_raw());
-    //let store = sync::Mutex::new(store);
 
-    println!("{:?}", block);
+    println!("{:?} ({:?})", block, block_hash);
 
     let mut total_amount = 0_u64;
 
@@ -83,8 +87,8 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
         total_amount += 1;
 
-        let pos = store.file_transactions.write(tx.to_raw());
-        store.index.set(hash.as_ref(), pos);
+        let res = tx.verify_and_store(store);
+        println!("TX={:?} res={:?}", hash, res);
 
         Ok(())
 

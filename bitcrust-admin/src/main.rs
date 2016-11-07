@@ -41,7 +41,7 @@ fn main() {
     let f = File::open("/home/tomas/.bitcoin/blocks/blk00000.dat").unwrap();
     let mut rdr = BufReader::new(f);
 
-    for _ in 0..10 {
+    for _ in 0..200 {
         let blk = blk_file::read_block(&mut rdr).unwrap();
 
         let mut store = bitcrust_lib::init();

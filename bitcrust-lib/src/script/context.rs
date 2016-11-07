@@ -104,7 +104,7 @@ mod tests {
     fn test_op_false()
     {
         let script = vec![0x00];
-        let ctx = Context::new(&script);
+        let _ = Context::new(&script);
         
         
         

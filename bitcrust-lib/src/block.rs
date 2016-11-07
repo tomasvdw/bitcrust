@@ -7,9 +7,8 @@
 use std::convert;
 
 use hash;
-use decode;
-use decode::Parse;
-use transaction::{ParsedTx, TransactionError};
+use buffer::*;
+use transaction::{Transaction, TransactionError};
 
 
 
@@ -24,8 +23,8 @@ pub enum BlockError {
     TransactionError(TransactionError)
 }
 
-impl convert::From<decode::EndOfBufferError> for BlockError {
-    fn from(_: decode::EndOfBufferError) -> BlockError {
+impl convert::From<EndOfBufferError> for BlockError {
+    fn from(_: EndOfBufferError) -> BlockError {
         BlockError::UnexpectedEndOfBuffer
     }
 
@@ -74,9 +73,9 @@ impl<'a> Block<'a> {
     /// Parses the block from a raw blob
     ///
     /// The transactions will not be parsed yet, and simply stored as a slice
-    pub fn new(raw: &'a[u8]) -> Result<Block<'a>, decode::EndOfBufferError> {
+    pub fn new(raw: &'a[u8]) -> Result<Block<'a>, EndOfBufferError> {
 
-        let mut buf = decode::Buffer::new(raw);
+        let mut buf = Buffer::new(raw);
 
         Ok(Block {
             raw:     raw,
@@ -100,17 +99,17 @@ impl<'a> Block<'a> {
     /// This will also check whether only the first transaction is a coinbase
     ///
     pub fn process_transactions<F>(&self, mut callback: F) -> BlockResult<()>
-        where F : FnMut(ParsedTx<'a>) -> BlockResult<()> {
+        where F : FnMut(Transaction<'a>) -> BlockResult<()> {
 
         if self.txs.is_empty() {
             return Err(BlockError::NoTransanctions);
         }
 
 
-        let mut buffer = decode::Buffer::new(self.txs);
+        let mut buffer = Buffer::new(self.txs);
 
         // check if the first is coinbase
-        let first_tx = ParsedTx::parse(&mut buffer)?;
+        let first_tx = Transaction::parse(&mut buffer)?;
         if !first_tx.is_coinbase() {
             return Err(BlockError::FirstNotCoinbase);
         }
@@ -118,7 +117,7 @@ impl<'a> Block<'a> {
         callback(first_tx)?;
 
         for _ in 1..self.txcount {
-            let tx = ParsedTx::parse(&mut buffer)?;
+            let tx = Transaction::parse(&mut buffer)?;
             if tx.is_coinbase() {
 
                 return Err(BlockError::DoubleCoinbase);
@@ -139,10 +138,10 @@ impl<'a> Block<'a> {
 }
 
 
-impl<'a> decode::Parse<'a> for BlockHeader<'a> {
+impl<'a> Parse<'a> for BlockHeader<'a> {
 
     /// Parses the block-header
-    fn parse(buffer: &mut decode::Buffer<'a>) -> Result<BlockHeader<'a>, decode::EndOfBufferError> {
+    fn parse(buffer: &mut Buffer<'a>) -> Result<BlockHeader<'a>, EndOfBufferError> {
 
         let org_buffer = *buffer;
 
@@ -159,7 +158,7 @@ impl<'a> decode::Parse<'a> for BlockHeader<'a> {
     }
 }
 
-impl<'a> decode::ToRaw<'a> for BlockHeader<'a> {
+impl<'a> ToRaw<'a> for BlockHeader<'a> {
     fn to_raw(&self) -> &[u8] {
         self.raw
     }
@@ -173,12 +172,8 @@ mod tests {
     extern crate rustc_serialize;
 
     use super::*;
-    use std::io::Cursor;
-    use self::rustc_serialize::hex::FromHex;
-    use std::mem;
-    use lmdb_rs::{EnvBuilder, DbFlags};
-    use decode::Parse;
-    use decode;
+    use buffer::Parse;
+    use buffer;
     use transaction;
 
     #[test]
@@ -195,10 +190,10 @@ mod tests {
 
 
         let slice = &rustc_serialize::hex::FromHex::from_hex(hex).unwrap();
-        let mut buf = decode::Buffer::new(slice);
+        let mut buf = buffer::Buffer::new(slice);
 
         let hdr = BlockHeader::parse(&mut buf).unwrap();
-        let txs: Vec<transaction::ParsedTx> = Vec::parse(&mut buf).unwrap();
+        let txs: Vec<transaction::Transaction> = Vec::parse(&mut buf).unwrap();
 
         for tx in &txs {
             tx.verify_syntax().unwrap();

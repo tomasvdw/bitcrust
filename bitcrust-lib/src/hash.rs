@@ -2,11 +2,11 @@
 //! For now: Hash32 acts as a reference wrapper
 //! and HashBuf acts as an owned hash
 
-use decode;
+use buffer;
 use std::fmt::{Debug,Formatter,Error};
 use ring;
 
-pub type HashBuf = ring::digest::Digest;
+type HashBuf = ring::digest::Digest;
 
 
 
@@ -23,9 +23,9 @@ pub fn double_sha256(input: &[u8]) -> HashBuf {
 pub struct Hash32<'a>(pub &'a[u8]);
 
 
-impl<'a> decode::Parse<'a> for Hash32<'a> {
+impl<'a> buffer::Parse<'a> for Hash32<'a> {
     /// Parses the hash from a buffer; with 0-copy
-    fn parse(buffer: &mut decode::Buffer<'a>) -> Result<Hash32<'a>, decode::EndOfBufferError> {
+    fn parse(buffer: &mut buffer::Buffer<'a>) -> Result<Hash32<'a>, buffer::EndOfBufferError> {
         Ok(
             Hash32(try!(buffer.parse_bytes(32)))
         )
@@ -53,7 +53,7 @@ impl<'a> Debug for Hash32<'a> {
             .map(|n| format!("{:02x}", n))
             .collect::<Vec<_>>()
             .concat();
-            
+
         fmt.write_str(&x)
     }
 }

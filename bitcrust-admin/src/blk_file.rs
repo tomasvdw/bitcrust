@@ -6,7 +6,7 @@
 extern crate byteorder;
 
 use byteorder::{ReadBytesExt, LittleEndian};
-use bitcrust_lib;
+
 
 use std::io;
 
