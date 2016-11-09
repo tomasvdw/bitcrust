@@ -1,6 +1,8 @@
 //! SCRIPTING interface
 //!
-//! CURRENTLY UNUSED; libbitcoin-consensus is used instead
+//! CURRENTLY ONLY USED FOR DISPLAY
+//!
+//! libbitcoin-consensus is used for script verification
 
 
 pub mod context;

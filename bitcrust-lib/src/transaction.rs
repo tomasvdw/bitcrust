@@ -25,6 +25,8 @@ pub enum TransactionError {
     OutputTransactionNotFound,
     OutputIndexNotFound,
 
+    ScriptError(i32)
+
 }
 
 #[derive(Debug)]
@@ -121,40 +123,44 @@ impl<'a> Transaction<'a> {
 
         self.verify_syntax()?;
 
-        let hash = hash::double_sha256(self.raw.inner);
-        let hash_ref = hash.as_ref();
+        let hash_buf = hash::Hash32Buf::double_sha256(self.to_raw());
+        let hash     = hash_buf.as_ref();
 
         // First see if it already exists
-        if store.index.get(hash_ref).is_some() {
+        if store.index.get(hash_buf.as_ref()).is_some() {
             return Ok(TransactionOk::AlreadyExists)
         }
 
         if !self.is_coinbase() {
-            println!("**** NO COINBASE");
             self.verify_input_scripts(store)?;
         }
 
 
-        let ptr = store.file_transactions.write(self.to_raw());
-        store.index.set(hash_ref, ptr);
+        let ptr = store.block_content.write(self.to_raw());
+        store.index.set(hash_buf.as_ref(), ptr);
 
 
         Ok(TransactionOk::VerifiedAndStored)
     }
 
+
     pub fn verify_input_scripts(&self, store: &mut Store) -> TransactionResult<()> {
 
         for (index, input) in self.txs_in.iter().enumerate() {
 
-            println!("**** Searching: {:?}", input.prev_tx_out);
+            //let output = store.index.get_transaction_or_set_input
+            let output_r = store.index.get(input.prev_tx_out);
+            let output = match output_r {
+                None => {
 
-            let output = store.index.get(input.prev_tx_out.0)
-                .ok_or(TransactionError::OutputTransactionNotFound)?;
-            println!("**** Found: {:?} @ {:?}", input.prev_tx_out, output);
+                    println!("Err for inp {:?}", input);
+                    return Err(TransactionError::OutputTransactionNotFound);
+                },
+                Some(o) => o
+            };
 
 
-            let mut previous_tx_raw = Buffer::new(store.file_transactions.read(output));
-            println!("PREV TX {:?} {:?}", previous_tx_raw.len(), previous_tx_raw);
+            let mut previous_tx_raw = Buffer::new(store.block_content.read(output));
             let previous_tx = Transaction::parse(&mut previous_tx_raw)?;
 
             let previous_tx_out = previous_tx.txs_out.get(input.prev_tx_out_idx as usize)
@@ -171,7 +177,11 @@ impl<'a> Transaction<'a> {
                 flags
             ) };
 
-            println!("Script validation: {}", result);
+
+            if result != 1 {
+                return Err(TransactionError::ScriptError(result));
+            }
+
 
         }
 

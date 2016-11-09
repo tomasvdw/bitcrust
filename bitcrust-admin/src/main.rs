@@ -34,18 +34,38 @@ use std::fs::File;
 
 mod blk_file;
 
+use std::fs;
 
 fn main() {
 
 
-    let f = File::open("/home/tomas/.bitcoin/blocks/blk00000.dat").unwrap();
-    let mut rdr = BufReader::new(f);
+    let mut block = 0;
+    for fileno in 0..1 {
+        let name = format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", fileno);
+        println!("Processing {}", name);
+        let f = File::open(name).unwrap();
+        let mut rdr = BufReader::new(f);
 
-    for _ in 0..200 {
-        let blk = blk_file::read_block(&mut rdr).unwrap();
 
-        let mut store = bitcrust_lib::init();
-        bitcrust_lib::add_block(&mut store, &blk);
+        loop {
+            let blk = blk_file::read_block(&mut rdr).unwrap();
+
+            if blk.is_none() {
+                break;
+            }
+
+            let mut store = bitcrust_lib::init();
+            bitcrust_lib::add_block(&mut store, &blk.unwrap());
+
+            block += 1;
+            if block % 100 == 0 {
+                println!("Processed block {}", block);
+            }
+
+        }
+
+
+    }
 
         //println!("{:?}", blk);
        
@@ -58,7 +78,7 @@ fn main() {
         
         
         //println!("Block: {:?}", hex);
-    }
+
 
 }
 

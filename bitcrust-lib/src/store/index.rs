@@ -1,13 +1,14 @@
-
+//! The index uses 32-bit hashes
 use std::mem;
 
 use lmdb_rs;
 use config;
+use hash;
 
-use store::flatfileset;
+use store::fileptr;
 
 /// Implement conversion for FilePtr (64-bit pointers) to values for lmdb
-impl lmdb_rs::ToMdbValue for flatfileset::FilePtr {
+impl lmdb_rs::ToMdbValue for fileptr::FilePtr {
     fn to_mdb_value<'a>(&'a self) -> lmdb_rs::MdbValue<'a> {
 
         lmdb_rs::MdbValue::new_from_sized(self)
@@ -16,9 +17,9 @@ impl lmdb_rs::ToMdbValue for flatfileset::FilePtr {
 }
 
 /// Implement conversion for FilePtr (64-bit pointers) to values for lmdb
-impl lmdb_rs::FromMdbValue for flatfileset::FilePtr {
-    fn from_mdb_value(value: &lmdb_rs::MdbValue) -> flatfileset::FilePtr {
-        let ptr: &flatfileset::FilePtr = unsafe { mem::transmute( value.get_ref() ) };
+impl lmdb_rs::FromMdbValue for fileptr::FilePtr {
+    fn from_mdb_value(value: &lmdb_rs::MdbValue) -> fileptr::FilePtr {
+        let ptr: &fileptr::FilePtr = unsafe { mem::transmute( value.get_ref() ) };
         *ptr
     }
 
@@ -39,7 +40,11 @@ impl Index {
 
         let path = &cfg.root;
 
-        let env = lmdb_rs::EnvBuilder::new().open(&path, 0o777).unwrap();
+        let env = lmdb_rs::EnvBuilder::new()
+            .map_size(2_000_000_000)
+            .open(&path, 0o777)
+            .unwrap();
+
         let handle = env.get_default_db(lmdb_rs::DbFlags::empty()).unwrap();
 
         Index  {
@@ -50,25 +55,38 @@ impl Index {
 
     }
 
+
+
     /// Sets a value in the index
-    pub fn set(&self, hash: &[u8], ptr: flatfileset::FilePtr) {
+    pub fn set(&self, hash: hash::Hash32, ptr: fileptr::FilePtr) {
+
         let txn = self.db_env.new_transaction().unwrap();
         {
-            let db = txn.bind(&self.db_handle); // get a database bound to this transaction
-
-
-            db.set(&hash, &ptr).unwrap();
+            let db = txn.bind(&self.db_handle);
+            db.set(&hash.0, &ptr).unwrap();
 
         }
         txn.commit().unwrap();
     }
 
-    pub fn get(&self, hash: &[u8]) -> Option<flatfileset::FilePtr> {
+
+
+    /// Retrieves the FilePtr to transaction given by `hash`
+    /// If the key is not found, the given FilePtr is stored at that location
+    ///
+    /// This operations occurs atomically
+    pub fn get_transaction_or_set_input(&self, hash: hash::Hash32, set_on_fail: fileptr::FilePtr) -> Option<fileptr::FilePtr> {
+
+        unimplemented!();
+    }
+
+
+    pub fn get(&self, hash: hash::Hash32) -> Option<fileptr::FilePtr> {
 
         let txn = self.db_env.get_reader().unwrap();
         let db = txn.bind(&self.db_handle); // get a database bound to this transaction
 
-        match db.get(&hash) {
+        match db.get(&hash.0) {
             Ok(v) => Some(v),
 
             Err(lmdb_rs::MdbError::NotFound) => None,

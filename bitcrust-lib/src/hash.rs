@@ -6,20 +6,32 @@ use buffer;
 use std::fmt::{Debug,Formatter,Error};
 use ring;
 
-type HashBuf = ring::digest::Digest;
+
+/// Owner, 32-byte hash value
+pub struct Hash32Buf(ring::digest::Digest);
 
 
 
-/// Hashes the input twice with SHA256 and returns an owned buffer;
-/// The actual hash-value can be extracted with as_ref()
-pub fn double_sha256(input: &[u8]) -> HashBuf {
-    // TODO: I think we want to return a [u8;32] here but that doesn't work this way
-    let digest1 = ring::digest::digest(&ring::digest::SHA256, input);
-    let digest2 = ring::digest::digest(&ring::digest::SHA256, digest1.as_ref());
-    digest2
+impl Hash32Buf {
+
+
+    pub fn as_ref(&self) -> Hash32 {
+
+        Hash32(self.0.as_ref())
+    }
+
+    /// Hashes the input twice with SHA256 and returns an owned buffer;
+    /// Can be extracted as an Hash32 using as_ref()
+    pub fn double_sha256(input: &[u8]) -> Hash32Buf {
+        let digest1 = ring::digest::digest(&ring::digest::SHA256, input);
+        let digest2 = ring::digest::digest(&ring::digest::SHA256, digest1.as_ref());
+        Hash32Buf(digest2)
+    }
 }
 
-#[derive(PartialEq)]
+
+/// Reference to a 32-byte hash value
+#[derive(Copy,Clone,PartialEq)]
 pub struct Hash32<'a>(pub &'a[u8]);
 
 
@@ -48,6 +60,20 @@ impl<'a> Hash32<'a> {
 impl<'a> Debug for Hash32<'a> {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
         let x = self.0
+            .iter()
+            .rev()
+            .map(|n| format!("{:02x}", n))
+            .collect::<Vec<_>>()
+            .concat();
+
+        fmt.write_str(&x)
+    }
+}
+
+
+impl Debug for Hash32Buf {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
+        let x = self.0.as_ref()
             .iter()
             .rev()
             .map(|n| format!("{:02x}", n))

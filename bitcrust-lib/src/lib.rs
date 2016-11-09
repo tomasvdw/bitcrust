@@ -73,22 +73,21 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
     let block = Block::new(buffer).unwrap();
 
-    let block_hash = hash::double_sha256(block.header.to_raw());
-
-    println!("{:?} ({:?})", block, block_hash);
+    let block_hash = hash::Hash32Buf::double_sha256(block.header.to_raw());
 
     let mut total_amount = 0_u64;
 
 
     block.process_transactions(|tx| {
-        println!("{:?}", tx);
 
-        let hash = hash::double_sha256(tx.to_raw());
+        let hash = hash::Hash32Buf::double_sha256(tx.to_raw());
 
         total_amount += 1;
 
         let res = tx.verify_and_store(store);
-        println!("TX={:?} res={:?}", hash, res);
+        //if !tx.is_coinbase() || res.is_err() {
+          //  println!("res={:?} cb={} TX={:?} ", res, tx.is_coinbase(), hash);
+        //}
 
         Ok(())
 

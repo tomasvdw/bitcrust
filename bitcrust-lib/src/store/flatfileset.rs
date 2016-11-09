@@ -13,11 +13,15 @@
 //!
 
 use std::path::{Path,PathBuf};
+use std::mem;
 
 use itertools::Itertools;
 use itertools::MinMaxResult::{NoElements, OneElement, MinMax};
 
 use store::flatfile::FlatFile;
+use store::fileptr::FilePtr;
+
+
 
 /// FlatFileSet is a sequential set of files in form of prefixNNNN where NNNN is
 /// sequential signed 16 bit big-endian number.
@@ -34,28 +38,6 @@ pub struct FlatFileSet {
     max_size:   u32,
 }
 
-
-/// A FilePtr consists of a 16-bits signed filenumber and a 32-bits unsigned file-position
-/// This in memorry representation is 64-bit where the first 16 bits are ignored
-
-#[derive(Copy,Clone,PartialEq,Eq,Hash,Debug)]
-pub struct FilePtr(u64);
-
-impl FilePtr {
-    pub fn new(fileno: i16, filepos: u32) -> FilePtr {
-        FilePtr(
-            (((fileno as u64) << 32) & 0xFFFF_0000_0000) |
-            ((filepos as u64) & 0xFFFF_FFFF)
-        )
-    }
-    pub fn file_number(self) -> i16 {
-        ((self.0 >> 32) & 0xFFFF) as i16
-    }
-
-    pub fn file_pos(self) -> usize {
-        (self.0 & 0xFFFF_FFFF) as usize
-    }
-}
 
 /// An error used internally for filenames that do not match the pattern
 #[derive(Debug)]
@@ -188,21 +170,18 @@ impl FlatFileSet {
 
     }
 
-    /// Appends the slice to the flatfileset and returns a filepos
+    /// Reserves `size` bytes in the flatfileset
+    /// Creates a new file if needed
     ///
-    /// Internally, this will ensure creation of new files
-    pub fn write(&mut self, buffer: &[u8]) -> FilePtr {
+    /// Allocation occurs atomically but lock-free
+    pub fn alloc_write_space(&mut self, size: u32) -> FilePtr {
+        let fileno = self.last_file - 1;
+        let max_size = self.max_size;
 
-
-        let fileno     = self.last_file - 1;
-        let max_size   = self.max_size;
-        let buffer_len = buffer.len() as u32;
-        let write_len  = buffer_len + 4; // including size-prefix
-
-        // allocate some space to write
+        // try to allocate some space in the last file
         let write_pos = self
             .get_flatfile(fileno)
-            .alloc_write(write_len, max_size);
+            .alloc_write(size, max_size);
 
 
         match write_pos {
@@ -213,32 +192,78 @@ impl FlatFileSet {
                 self.last_file += 1;
 
                 // call self using the new new last_file
-                self.write(buffer)
+                self.alloc_write_space(size)
 
             }
-
             Some(pos) => {
-
-                // We have enough room; write length & data
-                let flatfile = &mut self.get_flatfile(fileno);
-                flatfile.put(&buffer_len, pos as usize);
-                flatfile.put_bytes(buffer, (pos + 4) as usize);
-
-                FilePtr::new(fileno, pos  )
+                FilePtr::new(fileno, pos)
             }
         }
+    }
+
+    /// Appends the slice to the flatfileset and returns a filepos
+    ///
+    /// Internally, this will ensure creation of new files
+    pub fn write(&mut self, buffer: &[u8]) -> FilePtr {
+
+        let buffer_len = buffer.len() as u32;
+        let write_len  = buffer_len + 4; // including size-prefix
+
+        let target_ptr = self.alloc_write_space(write_len);
+
+        let flatfile   = self.get_flatfile(target_ptr.file_number());
+
+        // write size & buffer
+        flatfile.put(&buffer_len, target_ptr.file_pos());
+        flatfile.put_bytes(buffer, target_ptr.file_pos() + 4);
+
+        target_ptr
+    }
+
+
+    /// Appends the given value to the flatfileset and returns a filepos
+    ///
+    /// Internally, this will ensure creation of new files
+    pub fn write_fixed<T>(&mut self, value: &T) -> FilePtr {
+
+        let target_ptr = self.alloc_write_space(mem::size_of::<T>() as u32);
+
+        let flatfile   = self.get_flatfile(target_ptr.file_number());
+
+        flatfile.put(value, target_ptr.file_pos());
+
+        target_ptr
+    }
+
+    /// Allocates the given amount of space, but leave it empty
+    ///
+    /// Internally, this will ensure creation of new files
+    pub fn write_empty<T>(&mut self, size: u32) -> FilePtr {
+
+        self.alloc_write_space(mem::size_of::<T>() as u32)
 
     }
+
 
     /// Reads the length-prefixed buffer at the given position
     pub fn read(&mut self, pos: FilePtr) -> &[u8] {
 
         let fileno   = pos.file_number();
         let filepos  = pos.file_pos();
-        let map      = self.get_flatfile(fileno);
+        let file     = self.get_flatfile(fileno);
 
-        let len: u32 = *map.get(filepos);
-        map.get_bytes(filepos+4, len as usize)
+        let len: u32 = *file.get(filepos);
+        file.get_bytes(filepos+4, len as usize)
+    }
+
+    /// Reads the fixed size buffer at the given position
+    pub fn read_fixed<T>(&mut self, pos: FilePtr) -> &'static T {
+
+        let fileno   = pos.file_number();
+        let filepos  = pos.file_pos();
+        let file     = self.get_flatfile(fileno);
+
+        file.get(filepos)
     }
 }
 
@@ -292,12 +317,14 @@ mod tests {
     use self::rand::Rng;
     use super::*;
 
+    use store::fileptr::FilePtr;
+
 
     #[test]
     fn flatfile_set() {
         let buf = [1_u8, 0, 0, 0];
-        //let dir = tempdir::TempDir::new("test1").unwrap();
-        let path = PathBuf::from(".");
+        let dir = tempdir::TempDir::new("test1").unwrap();
+        let path = dir.path();
 
         let mut ff = FlatFileSet::new(&path, "tx1-", 1000, 900);
 
@@ -306,15 +333,18 @@ mod tests {
         let out1 = ff.read(in1);
 
         assert_eq!(buf, out1);
-        //fs::File::create(path.join("tx-FFFF")).unwrap().write_all(b"abc").unwrap();
-        //fs::File::create(path.join("tx-0001")).unwrap().write_all(b"abc").unwrap();
-
 
     }
 
     #[test]
     fn test_concurrent() {
-        let handles = (0..100).map(|_|
+
+        const THREADS: usize         = 100;
+        const MAX_SIZE: usize        = 20000;
+        const PUTS_PER_THREAD: usize = 100;
+        const GETS_PER_PUT: usize    = 30;
+
+        let handles = (0..THREADS).map(|_|
             thread::spawn(|| {
                 let mut rng = rand::thread_rng();
 
@@ -324,10 +354,10 @@ mod tests {
 
                 let mut map: collections::HashMap<FilePtr,  Vec<u8>> = collections::HashMap::new();
 
-                for _ in 0..50 {
+                for _ in 0..PUTS_PER_THREAD {
 
                     // create some nice data
-                    let size: usize = rng.gen_range(10, 2000);
+                    let size: usize = rng.gen_range(10, MAX_SIZE);
                     let mut buf = vec![0; size];
                     rng.fill_bytes(&mut buf.as_mut_slice());
 
@@ -337,7 +367,7 @@ mod tests {
 
 
                     // 3 gets
-                    for _ in 0..30 {
+                    for _ in 0..GETS_PER_PUT {
                         let n: usize = rng.gen_range(0, map.len());
 
                         let v = map.values().nth(n).unwrap().as_slice();

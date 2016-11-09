@@ -1,3 +1,10 @@
+//!
+//! Wraps a single flat-file from a flat-file-set
+//!
+//! All access occurs through flatfileset
+//!
+//!
+
 use std::fs;
 use std::slice;
 use std::mem;
@@ -128,8 +135,6 @@ impl FlatFile {
         };
     }
 
-
-
     /// Reserves `size` bytes for writing, updates the write_pos atomically
     /// and returns the position at which the bytes can be written
     ///
@@ -147,6 +152,7 @@ impl FlatFile {
             let old_write_pos = write_ptr.compare_and_swap
                 (write_pos, write_pos + size, atomic::Ordering::Relaxed);
 
+            // Only if we are overwriting the old value we are ok; otherwise retry
             if old_write_pos == write_pos {
                 return Some(old_write_pos)
             }
