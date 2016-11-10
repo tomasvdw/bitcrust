@@ -70,6 +70,14 @@ impl FilePtr {
 
     }
 
+    pub fn is_null(&self) -> bool {
+        self.0 == 0
+    }
+
+    pub fn null() -> FilePtr {
+        FilePtr(0)
+    }
+
 
 }
 

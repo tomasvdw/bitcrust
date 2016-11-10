@@ -3,21 +3,27 @@
 //! and HashBuf acts as an owned hash
 
 use buffer;
+use std::mem;
+use std::convert::AsMut;
 use std::fmt::{Debug,Formatter,Error};
 use ring;
 
 
-/// Owner, 32-byte hash value
-pub struct Hash32Buf(ring::digest::Digest);
-
-
+/// Owned, 32-byte hash value
+pub struct Hash32Buf([u8;32]);
 
 impl Hash32Buf {
 
+    /// Copies a slice into an owned buffer
+    pub fn from_slice(slice: &[u8]) -> Hash32Buf {
+        let mut result: Hash32Buf = Hash32Buf([0;32]);
+        result.0.as_mut().copy_from_slice(&slice[0..32]);
+        result
+    }
 
     pub fn as_ref(&self) -> Hash32 {
 
-        Hash32(self.0.as_ref())
+        Hash32(&self.0)
     }
 
     /// Hashes the input twice with SHA256 and returns an owned buffer;
@@ -25,22 +31,28 @@ impl Hash32Buf {
     pub fn double_sha256(input: &[u8]) -> Hash32Buf {
         let digest1 = ring::digest::digest(&ring::digest::SHA256, input);
         let digest2 = ring::digest::digest(&ring::digest::SHA256, digest1.as_ref());
-        Hash32Buf(digest2)
+
+        // convert to HashBuf
+        Hash32Buf::from_slice(digest2.as_ref())
     }
 }
 
 
 /// Reference to a 32-byte hash value
 #[derive(Copy,Clone,PartialEq)]
-pub struct Hash32<'a>(pub &'a[u8]);
+pub struct Hash32<'a>(pub &'a[u8;32]);
+
+
 
 
 impl<'a> buffer::Parse<'a> for Hash32<'a> {
     /// Parses the hash from a buffer; with 0-copy
     fn parse(buffer: &mut buffer::Buffer<'a>) -> Result<Hash32<'a>, buffer::EndOfBufferError> {
-        Ok(
-            Hash32(try!(buffer.parse_bytes(32)))
-        )
+
+        Ok(Hash32(
+            unsafe { mem::transmute(
+                try!(buffer.parse_bytes(32)).as_ptr()) }
+        ))
     }
 }
 

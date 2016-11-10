@@ -60,10 +60,11 @@ impl Index {
     /// Sets a value in the index
     pub fn set(&self, hash: hash::Hash32, ptr: fileptr::FilePtr) {
 
+        let u: &[u8] = &hash.0[..];
         let txn = self.db_env.new_transaction().unwrap();
         {
             let db = txn.bind(&self.db_handle);
-            db.set(&hash.0, &ptr).unwrap();
+            db.set(&u, &ptr).unwrap();
 
         }
         txn.commit().unwrap();
@@ -85,8 +86,8 @@ impl Index {
 
         let txn = self.db_env.get_reader().unwrap();
         let db = txn.bind(&self.db_handle); // get a database bound to this transaction
-
-        match db.get(&hash.0) {
+        let u: &[u8] = &hash.0[..];
+        match db.get(&u) {
             Ok(v) => Some(v),
 
             Err(lmdb_rs::MdbError::NotFound) => None,
