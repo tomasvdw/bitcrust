@@ -25,11 +25,8 @@ pub struct BlockContent {
 
 impl BlockContent {
     pub fn new(cfg: &config::Config) -> BlockContent {
-        let dir = &cfg.root.clone().join("block_content");
 
-        // recreate dir
-        fs::remove_dir_all(dir);
-        fs::create_dir_all(dir);
+        let dir = &cfg.root.clone().join("block_content");
 
         BlockContent {
             fileset: FlatFileSet::new(

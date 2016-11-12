@@ -124,7 +124,7 @@ impl<'a> Transaction<'a> {
         self.verify_syntax()?;
 
         let hash_buf = hash::Hash32Buf::double_sha256(self.to_raw());
-        let hash     = hash_buf.as_ref();
+        let _        = hash_buf.as_ref();
 
         // First see if it already exists
         if store.index.get(hash_buf.as_ref()).is_some() {

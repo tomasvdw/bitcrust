@@ -106,6 +106,14 @@ impl FlatFile {
         }
     }
 
+    pub fn get_mut(&self, filepos: usize) -> &'static mut atomic::AtomicU64 {
+
+        unsafe {
+            mem::transmute( self.ptr.offset(filepos as isize))
+        }
+    }
+
+
     pub fn put<T>(&self, value: &T, filepos: usize) {
 
         let target: &mut T = unsafe {
@@ -135,7 +143,13 @@ impl FlatFile {
         };
     }
 
-    /// Reserves `size` bytes for writing, updates the write_pos atomically
+    //pub fn update_cas(&self, filepos: usize, oldValue: FilePtr, newValue: FilePtr) -> bool {
+    //    true
+
+    //}
+
+
+        /// Reserves `size` bytes for writing, updates the write_pos atomically
     /// and returns the position at which the bytes can be written
     ///
     /// If no more then max_size bytes are available, None is returned

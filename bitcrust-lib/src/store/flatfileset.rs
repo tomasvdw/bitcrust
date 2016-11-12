@@ -14,6 +14,7 @@
 
 use std::path::{Path,PathBuf};
 use std::mem;
+use std::fs;
 
 use itertools::Itertools;
 use itertools::MinMaxResult::{NoElements, OneElement, MinMax};
@@ -125,10 +126,14 @@ impl FlatFileSet {
         path:   &Path,
         prefix: &'static str,
         file_size: u32,
-        max_size: u32)
-        -> FlatFileSet {
+        max_size: u32) -> FlatFileSet {
 
         assert!(file_size >= max_size);
+
+        if !path.exists() {
+            fs::create_dir_all(path)
+                .expect(&format!("Could not create {:?}", path));
+        }
 
         // Find the range of files currently on disk
         let (min,max) = find_min_max_filenumbers(path, prefix);
@@ -235,15 +240,6 @@ impl FlatFileSet {
         target_ptr
     }
 
-    /// Allocates the given amount of space, but leave it empty
-    ///
-    /// Internally, this will ensure creation of new files
-    pub fn write_empty<T>(&mut self, size: u32) -> FilePtr {
-
-        self.alloc_write_space(mem::size_of::<T>() as u32)
-
-    }
-
 
     /// Reads the length-prefixed buffer at the given position
     pub fn read(&mut self, pos: FilePtr) -> &[u8] {
@@ -265,6 +261,7 @@ impl FlatFileSet {
 
         file.get(filepos)
     }
+
 }
 
 
@@ -339,23 +336,25 @@ mod tests {
     #[test]
     fn test_concurrent() {
 
-        const THREADS: usize         = 100;
-        const MAX_SIZE: usize        = 20000;
-        const PUTS_PER_THREAD: usize = 100;
+        const THREADS: usize         = 50;
+        const MAX_SIZE: usize        = 2000;
+        const PUTS_PER_THREAD: usize = 10;
         const GETS_PER_PUT: usize    = 30;
 
-        let handles = (0..THREADS).map(|_|
-            thread::spawn(|| {
+        let dir = tempdir::TempDir::new("test1").unwrap();
+        let path = PathBuf::from(dir.path());
+
+        let handles: Vec<_> = (0..THREADS).map(|_| {
+            let path = path.clone();
+            thread::spawn(move || {
+
                 let mut rng = rand::thread_rng();
 
-                //let dir = ;//tempdir::TempDir::new("test1").unwrap();
-                let path = PathBuf::from(".");//dir.path();
                 let mut ff = FlatFileSet::new(&path, "tx2-", 10_000_000, 9_000_000);
 
-                let mut map: collections::HashMap<FilePtr,  Vec<u8>> = collections::HashMap::new();
+                let mut map: collections::HashMap<FilePtr, Vec<u8>> = collections::HashMap::new();
 
                 for _ in 0..PUTS_PER_THREAD {
-
                     // create some nice data
                     let size: usize = rng.gen_range(10, MAX_SIZE);
                     let mut buf = vec![0; size];
@@ -375,10 +374,9 @@ mod tests {
                         assert_eq!(v, ff.read(*k));
                         //assert_eq!(3,4);
                     }
-
                 }
             })
-        );
+        }).collect();
 
         for h in handles {
             h.join().unwrap();

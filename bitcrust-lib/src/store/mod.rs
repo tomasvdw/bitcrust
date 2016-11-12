@@ -11,7 +11,6 @@
 //!
 //!
 
-use std::fs;
 
 mod fileptr;
 mod flatfile;
@@ -44,7 +43,6 @@ pub struct Store {
 
     // Flat files
     pub block_content: block_content::BlockContent,
-    pub spent_tree:    FlatFileSet,
     pub hash_index:    hash_index::HashIndex,
 
 }
@@ -54,38 +52,15 @@ impl Store {
 
     pub fn new(cfg: &config::Config) -> Store {
 
-        let dir_st = &cfg.root.clone().join("spent_tree");
-
-        // recreate them
-        fs::remove_dir_all(dir_st);
-        fs::create_dir_all(dir_st);
-
         Store {
             index: index::Index::new(cfg),
 
             block_content: block_content::BlockContent::new(&cfg),
             hash_index:    hash_index::HashIndex::new(&cfg),
 
-            spent_tree: FlatFileSet::new(
-                dir_st, "st-", FILE_SIZE, MAX_CONTENT_SIZE),
-
 
         }
     }
-
-/*
-    /// Sets a value in the index
-    pub fn set(&self, hash: hash::Hash32, ptr: fileptr::FilePtr) {
-
-
-    }
-
-    pub fn get(&self, hash: hash::Hash32) -> Option<fileptr::FilePtr> {
-
-        unimplemented!();
-    }
-*/
-
 
 }
 
