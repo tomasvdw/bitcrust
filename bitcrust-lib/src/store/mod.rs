@@ -12,7 +12,9 @@
 //!
 
 
-mod fileptr;
+// hmm; don't like this
+pub mod fileptr;
+
 mod flatfile;
 mod flatfileset;
 mod index;
@@ -39,7 +41,7 @@ const MAX_CONTENT_SIZE: u32  = FILE_SIZE - 10 * MB as u32 ;
 /// This is the accessor to the
 pub struct Store {
 
-    pub index: index::Index,
+    //pub index: index::Index,
 
     // Flat files
     pub block_content: block_content::BlockContent,
@@ -53,7 +55,7 @@ impl Store {
     pub fn new(cfg: &config::Config) -> Store {
 
         Store {
-            index: index::Index::new(cfg),
+            //index: index::Index::new(cfg),
 
             block_content: block_content::BlockContent::new(&cfg),
             hash_index:    hash_index::HashIndex::new(&cfg),

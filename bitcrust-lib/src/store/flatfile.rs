@@ -143,13 +143,7 @@ impl FlatFile {
         };
     }
 
-    //pub fn update_cas(&self, filepos: usize, oldValue: FilePtr, newValue: FilePtr) -> bool {
-    //    true
-
-    //}
-
-
-        /// Reserves `size` bytes for writing, updates the write_pos atomically
+    /// Reserves `size` bytes for writing, updates the write_pos atomically
     /// and returns the position at which the bytes can be written
     ///
     /// If no more then max_size bytes are available, None is returned

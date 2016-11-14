@@ -10,7 +10,7 @@ use itertools::Itertools;
 use hash;
 
 use ffi;
-
+use store::fileptr::FilePtr;
 
 const MAX_TRANSACTION_SIZE: usize = 1_000_000;
 
@@ -119,42 +119,61 @@ impl<'a> Transaction<'a> {
         self.txs_in.len() == 1 && self.txs_in[0].prev_tx_out.is_null()
     }
 
+    pub fn verify_pending_outputs(&self, inputs: &Vec<FilePtr>) {
+        if !inputs.is_empty() {
+            //println!("Back-tracking {} inputs", inputs.len());
+        }
+    }
+
     pub fn verify_and_store(&self, store: &mut Store) -> TransactionResult<TransactionOk> {
 
         self.verify_syntax()?;
+
 
         let hash_buf = hash::Hash32Buf::double_sha256(self.to_raw());
         let _        = hash_buf.as_ref();
 
         // First see if it already exists
-        if store.index.get(hash_buf.as_ref()).is_some() {
+        let existing_ptrs = store.hash_index.get_ptr(hash_buf.as_ref());
+
+        if existing_ptrs
+            .iter()
+            .any(|p| p.is_transaction()) {
+
+            assert_eq!(existing_ptrs.len(), 1);
             return Ok(TransactionOk::AlreadyExists)
         }
 
+        // existing_ptrs are now inputs that are waiting for this transactions
+        // they need to be verified
+        self.verify_pending_outputs(&existing_ptrs);
+
+
+        let ptr      = store.block_content.write(self.to_raw());
+
         if !self.is_coinbase() {
-            self.verify_input_scripts(store)?;
+            self.verify_input_scripts(store, ptr)?;
         }
 
 
-        let ptr = store.block_content.write(self.to_raw());
-        store.index.set(hash_buf.as_ref(), ptr);
+        store.hash_index.set_tx_ptr(hash_buf.as_ref(), ptr, existing_ptrs);
 
 
         Ok(TransactionOk::VerifiedAndStored)
     }
 
 
-    pub fn verify_input_scripts(&self, store: &mut Store) -> TransactionResult<()> {
+    pub fn verify_input_scripts(&self, store: &mut Store, tx_ptr: FilePtr) -> TransactionResult<()> {
 
         for (index, input) in self.txs_in.iter().enumerate() {
 
-            //let output = store.index.get_transaction_or_set_input
-            let output_r = store.index.get(input.prev_tx_out);
-            let output = match output_r {
+            let output = store.hash_index.get_tx_for_output(input.prev_tx_out,
+                tx_ptr.to_input(index as u32 ));
+            let output = match output {
                 None => {
 
-                    println!("Err for inp {:?}", input);
-                    return Err(TransactionError::OutputTransactionNotFound);
+                    //println!("Ignoring output not found for {:?}", input);
+                    return Ok(())
                 },
                 Some(o) => o
             };

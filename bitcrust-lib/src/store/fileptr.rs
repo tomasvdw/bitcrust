@@ -55,6 +55,15 @@ impl FilePtr {
         )
     }
 
+    pub fn to_input(self, input: u32) -> FilePtr {
+        FilePtr(
+            self.0
+                | 0x2000_0000_0000_0000
+                | (((input as u64)  << 46) & 0x1FFF_C000_0000_0000)
+        )
+
+    }
+
     pub fn file_number(self) -> i16 {
         ((self.0 >> 30) & 0x3FFF) as i16
     }

@@ -105,7 +105,7 @@ impl HashIndex {
         let hash_root_fileptr = if is_new {
 
             // allocate space for root hash table
-            fileset.alloc_write_space(8 * 256* 256 * 256)
+            fileset.alloc_write_space(mem::size_of::<[FilePtr; HASH_ROOT_COUNT]>() as u32)
         }
         else {
             // hash root must have been the first thing written
@@ -281,8 +281,6 @@ impl HashIndex {
                     let new_leaf     = Leaf { value: input_ptr, next: node.leaf };
                     let new_leaf_ptr = self.fileset.write_fixed(&new_leaf);
 
-//                    println!("get_tx_fo_out set leaf @ {:?} to {:?}", node.leaf, new_leaf_ptr);
-
                     // then atomically update the pointer
                     if node.leaf.atomic_replace(first_value_ptr, new_leaf_ptr) {
                         return None;
@@ -355,8 +353,6 @@ mod tests {
                 let mut idx = HashIndex::new(&cfg);
 
                 for _ in 0..LOOPS {
-                    let hh = hash(585);
-
 
                     let tx = FilePtr::new(0, rng.gen_range(10, DATA_SIZE));
                     let tx_hash = hash(tx.file_pos());
