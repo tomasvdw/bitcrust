@@ -55,7 +55,7 @@ impl FilePtr {
         )
     }
 
-    pub fn to_input(self, input: u32) -> FilePtr {
+    pub fn as_input(self, input: u32) -> FilePtr {
         FilePtr(
             self.0
                 | 0x2000_0000_0000_0000

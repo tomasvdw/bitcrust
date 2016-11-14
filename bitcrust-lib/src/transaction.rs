@@ -168,7 +168,7 @@ impl<'a> Transaction<'a> {
         for (index, input) in self.txs_in.iter().enumerate() {
 
             let output = store.hash_index.get_tx_for_output(input.prev_tx_out,
-                tx_ptr.to_input(index as u32 ));
+                tx_ptr.as_input(index as u32 ));
             let output = match output {
                 None => {
 

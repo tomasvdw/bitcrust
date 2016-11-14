@@ -195,11 +195,11 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
     }
 
     fn serialize_none(&mut self) -> Result<(), Self::Error> {
-        unimplemented!();
+        unimplemented!()
     }
 
     fn serialize_some<V: serde::Serialize>(&mut self, _: V) -> Result<(), Self::Error> {
-        unimplemented!();
+        unimplemented!()
     }
 
 
@@ -214,7 +214,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         name: &'static str,
         len: usize,
     ) -> Result<Self::TupleStructState, Self::Error> {
-        unimplemented!();
+        unimplemented!()
     }
 
     /// Serializes a tuple struct element. Must have previously called
@@ -224,7 +224,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         state: &mut Self::TupleStructState,
         value: V,
     ) -> Result<(), Self::Error> {
-        unimplemented!();
+        unimplemented!()
     }
 
     /// Finishes serializing a tuple struct.
@@ -232,7 +232,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         &mut self,
         state: Self::TupleStructState,
     ) -> Result<(), Self::Error> {
-        unimplemented!();
+        unimplemented!()
     }
 /// Begins to serialize a tuple. This call must be followed by zero or more
     /// calls to `serialize_tuple_elt`, then a call to `serialize_tuple_end`. A
@@ -241,7 +241,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         &mut self,
         len: usize,
     ) -> Result<Self::TupleState, Self::Error> {
-        unimplemented!();
+        unimplemented!()
     }
 
 
@@ -253,7 +253,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         value: V,
     ) -> Result<(), Self::Error> {
         
-        unimplemented!();
+        unimplemented!()
     }
 
     /// Finishes serializing a tuple.
@@ -262,7 +262,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         state: Self::TupleState,
     ) -> Result<(), Self::Error> {
 
-        unimplemented!();
+        unimplemented!()
     }
 
     /// Begins to serialize a tuple variant. This call must be followed by zero
@@ -277,7 +277,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         len: usize,
     ) -> Result<Self::TupleVariantState, Self::Error> {
 
-        unimplemented!();
+        unimplemented!()
     }
 
     /// Serializes a tuple variant element. Must have previously called
@@ -288,7 +288,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         value: V,
     ) -> Result<(), Self::Error> {
 
-        unimplemented!();
+        unimplemented!()
     }
 
     /// Finishes serializing a tuple variant.
@@ -297,7 +297,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         state: Self::TupleVariantState,
     ) -> Result<(), Self::Error> {
 
-        unimplemented!();
+        unimplemented!()
     }
 
     fn serialize_map(&mut self, len: Option<usize>) -> Result<(), Self::Error> {
@@ -323,7 +323,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         &mut self,
         state: Self::MapState,
     ) -> Result<(), Self::Error> {
-        unimplemented!();
+        unimplemented!()
     }
 
 
@@ -398,7 +398,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
                           _name: &'static str,
                           _variant_index: usize,
                           variant: &'static str) -> Result<(), Self::Error> {
-        unimplemented!();
+        unimplemented!()
     }
 
     #[inline]
@@ -431,7 +431,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         len: usize,
     ) -> Result<Self::StructVariantState, Self::Error> {
 
-        unimplemented!();
+        unimplemented!()
     }
 
     /// Serialize a struct variant element. Must have previously called
@@ -443,7 +443,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         value: V,
     ) -> Result<(), Self::Error> {
 
-        unimplemented!();
+        unimplemented!()
     }
 
     /// Finishes serializing a struct variant.
@@ -452,7 +452,7 @@ impl<'a, T: io::Write> serde::ser::Serializer for BinSerializer<'a, T> {
         state: Self::StructVariantState,
     ) -> Result<(), Self::Error> {
 
-        unimplemented!();
+        unimplemented!()
     }
 
 }
