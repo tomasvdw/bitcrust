@@ -1,4 +1,4 @@
-sudo: false
+sudo: true
 
 language: rust
 
@@ -16,6 +16,7 @@ rust:
 # load travis-cargo
 before_script:
   - |
+      cp deps/* /usr/local/lib &&
       pip install 'travis-cargo<0.2' --user &&
       export PATH=$HOME/.local/bin:$PATH
 
