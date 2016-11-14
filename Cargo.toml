@@ -3,9 +3,14 @@ name = "bitcrust"
 version = "0.1.0"
 authors = ["Tomas van der Wansem <tomas@tomasvdw.nl>"]
 
+
 [lib]
 name = "bitcrust_lib"
 path = "bitcrust-lib/src/lib.rs"
+
+[profile.dev]
+
+rustflags = ["-L", "lib"]
 
 [dependencies]
 lmdb-rs = "0.7"

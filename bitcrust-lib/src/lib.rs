@@ -1,5 +1,6 @@
 
 
+#![feature(link_args)]
 #![feature(custom_derive, plugin)]
 #![feature(question_mark)]
 #![feature(integer_atomics)]
