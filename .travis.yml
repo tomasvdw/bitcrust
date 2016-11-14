@@ -9,7 +9,7 @@ addons:
       - libelf-dev
       - libdw-dev
       - binutils-dev # optional: only required for the --verify flag of coveralls
-      - g++-5
+      - g++
 
 
 rust:
