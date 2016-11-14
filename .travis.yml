@@ -1,15 +1,22 @@
 sudo: true
+dist: trusty
 
 language: rust
 
 addons:
   apt:
+    sources:
+      # add PPAs with more up-to-date toolchains
+      - ubuntu-toolchain-r-test
+      - llvm-toolchain-precise-3.6
     packages:
       - libcurl4-openssl-dev
       - libelf-dev
       - libdw-dev
       - binutils-dev # optional: only required for the --verify flag of coveralls
-      - g++
+      - gcc-5
+      - g++-5
+      - clang-3.6
 
 
 rust:
