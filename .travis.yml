@@ -5,27 +5,26 @@ language: rust
 
 addons:
   apt:
-    sources:
-      # add PPAs with more up-to-date toolchains
-      - ubuntu-toolchain-r-test
-      - llvm-toolchain-precise-3.6
     packages:
       - libcurl4-openssl-dev
       - libelf-dev
       - libdw-dev
       - binutils-dev # optional: only required for the --verify flag of coveralls
-      - gcc-5
-      - g++-5
-      - clang-3.6
 
 
 rust:
   - nightly
 
+install:
+  - git clone https://github.com/bitcoin/secp256k1.git
+  - cd secp256k1
+  - ./autogen.sh && .configure --enable-module-recovery && make && sudo make install
+  - sudo ldconfig /usr/local/lib
+
 # load travis-cargo
 before_script:
   - |
-      sudo cp deps/* /usr/local/lib &&
+      #sudo cp deps/* /usr/local/lib &&
       pip install 'travis-cargo<0.2' --user &&
       export PATH=$HOME/.local/bin:$PATH
 
