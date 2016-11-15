@@ -35,6 +35,7 @@ use std::sync::atomic;
 
 use std::fmt::{Debug,Formatter,Error};
 
+
 #[derive(Copy,Clone,PartialEq,Eq,Hash)]
 pub struct FilePtr(u64);
 
@@ -43,15 +44,6 @@ impl FilePtr {
         FilePtr(
             (((fileno as u64) << 30) & 0x3FFF_C000_0000) |
                 ((filepos as u64) & 0x3FFF_FFFF)
-        )
-    }
-
-    pub fn new_input(fileno: i16, filepos: u32, input: u32 ) -> FilePtr {
-        FilePtr(
-               (((fileno as u64) << 30) & 0x0000_3FFF_C000_0000) |
-                ((filepos as u64)       & 0x0000_0000_3FFF_FFFF) |
-                                          0x2000_0000_0000_0000  |
-               (((input as u64)  << 46) & 0x1FFF_C000_0000_0000)
         )
     }
 

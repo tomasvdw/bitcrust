@@ -3,25 +3,23 @@ dist: trusty
 
 language: rust
 
-addons:
-  apt:
-    packages:
-      - libcurl4-openssl-dev
-      - libelf-dev
-      - libdw-dev
-      - libssl-dev
-      - libevent-dev
-      - libboost-all-dev
-      - binutils-dev # optional: only required for the --verify flag of coveralls
-
 
 rust:
   - nightly
 
+before_install:
+  - sudo apt-get update -q
+  - sudo apt-get install libcurl4-openssl-dev libelf-dev libdw-dev libssl-dev libevent-dev libboost-all-dev binutils-dev
+
 install:
   - git clone https://github.com/bitcoin/bitcoin
   - cd bitcoin
-  - ./autogen.sh && ./configure --without-daemon --without-utils --without-gui --disable-wallet --disable-tests --disable-gui-tests  && make && sudo make install
+  - |
+    ./autogen.sh && ./configure --without-daemon
+    --without-utils --without-gui --disable-wallet --disable-bench
+    --disable-zmq --disable-man --disable-tests --disable-gui-tests
+    && make
+    && sudo make install
   - sudo ldconfig /usr/local/lib
 
 # load travis-cargo
@@ -33,9 +31,9 @@ before_script:
 # the main build
 script:
   - |
-      travis-cargo build &&
-      travis-cargo test &&
-      travis-cargo bench 
+    travis-cargo build &&
+    travis-cargo test &&
+    travis-cargo bench
 
 after_success:
   # upload the documentation from the build with stable (automatically only actually

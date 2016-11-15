@@ -378,7 +378,7 @@ mod tests {
                             let output_tx1_ptr = FilePtr::new(0, tx.file_pos() as u32 -1);
                             let output_hash = hash(output_tx1_ptr.file_pos());
 
-                            let input_ptr = FilePtr::new_input(0, tx.file_pos() as u32, 1);
+                            let input_ptr = FilePtr::new(0, tx.file_pos() as u32).as_input(1);
 
                             let output_tx1 = idx.get_tx_for_output(output_hash.as_ref(), input_ptr);
 
