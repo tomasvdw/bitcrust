@@ -21,7 +21,7 @@ rust:
 install:
   - git clone https://github.com/bitcoin/bitcoin
   - cd bitcoin
-  - ./autogen.sh && ./configure --without-daemon --without-utils --without-gui && make && sudo make install
+  - ./autogen.sh && ./configure --without-daemon --without-utils --without-gui --disable-wallet --disable-tests --disable-gui-tests  && make && sudo make install
   - sudo ldconfig /usr/local/lib
 
 # load travis-cargo
