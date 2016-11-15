@@ -24,7 +24,7 @@ extern {
 }
 
 #[derive(Debug)]
-enum VerifyScriptError {
+pub enum VerifyScriptError {
     UnknownError
 }
 
@@ -34,12 +34,12 @@ pub fn verify_script(previous_tx_out: &[u8], transaction: &[u8], input: u32) -> 
 
     let flags = 0;
     let mut err: i32 = 0;
-    let result = unsafe { ffi::bitcoinconsensus_verify_script(
-        previous_tx_out.pk_script.as_ptr(),
-        previous_tx_out.pk_script.len()  as u32,
+    let result = unsafe { bitcoinconsensus_verify_script(
+        previous_tx_out.as_ptr(),
+        previous_tx_out.len()  as u32,
         transaction.as_ptr(),
         transaction.len() as u32,
-        index as u32,
+        input as u32,
         flags,
         &mut err
     ) };

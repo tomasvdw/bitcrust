@@ -185,7 +185,7 @@ impl<'a> Transaction<'a> {
             let previous_tx_out = previous_tx.txs_out.get(input.prev_tx_out_idx as usize)
                 .ok_or(TransactionError::OutputIndexNotFound)?;
 
-            ffi::verify_script(previous_tx_out, self.to_raw(), index)
+            ffi::verify_script(previous_tx_out.pk_script, self.to_raw(), index as u32)
                 .expect("We can't have script errors at this stage!");
 
 
