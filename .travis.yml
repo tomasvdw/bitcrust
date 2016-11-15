@@ -9,6 +9,9 @@ addons:
       - libcurl4-openssl-dev
       - libelf-dev
       - libdw-dev
+      - libssl-dev
+      - libevent-dev
+      - libboost-all-dev
       - binutils-dev # optional: only required for the --verify flag of coveralls
 
 
@@ -16,15 +19,14 @@ rust:
   - nightly
 
 install:
-  - git clone https://github.com/bitcoin/secp256k1.git
-  - cd secp256k1
-  - ./autogen.sh && .configure --enable-module-recovery && make && sudo make install
+  - git clone https://github.com/bitcoin/bitcoin
+  - cd bitcoin
+  - ./autogen.sh && .configure && make && sudo make install
   - sudo ldconfig /usr/local/lib
 
 # load travis-cargo
 before_script:
   - |
-      #sudo cp deps/* /usr/local/lib &&
       pip install 'travis-cargo<0.2' --user &&
       export PATH=$HOME/.local/bin:$PATH
 
@@ -50,5 +52,5 @@ env:
     # override the default `--features unstable` used for the nightly branch (optional)
     - TRAVIS_CARGO_NIGHTLY_FEATURE=""
     # encrypted github token for doc upload (see `GH_TOKEN` link above)
-    - secure: "..."
+    # - secure: "..."
 

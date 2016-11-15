@@ -185,21 +185,8 @@ impl<'a> Transaction<'a> {
             let previous_tx_out = previous_tx.txs_out.get(input.prev_tx_out_idx as usize)
                 .ok_or(TransactionError::OutputIndexNotFound)?;
 
-
-            let flags = 0;
-            let result = unsafe { ffi::bitcoin_verify_script(
-                self.raw.inner.as_ptr(),
-                self.raw.inner.len(),
-                previous_tx_out.pk_script.as_ptr(),
-                previous_tx_out.pk_script.len(),
-                index as u32,
-                flags
-            ) };
-
-
-            if result != 1 {
-                return Err(TransactionError::ScriptError(result));
-            }
+            ffi::verify_script(previous_tx_out, self.to_raw(), index)
+                .expect("We can't have script errors at this stage!");
 
 
         }
