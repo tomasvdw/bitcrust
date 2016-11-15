@@ -8,9 +8,6 @@ authors = ["Tomas van der Wansem <tomas@tomasvdw.nl>"]
 name = "bitcrust_lib"
 path = "bitcrust-lib/src/lib.rs"
 
-[profile.dev]
-
-rustflags = ["-L", "lib"]
 
 [dependencies]
 lmdb-rs = "0.7"

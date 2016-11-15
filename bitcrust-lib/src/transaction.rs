@@ -119,11 +119,21 @@ impl<'a> Transaction<'a> {
         self.txs_in.len() == 1 && self.txs_in[0].prev_tx_out.is_null()
     }
 
-    pub fn verify_pending_outputs(&self, inputs: &Vec<FilePtr>) {
-        if !inputs.is_empty() {
-            //println!("Back-tracking {} inputs", inputs.len());
+    pub fn verify_pending_outputs(&self, store: &mut Store, inputs: &Vec<FilePtr>) {
+        for input in inputs {
+
+            //let mut tx_raw = Buffer::new(store.block_content.read_fixed(input));
+            //let tx         = Transaction::parse(&mut tx_raw);
+
+
+
+
+               //println!("Back-tracking {} inputs", inputs.len());
+
         }
     }
+
+
 
     pub fn verify_and_store(&self, store: &mut Store) -> TransactionResult<TransactionOk> {
 
@@ -146,7 +156,7 @@ impl<'a> Transaction<'a> {
 
         // existing_ptrs are now inputs that are waiting for this transactions
         // they need to be verified
-        self.verify_pending_outputs(&existing_ptrs);
+        self.verify_pending_outputs(store, &existing_ptrs);
 
 
         let ptr      = store.block_content.write(self.to_raw());
