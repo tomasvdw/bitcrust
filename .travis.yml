@@ -16,6 +16,7 @@ install:
   - cd bitcoin
   - ./autogen.sh && ./configure --without-daemon --without-utils --without-gui --disable-wallet --disable-bench --disable-zmq --disable-man --disable-tests --disable-gui-tests && make && sudo make install
   - sudo ldconfig /usr/local/lib
+  - cd ..
 
 # load travis-cargo
 before_script:
