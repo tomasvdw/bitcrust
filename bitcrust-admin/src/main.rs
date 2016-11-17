@@ -45,6 +45,7 @@ fn main() {
         println!("Processing {}", name);
         let f = File::open(name).unwrap();
         let mut rdr = BufReader::new(f);
+        let mut store = bitcrust_lib::init();
 
 
         loop {
@@ -54,12 +55,15 @@ fn main() {
                 break;
             }
 
-            let mut store = bitcrust_lib::init();
             bitcrust_lib::add_block(&mut store, &blk.unwrap());
 
             block += 1;
             if block % 100 == 0 {
                 println!("Processed block {}", block);
+            }
+
+            if block == 75000 {
+                break;
             }
 
         }

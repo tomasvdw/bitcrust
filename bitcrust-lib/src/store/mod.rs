@@ -25,6 +25,7 @@ mod hash_index;
 
 use config;
 
+use metrics::Metrics;
 
 use self::flatfileset::FlatFileSet;
 
@@ -47,6 +48,8 @@ pub struct Store {
     pub block_content: block_content::BlockContent,
     pub hash_index:    hash_index::HashIndex,
 
+
+    pub metrics:       Metrics,
 }
 
 
@@ -59,8 +62,7 @@ impl Store {
 
             block_content: block_content::BlockContent::new(&cfg),
             hash_index:    hash_index::HashIndex::new(&cfg),
-
-
+            metrics:       Metrics::new(),
         }
     }
 

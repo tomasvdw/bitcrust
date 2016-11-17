@@ -120,10 +120,13 @@ impl<'a> Transaction<'a> {
     }
 
     pub fn verify_pending_outputs(&self, store: &mut Store, inputs: &Vec<FilePtr>) {
-        for input in inputs {
 
-            //let mut tx_raw = Buffer::new(store.block_content.read_fixed(input));
-            //let tx         = Transaction::parse(&mut tx_raw);
+
+        for input in inputs {
+            let mut _m = store.metrics.start("verify_backtrack");
+
+            let mut tx_raw = Buffer::new(store.block_content.read_fixed(input));
+            let tx         = Transaction::parse(&mut tx_raw);
 
 
 
@@ -138,7 +141,6 @@ impl<'a> Transaction<'a> {
     pub fn verify_and_store(&self, store: &mut Store) -> TransactionResult<TransactionOk> {
 
         self.verify_syntax()?;
-
 
         let hash_buf = hash::Hash32Buf::double_sha256(self.to_raw());
         let _        = hash_buf.as_ref();
@@ -175,7 +177,11 @@ impl<'a> Transaction<'a> {
 
     pub fn verify_input_scripts(&self, store: &mut Store, tx_ptr: FilePtr) -> TransactionResult<()> {
 
+        let mut _m = store.metrics.start("verify_scoped_scripts");
+        _m.set_ticker(self.txs_in.len());
+
         for (index, input) in self.txs_in.iter().enumerate() {
+
 
             let output = store.hash_index.get_tx_for_output(input.prev_tx_out,
                 tx_ptr.as_input(index as u32 ));
@@ -183,7 +189,7 @@ impl<'a> Transaction<'a> {
                 None => {
 
                     //println!("Ignoring output not found for {:?}", input);
-                    return Ok(())
+                    continue;
                 },
                 Some(o) => o
             };
@@ -195,11 +201,16 @@ impl<'a> Transaction<'a> {
             let previous_tx_out = previous_tx.txs_out.get(input.prev_tx_out_idx as usize)
                 .ok_or(TransactionError::OutputIndexNotFound)?;
 
+            let mut _m2 = store.metrics.start("verify_scripts");
             ffi::verify_script(previous_tx_out.pk_script, self.to_raw(), index as u32)
                 .expect("We can't have script errors at this stage!");
 
 
+
+
         }
+        //store.metrics.stop("verify_input_scripts");
+        //println!("Expecting drop now:");
 
         Ok(())
     }

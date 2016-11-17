@@ -40,6 +40,7 @@ extern crate rand;
 extern crate ring;
 
 mod ffi;
+mod metrics;
 
 mod buffer;
 use buffer::*;

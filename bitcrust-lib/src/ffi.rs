@@ -1,6 +1,10 @@
+//! Interface to C-libs.
+//!
+//! Currently only libbitcoinconsensus
+
+
 extern crate libc;
 
-//#[link(name = "secp256k1")]
 #[link(name = "bitcoinconsensus")]
 extern {
 

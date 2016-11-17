@@ -19,15 +19,15 @@ write-pointer (using atomic CAS) and then write the record at the location of th
 
 Records in the files can be identified with 48-bit pointers (16-bit fileno and 32-bit filepos).
 
-## Transactions
+## Block_Content
 
-Transactions are stored in flatfiles `transactions/tx-XXXX` 
+Transactions are stored in flatfiles `block_content/bc-XXXX` 
 
 Transanctions are prefixed with a 4-byte length and written in network format.
 
-## Blockheaders
+## Hash_Index
 
-Blcokheaders are stored  'headers/hdr-XXXX'. Without prefix as they are fixed lenth.
+The hash index is used to lookup fileptrs from 
 
 ## Spenttree
 

@@ -1,5 +1,7 @@
 //!
-//! Bitcrust block main documentation
+//! Bitcoin block
+//!
+//! Handles block-level validation and storage
 
 /// 2016 Tomas, no rights reserved, no warranties given
 
@@ -24,14 +26,18 @@ pub enum BlockError {
 }
 
 impl convert::From<EndOfBufferError> for BlockError {
+
     fn from(_: EndOfBufferError) -> BlockError {
+
         BlockError::UnexpectedEndOfBuffer
     }
 
 }
 
 impl convert::From<TransactionError> for BlockError {
+
     fn from(inner: TransactionError) -> BlockError {
+
         BlockError::TransactionError(inner)
     }
 
@@ -97,6 +103,7 @@ impl<'a> Block<'a> {
     /// Parses each transaction in the block, and executes the callback for each
     ///
     /// This will also check whether only the first transaction is a coinbase
+    /// and the rest is not
     ///
     pub fn process_transactions<F>(&self, mut callback: F) -> BlockResult<()>
         where F : FnMut(Transaction<'a>) -> BlockResult<()> {
