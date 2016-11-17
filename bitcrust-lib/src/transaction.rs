@@ -309,10 +309,12 @@ impl<'a> fmt::Debug for TxOutput<'a> {
 }
 
 
+/// tx-tests are external
 
 #[cfg(test)]
 mod tests {
     extern crate rustc_serialize;
+
 
     #[test]
     fn test_parse_tx() {}

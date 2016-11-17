@@ -51,12 +51,10 @@ pub struct Block<'a> {
 
 
     pub header: BlockHeader<'a>,
-
     pub txcount: usize,
-
     pub txs:    &'a[u8],
 
-    // the full block as slice
+    /// the full block as slice
     raw:        &'a[u8],
 }
 
@@ -100,10 +98,11 @@ impl<'a> Block<'a> {
         Ok(())
     }
 
+
     /// Parses each transaction in the block, and executes the callback for each
     ///
     /// This will also check whether only the first transaction is a coinbase
-    /// and the rest is not
+    /// and the rest is not, so that the transactions can be uniformly handled
     ///
     pub fn process_transactions<F>(&self, mut callback: F) -> BlockResult<()>
         where F : FnMut(Transaction<'a>) -> BlockResult<()> {
@@ -125,8 +124,9 @@ impl<'a> Block<'a> {
 
         for _ in 1..self.txcount {
             let tx = Transaction::parse(&mut buffer)?;
-            if tx.is_coinbase() {
 
+            // all but first may not be coinbase
+            if tx.is_coinbase() {
                 return Err(BlockError::DoubleCoinbase);
             }
 
@@ -138,9 +138,9 @@ impl<'a> Block<'a> {
             // Buffer not fully consumed
             Err(BlockError::UnexpectedEndOfBuffer)
         }
-            else {
-                Ok(())
-            }
+        else {
+            Ok(())
+        }
     }
 }
 

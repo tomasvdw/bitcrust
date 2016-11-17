@@ -47,7 +47,7 @@ impl Metrics {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use bitcrust_lib::metrics;
     ///
     /// let metrics = metrics::Metrics::new();

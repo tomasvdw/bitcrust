@@ -8,8 +8,8 @@
 //! The other bytes of the header are reserved
 //!
 //! The flatfiles are suffixed with 4 hex-digits indicating the filenumber
-//! An index to a file consists of a 16-bits signed filenumber followed by 32-bit filepos
-//! This is passed around as a u64
+//! An index to a file consists of a 16-bits signed filenumber followed by 30-bit filepos
+//! This is passed around as a u64 [`FilePtr`]
 //!
 
 use std::path::{Path,PathBuf};

@@ -375,6 +375,9 @@ mod tests {
                     }
                     else {
                         if tx.file_pos() > 2 {
+
+                            // some messy ops for messy tests
+
                             let output_tx1_ptr = FilePtr::new(0, tx.file_pos() as u32 -1);
                             let output_hash = hash(output_tx1_ptr.file_pos());
 

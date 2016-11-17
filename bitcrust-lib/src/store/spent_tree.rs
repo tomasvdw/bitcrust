@@ -2,6 +2,10 @@
 
 /// The spent tree stores the location of transactions in the block-tree
 ///
+/// It is tracks the tree of blocks and is used to verify whether a block can be inserted at a
+/// certain location in the tree
+///
+///
 
 
 use std::{fs};

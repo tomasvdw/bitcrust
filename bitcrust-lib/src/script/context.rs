@@ -9,7 +9,7 @@ use script::opcode::OPCODES;
 
 /// Context provides an execution environment for scripts
 ///
-/// It is passed through 
+
 pub struct Context<'a> {
     pub stack:     stack::Stack,
     pub alt_stack: stack::Stack,
@@ -32,7 +32,7 @@ impl<'a> Context<'a> {
     }
     
     pub fn run(&mut self) -> Result<(), ScriptError> {
-        unimplemented!();
+        unimplemented!()
     }
 
 

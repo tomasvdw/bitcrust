@@ -9,6 +9,13 @@
 //!
 //! # hash_index
 //!
+//! This maps hashes to transaction and blockheaders
+//! A tx-hash can point to a transaction or to a set of inputs;
+//! in the latter case, the inputs are guards: these must be verified
+//! before the transaction can be inserted
+//!
+//! # spent_tree
+//!
 //!
 
 
@@ -17,7 +24,6 @@ pub mod fileptr;
 
 mod flatfile;
 mod flatfileset;
-mod index;
 
 mod block_content;
 mod hash_index;
