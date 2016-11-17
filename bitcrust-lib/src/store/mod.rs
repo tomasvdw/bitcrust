@@ -21,6 +21,7 @@ mod index;
 
 mod block_content;
 mod hash_index;
+mod spent_tree;
 
 
 use config;
@@ -47,6 +48,7 @@ pub struct Store {
     // Flat files
     pub block_content: block_content::BlockContent,
     pub hash_index:    hash_index::HashIndex,
+    pub spent_tree:    spent_tree::SpentTree,
 
 
     pub metrics:       Metrics,
@@ -62,6 +64,8 @@ impl Store {
 
             block_content: block_content::BlockContent::new(&cfg),
             hash_index:    hash_index::HashIndex::new(&cfg),
+            spent_tree:    spent_tree::SpentTree::new(&cfg),
+
             metrics:       Metrics::new(),
         }
     }

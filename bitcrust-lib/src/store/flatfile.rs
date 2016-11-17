@@ -125,9 +125,10 @@ impl FlatFile {
         };
     }
 
-    pub fn get_bytes(&self, filepos: usize, size: usize) -> &'static [u8] {
+    pub fn get_slice<T>(&self, filepos: usize, size: usize) -> &'static [T] {
         unsafe {
-            slice::from_raw_parts(self.ptr.offset(filepos as isize), size)
+            let typed_ptr: *mut T = mem::transmute(self.ptr.offset(filepos as isize));
+            slice::from_raw_parts(typed_ptr, size)
         }
 
     }

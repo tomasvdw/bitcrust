@@ -176,9 +176,10 @@ impl FlatFileSet {
     }
 
     /// Reserves `size` bytes in the flatfileset
-    /// Creates a new file if needed
     ///
+    /// Creates a new file if needed
     /// Allocation occurs atomically but lock-free
+    /// Returns a pointer to where size bytes can be stored
     pub fn alloc_write_space(&mut self, size: u32) -> FilePtr {
         let fileno = self.last_file - 1;
         let max_size = self.max_size;
@@ -204,6 +205,14 @@ impl FlatFileSet {
                 FilePtr::new(fileno, pos)
             }
         }
+    }
+
+    pub fn alloc_slice<T>(&mut self, count: usize) -> &'static [T] {
+
+        let ptr        = self.alloc_write_space((mem::size_of::<T>() * count) as u32);
+        let flatfile   = self.get_flatfile(ptr.file_number());
+
+        flatfile.get_slice(ptr.file_pos(), count)
     }
 
     /// Appends the slice to the flatfileset and returns a filepos
@@ -249,7 +258,7 @@ impl FlatFileSet {
         let file     = self.get_flatfile(fileno);
 
         let len: u32 = *file.get(filepos);
-        file.get_bytes(filepos+4, len as usize)
+        file.get_slice(filepos+4, len as usize)
     }
 
     /// Reads the fixed size buffer at the given position

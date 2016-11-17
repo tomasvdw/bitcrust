@@ -1,3 +1,8 @@
+//! Transaction parsing and verification
+//!
+//!
+
+
 
 use std::fmt;
 use buffer::*;
@@ -58,12 +63,12 @@ pub struct Transaction<'a> {
 
     raw:           Buffer<'a>,
 
-
 }
 
 
 
 impl<'a> Parse<'a> for Transaction<'a> {
+
     /// Parses the raw bytes into individual fields
     /// and perform basic syntax checks
     fn parse(buffer: &mut Buffer<'a>) -> Result<Transaction<'a>, EndOfBufferError> {
@@ -119,20 +124,34 @@ impl<'a> Transaction<'a> {
         self.txs_in.len() == 1 && self.txs_in[0].prev_tx_out.is_null()
     }
 
-    pub fn verify_pending_outputs(&self, store: &mut Store, inputs: &Vec<FilePtr>) {
 
 
-        for input in inputs {
-            let mut _m = store.metrics.start("verify_backtrack");
-
-            let mut tx_raw = Buffer::new(store.block_content.read_fixed(input));
-            let tx         = Transaction::parse(&mut tx_raw);
-
-
+    /// Reverse script validation
+    ///
+    /// This checks the passed input-ptrs are valid against the corresponding output of self
+    ///
+    pub fn verify_backtracking_outputs(&self, store: &mut Store, inputs: &Vec<FilePtr>) {
 
 
-               //println!("Back-tracking {} inputs", inputs.len());
+        for input_ptr in inputs {
+            let mut _m = store.metrics.start("block.tx.backtrack");
 
+            // read tx from disk
+            let mut tx_raw   = Buffer::new(store.block_content.read(*input_ptr));
+            let tx           = Transaction::parse(&mut tx_raw).
+                    expect("Invalid tx data in database");
+
+            let input_index  = input_ptr.input_index() as usize;
+            let ref input    = tx.txs_in[input_index];
+            let output_index = input.prev_tx_out_idx as usize;
+
+            let mut _m2 = store.metrics.start("block.tx.backtrack.verify");
+
+            ffi::verify_script(self.txs_out[output_index].pk_script, tx.to_raw(), input_index as u32)
+                .expect("We can't have script errors at this stage!");
+
+
+            // TODO: verify_amount here
         }
     }
 
@@ -153,12 +172,13 @@ impl<'a> Transaction<'a> {
             .any(|p| p.is_transaction()) {
 
             assert_eq!(existing_ptrs.len(), 1);
+
             return Ok(TransactionOk::AlreadyExists)
         }
 
         // existing_ptrs are now inputs that are waiting for this transactions
         // they need to be verified
-        self.verify_pending_outputs(store, &existing_ptrs);
+        self.verify_backtracking_outputs(store, &existing_ptrs);
 
 
         let ptr      = store.block_content.write(self.to_raw());
@@ -188,7 +208,10 @@ impl<'a> Transaction<'a> {
             let output = match output {
                 None => {
 
-                    //println!("Ignoring output not found for {:?}", input);
+                    // We can't find the transaction this input is pointing to
+                    // Oddly, this is perfectly fine; we just postpone script validation
+                    // Until that transaction comes in
+
                     continue;
                 },
                 Some(o) => o
@@ -205,12 +228,8 @@ impl<'a> Transaction<'a> {
             ffi::verify_script(previous_tx_out.pk_script, self.to_raw(), index as u32)
                 .expect("We can't have script errors at this stage!");
 
-
-
-
+            // TODO: verify_amount here
         }
-        //store.metrics.stop("verify_input_scripts");
-        //println!("Expecting drop now:");
 
         Ok(())
     }

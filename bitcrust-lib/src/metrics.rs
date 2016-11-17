@@ -8,7 +8,7 @@ use std::time::{Instant,Duration};
 use std::sync::Arc;
 use std::cell::RefCell;
 
-
+/// Represents a single named countable value
 struct Metric {
     time:   Duration,
     count:  usize,
@@ -16,6 +16,7 @@ struct Metric {
     runner: Option<Instant>
 }
 
+/// A handle to a timed key.
 pub struct RunningMetric<'a>{
     metric:     &'a Metrics,
     name:       &'static str,
@@ -25,6 +26,7 @@ pub struct RunningMetric<'a>{
 }
 
 pub struct Metrics {
+
     metrics: Arc<RefCell<HashMap<&'static str, Metric>>>
 
 }
@@ -43,8 +45,12 @@ impl Metrics {
     ///
     /// Hence the results must be saved in a temporary variable.
     ///
-    /// # Example
-    /// ```
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use bitcrust_lib::metrics;
+    ///
+    /// let metrics = metrics::Metrics::new();
     /// let _m = metrics.start("mymetric");
     /// ```
     ///
@@ -96,7 +102,7 @@ impl Drop for Metrics {
 
 impl<'a> RunningMetric<'a> {
 
-    // Close this metric and add the numbers to
+    // Close this metric and add the numbers to the main metrics table
     fn stop(&mut self) {
 
         if self.is_stopped {

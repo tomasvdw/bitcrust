@@ -57,16 +57,12 @@ impl FilePtr {
     }
 
 
-    pub fn from_input(self) -> (FilePtr, u32) {
-
-        (
-            FilePtr(self.0 & 0x3FFF_FFFF_FFFF),
-            ((self.0 >> 46) & 0x7FFF) as u32
-        )
+    pub fn input_index(self) -> u32 {
+        ((self.0 >> 46) & 0x7FFF) as u32
     }
 
     pub fn file_number(self) -> i16 {
-        
+
         ((self.0 >> 30) & 0x3FFF) as i16
     }
 
@@ -209,10 +205,9 @@ mod tests {
             thread::spawn(move || {
 
                 let mut ff2 = FlatFileSet::new(&path, "at-", 10_000_000, 9_000_000);
-                let mut rng = rand::thread_rng();
 
 
-                for lp in 0..LOOPS {
+                for _ in 0..LOOPS {
                     // CAS retry loop
                     loop {
                         let fp: &FilePtr = ff2.read_fixed(pos);

@@ -123,6 +123,8 @@ impl HashIndex {
     }
 
     // Returns the first 24-bits of the hash
+    //
+    // This is the index into the root-hash table
     fn hash_to_index(hash: Hash32) -> usize {
 
         (hash.0[0] as usize) |
@@ -149,20 +151,18 @@ impl HashIndex {
     // Finds the node containing the hash, or the location the hash should be inserted
     fn find_node(&mut self, hash: Hash32) -> FindNodeResult {
 
+        // use the first 24-bit as index in the root hash table
         let mut ptr = &self.hash_index_root[HashIndex::hash_to_index(hash)];
 
+        // from there, we follow the binary tree
         while !ptr.is_null() {
             let node: &Node = self.fileset.read_fixed(*ptr);
-
-        //    println!("L1: {:?} {:x} {:?}", ptr, ptr.file_pos(), node);
 
             ptr = match hash.0.cmp(&node.hash) {
                 Ordering::Less    => &node.prev,
                 Ordering::Greater => &node.next,
                 Ordering::Equal   => return FindNodeResult::Found(node)
             };
-
-
         }
 
         FindNodeResult::NotFound(ptr)
