@@ -2,18 +2,17 @@
 //!
 //!
 
-
-
+extern crate rustc_serialize;
+use std::fs;
+use std::io::Write;
 use std::fmt;
-use buffer::*;
-
-use script::context;
-use store::Store;
 
 use itertools::Itertools;
 
-use hash;
-
+use buffer::*;
+use hash::*;
+use script::context;
+use store::Store;
 use ffi;
 use store::fileptr::FilePtr;
 
@@ -52,8 +51,9 @@ impl From<EndOfBufferError> for TransactionError {
     }
 }
 
-/// A transaction represents a parsed transaction;
+/// A transaction represents a parsed transaction
 ///
+/// It always contains a reference to the buffer it was read from
 #[derive(Debug)]
 pub struct Transaction<'a> {
     pub version:   i32,
@@ -134,18 +134,19 @@ impl<'a> Transaction<'a> {
 
 
         for input_ptr in inputs {
-            let mut _m = store.metrics.start("block.tx.backtrack");
+            let _m = store.metrics.start("block.tx.backtrack");
 
             // read tx from disk
             let mut tx_raw   = Buffer::new(store.block_content.read(*input_ptr));
             let tx           = Transaction::parse(&mut tx_raw).
                     expect("Invalid tx data in database");
 
+            // find indixes
             let input_index  = input_ptr.input_index() as usize;
             let ref input    = tx.txs_in[input_index];
             let output_index = input.prev_tx_out_idx as usize;
 
-            let mut _m2 = store.metrics.start("block.tx.backtrack.verify");
+            let _m2 = store.metrics.start("block.tx.backtrack.verify");
 
             ffi::verify_script(self.txs_out[output_index].pk_script, tx.to_raw(), input_index as u32)
                 .expect("TODO: Handle script error without panic");
@@ -155,8 +156,20 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn get_output_fileptrs(&self) -> Vec<FilePtr> {
-        Vec::new()
+    /// Gets the output fileptrs referenced by the inputs of this tx
+    ///
+    /// Uses FilePtr::null placeholder for outputs not found
+    pub fn get_output_fileptrs(&self, store: &mut Store) -> Vec<FilePtr> {
+
+        self.txs_in.iter().map(|input| {
+
+            store.hash_index
+                .get_ptr(input.prev_tx_out)
+                .iter()
+                .find(|ptr| ptr.is_transaction())
+                .map_or(FilePtr::null(), |ptr| ptr.as_output(input.prev_tx_out_idx))
+
+        }).collect()
     }
 
     /// Verifies and stores
@@ -164,7 +177,7 @@ impl<'a> Transaction<'a> {
 
         self.verify_syntax()?;
 
-        let hash_buf = hash::Hash32Buf::double_sha256(self.to_raw());
+        let hash_buf = Hash32Buf::double_sha256(self.to_raw());
         let _        = hash_buf.as_ref();
 
 
@@ -182,20 +195,19 @@ impl<'a> Transaction<'a> {
                 return Ok(TransactionOk::AlreadyExists(existing_ptrs[0]))
             }
 
-            // existing_ptrs are now inputs that are waiting for this transactions
+            // existing_ptrs (if any) are now inputs that are waiting for this transactions
             // they need to be verified
             self.verify_backtracking_outputs(store, &existing_ptrs);
 
-
+            // store & verify
             let ptr      = store.block_content.write(self.to_raw());
 
             if !self.is_coinbase() {
                 self.verify_input_scripts(store, ptr)?;
             }
 
-
-            // Store self in the hash_index.
-            // This may fail if since ^^ loop new dependent txs were added,
+            // Store reference in the hash_index.
+            // This may fail if since ^^ get_ptr new dependent txs were added,
             // in which case we must try again.
             if store.hash_index.set_tx_ptr(hash_buf.as_ref(), ptr, existing_ptrs) {
 
@@ -211,6 +223,13 @@ impl<'a> Transaction<'a> {
 
         let mut _m = store.metrics.start("verify_scoped_scripts");
         _m.set_ticker(self.txs_in.len());
+
+        if self.txs_in.len() > 1 {
+
+            let hex = rustc_serialize::hex::ToHex::to_hex(self.raw.inner);
+            let mut f = fs::File::create("./raw").unwrap();
+            f.write_all(&hex.into_bytes());
+        }
 
         for (index, input) in self.txs_in.iter().enumerate() {
 
@@ -239,7 +258,7 @@ impl<'a> Transaction<'a> {
 
             let mut _m2 = store.metrics.start("verify_scripts");
             ffi::verify_script(previous_tx_out.pk_script, self.to_raw(), index as u32)
-                .expect("TODO: Handle script error without panic");
+                .expect("TODO: Handle script error more gracefully");
 
             // TODO: verify_amount here
         }
@@ -251,11 +270,9 @@ impl<'a> Transaction<'a> {
 }
 
 
-
-
-
+/// Transaction input
 pub struct TxInput<'a> {
-    prev_tx_out:     hash::Hash32<'a>,
+    prev_tx_out:     Hash32<'a>,
     prev_tx_out_idx: u32,
     script:          &'a[u8],
     sequence:        u32,
@@ -265,15 +282,15 @@ pub struct TxInput<'a> {
 impl<'a> Parse<'a> for TxInput<'a> {
     fn parse(buffer: &mut Buffer<'a>) -> Result<TxInput<'a>, EndOfBufferError> {
 
-        let result = TxInput {
-            prev_tx_out:     try!(hash::Hash32::parse(buffer)),
+        Ok(TxInput {
+            prev_tx_out:     try!(Hash32::parse(buffer)),
             prev_tx_out_idx: try!(u32::parse(buffer)),
             script:          try!(buffer.parse_compact_size_bytes()),
             sequence:        try!(u32::parse(buffer))
-        };
+        })
 
-        Ok(result)
     }
+
 }
 
 pub struct TxOutput<'a> {
@@ -292,8 +309,6 @@ impl<'a> Parse<'a> for TxOutput<'a> {
         })
     }
 }
-
-
 
 
 impl<'a> fmt::Debug for TxInput<'a> {
@@ -327,8 +342,34 @@ impl<'a> fmt::Debug for TxOutput<'a> {
 #[cfg(test)]
 mod tests {
     extern crate rustc_serialize;
+    use super::*;
+    use buffer;
+    use buffer::Parse;
 
 
     #[test]
-    fn test_parse_tx() {}
+    fn test_parse_tx() {
+        let tx_hex = "010000000236b01007488776b78a1e6cf59b72e2236ba378d42761eba901\
+                      5d8bc243c7d9f0000000008a47304402206018582ef1405fbf9f08b71a2a\
+                      b61b6a93caf713d50879573d42f87463c645b3022030e274e52bd107f604\
+                      894d75968a47be340d633d3c38e5310fddf700ade244d501410475645fe0\
+                      50491f9593348ba511bba43f91e02719cb604fc1f73ef57a5d8507d22b58\
+                      20c9bf3065b1ac3543fc212b50218f7a4bf32aa664f84f336efa79660111\
+                      ffffffff36b01007488776b78a1e6cf59b72e2236ba378d42761eba9015d\
+                      8bc243c7d9f0010000008b4830450221009dd6581d23a64173cd5fd04c99\
+                      dfc9b3581708c361433dfd340e7f5ea07e0eb1022042d08810307a92af6e\
+                      f8c9ed748547f48e05b549f7bc004395b7c12879f94b2b014104607e781f\
+                      9d685959b2009a4e35b7d2f240d8b515d59d2ddaa51b82f21ef56372f892\
+                      39b836446bec96f5b66dee75425a38af3185610410e20655a9d333503f3b\
+                      ffffffff0280f0fa02000000001976a914bb42487be1aae97292b5ecda5e\
+                      66ba59d004d83088ac80f0fa02000000001976a914c3813e88eeddeba7de\
+                      fe159bf9df3f210652571c88ac00000000";
+
+        let slice = &rustc_serialize::hex::FromHex::from_hex(tx_hex).unwrap();
+        let mut buf = buffer::Buffer::new(slice);
+
+        let tx = Transaction::parse(&mut buf);
+
+        let _ = format!("{:?}", tx);
+    }
 }

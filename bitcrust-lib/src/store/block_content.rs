@@ -4,8 +4,6 @@
 ///
 /// This structure does little more then wrap the underlying flatfileset
 
-use std::{fs};
-
 use config;
 
 use store::fileptr::FilePtr;

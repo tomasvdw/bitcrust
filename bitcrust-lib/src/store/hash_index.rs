@@ -22,7 +22,7 @@
 //!
 //!
 
-use std::{fs,mem};
+use std::{mem};
 use std::cmp::{Ord,Ordering};
 
 use config;
@@ -316,7 +316,6 @@ mod tests {
     use std::path::PathBuf;
 
     use std::thread;
-    use std::time;
 
     use store::fileptr::FilePtr;
     use store::flatfileset::FlatFileSet;
@@ -342,7 +341,7 @@ mod tests {
         let path = PathBuf::from(dir.path());
         let cfg = config::Config { root: path.clone() };
 
-        let mut idx = HashIndex::new(&cfg);
+        let idx = HashIndex::new(&cfg);
 
         // We create a little transaction world:
         // The "transactions" are file pointers 1 to DATA_SIZE

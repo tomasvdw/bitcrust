@@ -53,23 +53,18 @@ pub fn init() -> Store {
 
 /// Validates and stores a block;
 ///
-/// Currently used to collect what needs to be done;
+/// Currently the fn here is used to collect what needs to be done;
 /// TODO: distibute over different mods
 pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
 
     let block = Block::new(buffer).unwrap();
-
     let block_hash = hash::Hash32Buf::double_sha256(block.header.to_raw());
 
     let mut total_amount = 0_u64;
-
-    let mut st_pointers = Vec::new();
+    let mut stree_pointers = Vec::new();
 
     block.process_transactions(|tx| {
-
-
-        let hash = hash::Hash32Buf::double_sha256(tx.to_raw());
 
         total_amount += 1;
 
@@ -81,14 +76,14 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
             transaction::TransactionOk::VerifiedAndStored(ptr) => ptr
         };
 
-        st_pointers.push(ptr);
+        stree_pointers.push(ptr);
 
         Ok(())
 
     }).unwrap();
 
 
-
+    // TODO verify amounts
 }
 
 pub fn add_transaction(_: &[u8]) {
@@ -101,8 +96,6 @@ mod tests {
     extern crate rustc_serialize;
 
     use super::*;
-    use buffer::Parse;
-    use buffer;
 
     #[test]
     pub fn test_add_block() {

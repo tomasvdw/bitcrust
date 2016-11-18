@@ -265,7 +265,7 @@ pub static OPCODES: [OpCode; 256] = [
     OpCode { name: "OP_ABS",             display: disp_name,            execute: op_unimplemented,      skip: skip_none     },
     OpCode { name: "OP_NOT",             display: disp_name,            execute: op_unimplemented,      skip: skip_none     },
     OpCode { name: "OP_0NOTEQUAL",       display: disp_name,            execute: op_unimplemented,      skip: skip_none     },
-    OpCode { name: "OP_ADD",             display: disp_name,            execute: op_unimplemented,      skip: skip_none     },
+    OpCode { name: "OP_ADD",             display: disp_name,            execute: op_add,                skip: skip_none     },
     OpCode { name: "OP_SUB",             display: disp_name,            execute: op_unimplemented,      skip: skip_none     },
     OpCode { name: "",                   display: disp_invalid,         execute: op_invalid,            skip: skip_none     },
     OpCode { name: "",                   display: disp_invalid,         execute: op_invalid,            skip: skip_none     },

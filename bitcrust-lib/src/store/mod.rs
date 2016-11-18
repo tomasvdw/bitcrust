@@ -34,14 +34,7 @@ use config;
 
 use metrics::Metrics;
 
-use self::flatfileset::FlatFileSet;
 
-const KB: usize = 1024;
-const MB: usize = 1024 * KB;
-const GB: usize = 1024 * MB;
-
-const FILE_SIZE: u32         = 1 * GB as u32;
-const MAX_CONTENT_SIZE: u32  = FILE_SIZE - 10 * MB as u32 ;
 
 
 
@@ -81,11 +74,6 @@ impl Store {
 
 
 
-
-#[cfg(test)]
-pub fn test_store() {
-
-}
 
 
 #[cfg(test)]

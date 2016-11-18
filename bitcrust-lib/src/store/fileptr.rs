@@ -81,6 +81,19 @@ impl FilePtr {
         )
     }
 
+    /// Creates a new fileptr from an existing one as input
+    ///
+    pub fn as_output(self, index: u32) -> FilePtr {
+
+        let index = index as u64;
+
+        FilePtr(
+            self.0
+                | TYPE_OUTPUT_MIN
+                | ((index << 46) & MASK_INDEX2)
+        )
+    }
+
 
     pub fn input_index(self) -> u32 {
         ((self.0 & MASK_INDEX1) >> 46) as u32

@@ -12,11 +12,11 @@ use std::cell::RefCell;
 struct Metric {
     time:   Duration,
     count:  usize,
-    ticker: usize,
-    runner: Option<Instant>
+    ticker: usize
 }
 
-/// A handle to a timed key.
+/// A handle to a timed key; this adds itself to the referenced metric
+/// when going out-of-scope
 pub struct RunningMetric<'a>{
     metric:     &'a Metrics,
     name:       &'static str,
@@ -43,7 +43,7 @@ impl Metrics {
     /// Start measuring time at the given tag name.
     /// Stops when the result go out of scope
     ///
-    /// Hence the results must be saved in a temporary variable.
+    /// Hence the results must be saved in a temporary variable. Use a _ prefix.
     ///
     /// # Examples
     ///
@@ -115,8 +115,7 @@ impl<'a> RunningMetric<'a> {
             Metric {
                 time: Duration::new(0, 0),
                 count: 0,
-                ticker: 0,
-                runner: None
+                ticker: 0
             }
         );
         metric.time += self.started.elapsed();
