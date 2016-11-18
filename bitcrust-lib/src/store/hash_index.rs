@@ -1,17 +1,26 @@
 
 
-/// Index to lookup fileptr's from hashes
-///
-/// This is used for transactions; the values found for a hash can be either:
-///
-///  * a single fileptr pointing to a transaction
-///  In that case the transaction can be found at the ptr and is fully validated
-///
-///  * a set of fileptr pointing to inputs
-///  In that case the transaction cannot be found, but these inputs need this transaction
-///  and are already assumed to be valid. The transaction may not be inserted before these
-///  scripts are checked
-///
+//! Index that maps hashes to fileptrs
+//!
+//! This is used for transactions & blockheaders; the values found for a hash can be:
+//!
+//!  * a single fileptr pointing to a transaction
+//!  The transaction can be found at the ptr in block_content and is fully validated
+//!
+//!  * a set of fileptr pointing to inputs
+//!  Transaction cannot be found, but these inputs need this transaction
+//!  and are already assumed to be valid. The transaction may not be inserted before these
+//!  scripts are checked
+//!
+//!  * a single fileptr pointing to a pointer to blockheader
+//!  The block is found. The pointer points to a record in the spent-tree; _that_ pointer points to the blockheader
+//!  in block_content
+//!
+//! * a set of fileptr pointing to guard blocks
+//!  The block cannot be found, but the blocks pointed to by these ptrs are having the given hash as previous block;
+//!  they are "expecting" this block
+//!
+//!
 
 use std::{fs,mem};
 use std::cmp::{Ord,Ordering};
@@ -327,7 +336,7 @@ mod tests {
 
         const DATA_SIZE: u32 = 100000;
         const THREADS: usize = 100;
-        const LOOPS: usize = 1000;
+        const LOOPS: usize = 100;
 
         let dir = tempdir::TempDir::new("test1").unwrap();
         let path = PathBuf::from(dir.path());

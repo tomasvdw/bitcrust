@@ -1,33 +1,31 @@
 
 
 
-//! A FilePtr is a pointer to a location in a flatfile.
+//! A FilePtr is a pointer to a location in a flatfile & some meta data.
 //!
 //! It consists of:
+//!
 //! 16-bits signed filenumber
 //! 30-bits unsigned file-position
 //!
-//! 18 remaining meta data which meaning depends on the context
+//! 18 remaining bits meta data whose meaning depends on the context
 //!
-//! 1x     -> transaction-output-index(x)  (17-bits)
-//! 001x   -> transaction-inpout-index(x)  (15-bits)
-//! 010x   -> transaction-output-offset(x) (15-bits)
-//! 011x   -> transaction-input-offset(x)  (15-bits)
-//! 000x -> transaction
-//! 000x -> block
-//!
+//! 1x   -> transaction-output-index(x)  (x=17-bits)
+//! 001x -> transaction-input-index(x)   (x=15-bits)
+//! 000x -> transaction                  (x=ignored)
+//! 010x -> block                        (x=ignored)
+//! 011x -> guard-block                  (x=ignored)
 //!
 //!
-//! A tx is max 1mb, an input is min. 41 bytes, an output is min. 9 bytes
-//! So we have max 2^15 inputs, and max 2^17 outputs
+//! Note:
+//! A transaction is max 1mb, an input is min. 41 bytes, an output is min. 9 bytes
+//! So we have < 2^15 inputs, and < 2^17 outputs
 //!
-//! Offsets to inputs/output are faster as they can be directly read
-//! But they do not always fit
+//! Note:
+//! The hash-index & the spent-tree both uses fileptrs
 //!
-//! The index & the block-spent-tree both uses fileptrs
-//!
-//! The index stores a "transaction"-fileptr for a validated transaction
-//!
+//! The hash-index stores all but transaction-output-index(x) fileptrs
+//! The spent-tree stores block, transaction & transaction-output-index(x) fileptrs
 //!
 
 use std::mem;
@@ -36,62 +34,72 @@ use std::sync::atomic;
 use std::fmt::{Debug,Formatter,Error};
 
 
+const MASK_TYPE:    u64 = 0xE000_0000_0000_0000; // 3-bits
+
+const MASK_INDEX1:  u64 = 0x1FFF_C000_0000_0000; // 15-bits
+const MASK_INDEX2:  u64 = 0x7FFF_C000_0000_0000; // 17-bits
+
+const MASK_FILENO:  u64 = 0x0000_3FFF_C000_0000; // 16-bits
+const MASK_FILEPOS: u64 = 0x0000_0000_3FFF_FFFF; // 30-bits
+
+const TYPE_INPUT:       u64 = 0x2000_0000_0000_0000;
+const TYPE_OUTPUT_MIN:  u64 = 0x8000_0000_0000_0000;
+const TYPE_OUTPUT_MAX:  u64 = 0xE000_0000_0000_0000;
+const TYPE_BLOCK:       u64 = 0x4000_0000_0000_0000;
+const TYPE_GUARD_BLOCK: u64 = 0x6000_0000_0000_0000;
+const TYPE_TRANSACTION: u64 = 0x0000_0000_0000_0000;
+
+/// A pointer to data in a flatfile
 #[derive(Copy,Clone,PartialEq,Eq,Hash)]
 pub struct FilePtr(u64);
 
 impl FilePtr {
+
+    /// Constructs a new _transaction_ fileptr
+    /// It can be modified after to change the type
     pub fn new(fileno: i16, filepos: u32 ) -> FilePtr {
+
+        let fileno  = fileno as u64;
+        let filepos = filepos as u64;
+
         FilePtr(
-            (((fileno as u64) << 30) & 0x3FFF_C000_0000) |
-                ((filepos as u64) & 0x3FFF_FFFF)
+            ((fileno << 30) & MASK_FILENO) |
+            (filepos & MASK_FILEPOS)
         )
     }
 
-    pub fn as_input(self, input: u32) -> FilePtr {
+    /// Creates a new fileptr from an existing one as input
+    ///
+    pub fn as_input(self, index: u32) -> FilePtr {
+
+        let index = index as u64;
+
         FilePtr(
             self.0
-                | 0x2000_0000_0000_0000
-                | (((input as u64)  << 46) & 0x1FFF_C000_0000_0000)
+                | TYPE_INPUT
+                | ((index << 46) & MASK_INDEX1)
         )
-
     }
 
 
     pub fn input_index(self) -> u32 {
-        ((self.0 >> 46) & 0x7FFF) as u32
+        ((self.0 & MASK_INDEX1) >> 46) as u32
     }
 
     pub fn file_number(self) -> i16 {
 
-        ((self.0 >> 30) & 0x3FFF) as i16
+        ((self.0 & MASK_FILENO) >> 30)  as i16
     }
 
     pub fn file_pos(self) -> usize {
-        (self.0 & 0x3FFF_FFFF) as usize
+        (self.0 & MASK_FILEPOS) as usize
     }
 
-    fn meta(self) -> FilePtrMeta {
-        let meta = (self.0 >> 46) & 0x3FFFF;
 
-        // check high three bits
-        match meta & 0xE000 {
 
-            0x8000 ... 0xE000 =>    FilePtrMeta::TransactionOutputIndex((meta & 0x7fff) as usize),
-            0x2000 =>               FilePtrMeta::TransactionInputIndex((meta & 0x1fff) as usize),
-            0x4000 =>               FilePtrMeta::TransactionOutputOffset((meta & 0x1fff) as usize),
-            0x6000 =>               FilePtrMeta::TransactionInputOffset((meta & 0x1fff) as usize),
-            0x0000 =>               if (meta & 0x1000) == 0x1000 {
-                                        FilePtrMeta::BlockHeader
-                                    } else {
-                                        FilePtrMeta::Transaction
-                                    },
 
-            _ => panic!("unknown fileptr meta-data")
-
-        }
-
-    }
-
+    /// We use a null value as magic NULL value. This is safe
+    /// because we're never pointing to the header
     pub fn is_null(&self) -> bool {
         self.0 == 0
     }
@@ -100,51 +108,40 @@ impl FilePtr {
         FilePtr(0)
     }
 
-    /// Set self to `new_value` only if it is now set to `current_value`
+    /// Set self to `new_value` only if it is now set to `current_value` using Compare-And-Swap
+    /// semantics
     ///
     /// Returns true if the update has taken place
     pub fn atomic_replace(&self, current_value: FilePtr, new_value: FilePtr) -> bool {
 
         let atomic_self: *mut atomic::AtomicU64 = unsafe { mem::transmute( self ) };
 
-        let prev = unsafe { (*atomic_self).compare_and_swap(current_value.0, new_value.0,
-                                     atomic::Ordering::Relaxed) };
+        let prev = unsafe {
+            (*atomic_self).compare_and_swap(
+                    current_value.0,
+                    new_value.0,
+                    atomic::Ordering::Relaxed)
+        };
 
         prev == current_value.0
 
     }
 
     pub fn is_transaction(&self) -> bool {
-        match self.meta() {
-            FilePtrMeta::Transaction => true,
-            _ => false
-        }
+        (self.0 & MASK_TYPE) == TYPE_TRANSACTION
     }
 
     pub fn is_input(&self) -> bool {
-        match self.meta() {
-            FilePtrMeta::TransactionInputIndex(_) => true,
-            _ => false
-        }
+        (self.0 & MASK_TYPE) == TYPE_INPUT
     }
 
 }
 
-#[derive(Debug)]
-enum FilePtrMeta {
-
-    Transaction,
-    BlockHeader,
-    TransactionOutputIndex(usize),
-    TransactionOutputOffset(usize),
-    TransactionInputIndex(usize),
-    TransactionInputOffset(usize),
-}
 
 
 impl Debug for FilePtr {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
-        write!(fmt, "fi={},fp={}, mt={:?}", self.file_number(), self.file_pos(), self.meta())
+        write!(fmt, "fi={},fp={}, tot={:x}", self.file_number(), self.file_pos(), self.0)
 
         //fmt.write_str(&x)
     }

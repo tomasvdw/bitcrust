@@ -1,6 +1,5 @@
 /*
  * 2016 Tomas van der Wansem
- * No rights reserved
 
  * CURRENTLY ONLY USED FOR DEBUG-RENDERING
  * Actual script processing is done in

@@ -15,7 +15,8 @@ const MB:                 u32 = 1024 * 1024;
 const FILE_SIZE:          u32 = 1024 * MB as u32;
 const MAX_CONTENT_SIZE:   u32 = FILE_SIZE - 10 * MB as u32 ;
 
-
+const SUBPATH: &'static str   = "block_content";
+const PREFIX:  &'static str   = "bc-";
 
 pub struct BlockContent {
 
@@ -26,11 +27,11 @@ pub struct BlockContent {
 impl BlockContent {
     pub fn new(cfg: &config::Config) -> BlockContent {
 
-        let dir = &cfg.root.clone().join("block_content");
+        let dir = &cfg.root.clone().join(SUBPATH);
 
         BlockContent {
             fileset: FlatFileSet::new(
-                dir, "bc-", FILE_SIZE, MAX_CONTENT_SIZE)
+                dir, PREFIX, FILE_SIZE, MAX_CONTENT_SIZE)
         }
     }
 

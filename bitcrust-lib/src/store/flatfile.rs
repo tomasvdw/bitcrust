@@ -99,6 +99,11 @@ impl FlatFile {
     }
 
 
+    /// Returns the object at the given filepos
+    ///
+    /// No checks are done: filepos must point to a correct location
+    ///
+    /// The resulting reference is static as it points to a never-closing memmap
     pub fn get<T>(&self, filepos: usize) -> &'static T {
 
         unsafe {
@@ -106,14 +111,10 @@ impl FlatFile {
         }
     }
 
-    pub fn get_mut(&self, filepos: usize) -> &'static mut atomic::AtomicU64 {
 
-        unsafe {
-            mem::transmute( self.ptr.offset(filepos as isize))
-        }
-    }
-
-
+    /// Stores an object at the given filepos
+    ///
+    /// It must be already verified to fit
     pub fn put<T>(&self, value: &T, filepos: usize) {
 
         let target: &mut T = unsafe {
@@ -149,6 +150,8 @@ impl FlatFile {
     ///
     /// If no more then max_size bytes are available, None is returned
     pub fn alloc_write(&self, size: u32, max_size: u32) -> Option<u32> {
+
+        // loop retries for compare-and-swap
         loop {
 
             let write_ptr = unsafe { &*self.write_ptr };

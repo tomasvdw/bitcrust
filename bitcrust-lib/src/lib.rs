@@ -64,7 +64,7 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
     let mut total_amount = 0_u64;
 
-    //let mut st_pointers = Vec::new();
+    let mut st_pointers = Vec::new();
 
     block.process_transactions(|tx| {
 
@@ -73,7 +73,7 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
         total_amount += 1;
 
-        let res = tx.verify_and_store(store);
+        let res = tx.verify_and_store(store, &mut st_pointers);
         //if !tx.is_coinbase() || res.is_err() {
           //  println!("res={:?} cb={} TX={:?} ", res, tx.is_coinbase(), hash);
         //}

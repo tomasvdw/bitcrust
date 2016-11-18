@@ -19,10 +19,28 @@ const MB:                 u32 = 1024 * 1024;
 const FILE_SIZE:          u32 = 1024 * MB as u32;
 const MAX_CONTENT_SIZE:   u32 = FILE_SIZE - 10 * MB as u32 ;
 
+const SUBPATH: &'static str   = "spent_tree";
+const PREFIX:  &'static str   = "st-";
+
+
 
 struct Record {
     ptr:   FilePtr,
     skips: [u16;4]
+}
+
+impl Record {
+
+    fn previous(&self) -> Option<Record> {
+        None
+    }
+
+    fn new(ptr: FilePtr) -> Self {
+        Record {
+            ptr: ptr,
+            skips: [0,0,0,0]
+        }
+    }
 }
 
 
@@ -35,11 +53,11 @@ pub struct SpentTree {
 impl SpentTree {
     pub fn new(cfg: &config::Config) -> SpentTree {
 
-        let dir = &cfg.root.clone().join("spent_tree");
+        let dir = &cfg.root.clone().join(SUBPATH);
 
         SpentTree {
             fileset: FlatFileSet::new(
-                dir, "st-", FILE_SIZE, MAX_CONTENT_SIZE)
+                dir, PREFIX, FILE_SIZE, MAX_CONTENT_SIZE)
         }
     }
 
@@ -47,6 +65,14 @@ impl SpentTree {
     pub fn store_block(&mut self, file_ptrs: Vec<FilePtr>) {
 
         let target: &[Record] = self.fileset.alloc_slice(file_ptrs.len());
+
+        for (idx, ptr) in file_ptrs.iter().enumerate() {
+
+
+            // we scan back through target
+            // we need to find
+
+        }
 
     }
 

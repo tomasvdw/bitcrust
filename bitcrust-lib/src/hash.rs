@@ -50,6 +50,9 @@ impl<'a> buffer::Parse<'a> for Hash32<'a> {
     fn parse(buffer: &mut buffer::Buffer<'a>) -> Result<Hash32<'a>, buffer::EndOfBufferError> {
 
         Ok(Hash32(
+
+            // we must transmute as rustc doesn't trust the slice is exactly 32 bytes
+            // (transmuting &[u8] -> &[u8;32])
             unsafe { mem::transmute(
                 try!(buffer.parse_bytes(32)).as_ptr()) }
         ))
@@ -62,8 +65,6 @@ impl<'a> Hash32<'a> {
     pub fn is_null(&self) -> bool {
         self.0.iter().all(|x| *x == 0)
     }
-
-
 }
 
 

@@ -157,7 +157,7 @@ impl<'a> Transaction<'a> {
 
 
 
-    pub fn verify_and_store(&self, store: &mut Store) -> TransactionResult<TransactionOk> {
+    pub fn verify_and_store(&self, store: &mut Store, result: &mut Vec<FilePtr>) -> TransactionResult<TransactionOk> {
 
         self.verify_syntax()?;
 

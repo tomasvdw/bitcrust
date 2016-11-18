@@ -1,4 +1,7 @@
 
+/// Context provides an execution environment for scripts
+/// Currently unused
+
 use super::stack;
 use super::ScriptError;
 use std::fmt;
@@ -6,9 +9,6 @@ use std::io;
 use std::io::Write;
 
 use script::opcode::OPCODES;
-
-/// Context provides an execution environment for scripts
-///
 
 pub struct Context<'a> {
     pub stack:     stack::Stack,
