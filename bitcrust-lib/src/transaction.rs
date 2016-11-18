@@ -36,9 +36,9 @@ pub enum TransactionError {
 
 #[derive(Debug)]
 pub enum TransactionOk {
-    AlreadyExists,
+    AlreadyExists(FilePtr),
 
-    VerifiedAndStored,
+    VerifiedAndStored(FilePtr),
 
 }
 
@@ -148,53 +148,65 @@ impl<'a> Transaction<'a> {
             let mut _m2 = store.metrics.start("block.tx.backtrack.verify");
 
             ffi::verify_script(self.txs_out[output_index].pk_script, tx.to_raw(), input_index as u32)
-                .expect("We can't have script errors at this stage!");
+                .expect("TODO: Handle script error without panic");
 
 
             // TODO: verify_amount here
         }
     }
 
+    pub fn get_output_fileptrs(&self) -> Vec<FilePtr> {
+        Vec::new()
+    }
 
-
-    pub fn verify_and_store(&self, store: &mut Store, result: &mut Vec<FilePtr>) -> TransactionResult<TransactionOk> {
+    /// Verifies and stores
+    pub fn verify_and_store(&self, store: &mut Store) -> TransactionResult<(TransactionOk)> {
 
         self.verify_syntax()?;
 
         let hash_buf = hash::Hash32Buf::double_sha256(self.to_raw());
         let _        = hash_buf.as_ref();
 
-        // First see if it already exists
-        let existing_ptrs = store.hash_index.get_ptr(hash_buf.as_ref());
 
-        if existing_ptrs
-            .iter()
-            .any(|p| p.is_transaction()) {
+        loop {
 
-            assert_eq!(existing_ptrs.len(), 1);
+            // First see if it already exists
+            let existing_ptrs = store.hash_index.get_ptr(hash_buf.as_ref());
 
-            return Ok(TransactionOk::AlreadyExists)
+            if existing_ptrs
+                .iter()
+                .any(|p| p.is_transaction()) {
+
+                assert_eq!(existing_ptrs.len(), 1);
+
+                return Ok(TransactionOk::AlreadyExists(existing_ptrs[0]))
+            }
+
+            // existing_ptrs are now inputs that are waiting for this transactions
+            // they need to be verified
+            self.verify_backtracking_outputs(store, &existing_ptrs);
+
+
+            let ptr      = store.block_content.write(self.to_raw());
+
+            if !self.is_coinbase() {
+                self.verify_input_scripts(store, ptr)?;
+            }
+
+
+            // Store self in the hash_index.
+            // This may fail if since ^^ loop new dependent txs were added,
+            // in which case we must try again.
+            if store.hash_index.set_tx_ptr(hash_buf.as_ref(), ptr, existing_ptrs) {
+
+                return Ok(TransactionOk::VerifiedAndStored(ptr))
+            }
         }
 
-        // existing_ptrs are now inputs that are waiting for this transactions
-        // they need to be verified
-        self.verify_backtracking_outputs(store, &existing_ptrs);
-
-
-        let ptr      = store.block_content.write(self.to_raw());
-
-        if !self.is_coinbase() {
-            self.verify_input_scripts(store, ptr)?;
-        }
-
-
-        store.hash_index.set_tx_ptr(hash_buf.as_ref(), ptr, existing_ptrs);
-
-
-        Ok(TransactionOk::VerifiedAndStored)
     }
 
 
+    /// Finds the outputs corresponding to the inputs and verify the scripts
     pub fn verify_input_scripts(&self, store: &mut Store, tx_ptr: FilePtr) -> TransactionResult<()> {
 
         let mut _m = store.metrics.start("verify_scoped_scripts");
@@ -211,6 +223,7 @@ impl<'a> Transaction<'a> {
                     // We can't find the transaction this input is pointing to
                     // Oddly, this is perfectly fine; we just postpone script validation
                     // Until that transaction comes in
+                    // ^^ get_tx_for_output has placed apropriate guards in the hash_index
 
                     continue;
                 },
@@ -226,7 +239,7 @@ impl<'a> Transaction<'a> {
 
             let mut _m2 = store.metrics.start("verify_scripts");
             ffi::verify_script(previous_tx_out.pk_script, self.to_raw(), index as u32)
-                .expect("We can't have script errors at this stage!");
+                .expect("TODO: Handle script error without panic");
 
             // TODO: verify_amount here
         }

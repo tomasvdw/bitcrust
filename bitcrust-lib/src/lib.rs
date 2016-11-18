@@ -73,10 +73,15 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
         total_amount += 1;
 
-        let res = tx.verify_and_store(store, &mut st_pointers);
-        //if !tx.is_coinbase() || res.is_err() {
-          //  println!("res={:?} cb={} TX={:?} ", res, tx.is_coinbase(), hash);
-        //}
+
+        let res = tx.verify_and_store(store).unwrap();
+
+        let ptr = match res {
+            transaction::TransactionOk::AlreadyExists(ptr) => ptr,
+            transaction::TransactionOk::VerifiedAndStored(ptr) => ptr
+        };
+
+        st_pointers.push(ptr);
 
         Ok(())
 
@@ -90,8 +95,32 @@ pub fn add_transaction(_: &[u8]) {
 
 }
 
-pub mod test {
-    pub fn xx() {
+#[cfg(test)]
+mod tests {
+
+    extern crate rustc_serialize;
+
+    use super::*;
+    use buffer::Parse;
+    use buffer;
+
+    #[test]
+    pub fn test_add_block() {
+        let hex = "0100000000000000000000000000000000000000000000000000000000000000\
+           000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa\
+           4b1e5e4a29ab5f49ffff001d1dac2b7c01010000000100000000000000000000\
+           00000000000000000000000000000000000000000000ffffffff4d04ffff001d\
+           0104455468652054696d65732030332f4a616e2f32303039204368616e63656c\
+           6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f75742066\
+           6f722062616e6b73ffffffff0100f2052a01000000434104678afdb0fe554827\
+           1967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4\
+           f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000";
+
+
+        let slice = &rustc_serialize::hex::FromHex::from_hex(hex).unwrap();
+        let mut store = init();
+
+        add_block(&mut store, slice);
 
     }
 }
