@@ -2,11 +2,7 @@
 //!
 //!
 
-extern crate rustc_serialize;
-use std::fs;
-use std::io::Write;
 use std::fmt;
-
 use itertools::Itertools;
 
 use buffer::*;
@@ -164,7 +160,7 @@ impl<'a> Transaction<'a> {
         self.txs_in.iter().map(|input| {
 
             store.hash_index
-                .get_ptr(input.prev_tx_out)
+                .get(input.prev_tx_out)
                 .iter()
                 .find(|ptr| ptr.is_transaction())
                 .map_or(FilePtr::null(), |ptr| ptr.as_output(input.prev_tx_out_idx))
@@ -184,7 +180,7 @@ impl<'a> Transaction<'a> {
         loop {
 
             // First see if it already exists
-            let existing_ptrs = store.hash_index.get_ptr(hash_buf.as_ref());
+            let existing_ptrs = store.hash_index.get(hash_buf.as_ref());
 
             if existing_ptrs
                 .iter()
@@ -209,7 +205,7 @@ impl<'a> Transaction<'a> {
             // Store reference in the hash_index.
             // This may fail if since ^^ get_ptr new dependent txs were added,
             // in which case we must try again.
-            if store.hash_index.set_tx_ptr(hash_buf.as_ref(), ptr, existing_ptrs) {
+            if store.hash_index.set(hash_buf.as_ref(), ptr, existing_ptrs) {
 
                 return Ok(TransactionOk::VerifiedAndStored(ptr))
             }
@@ -224,18 +220,11 @@ impl<'a> Transaction<'a> {
         let mut _m = store.metrics.start("verify_scoped_scripts");
         _m.set_ticker(self.txs_in.len());
 
-        if self.txs_in.len() > 1 {
-
-            let hex = rustc_serialize::hex::ToHex::to_hex(self.raw.inner);
-            let mut f = fs::File::create("./raw").unwrap();
-            f.write_all(&hex.into_bytes());
-        }
-
         for (index, input) in self.txs_in.iter().enumerate() {
 
 
-            let output = store.hash_index.get_tx_for_output(input.prev_tx_out,
-                tx_ptr.as_input(index as u32 ));
+            let output = store.hash_index.get_or_set(input.prev_tx_out,
+                                                     tx_ptr.as_input(index as u32 ));
             let output = match output {
                 None => {
 

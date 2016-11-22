@@ -179,7 +179,7 @@ impl HashIndex {
 
 
     /// Retrieves the fileptr's of the given hash
-    pub fn get_ptr(&mut self, hash: Hash32) -> Vec<FilePtr> {
+    pub fn get(&mut self, hash: Hash32) -> Vec<FilePtr> {
 
         match self.find_node(hash) {
             FindNodeResult::NotFound(_) => {
@@ -194,20 +194,22 @@ impl HashIndex {
 
     /// Stores a fileptr at the given hash
     ///
-    /// This will bail out atomically (do a noop) if there are inputs stored at the hash,
-    /// that are not among the passed `verified_inputs`.
+    /// This will bail out atomically (do a noop) if there are existing fileptrs stored at the hash,
+    /// that are not among the passed `verified_ptrs`.
     ///
     /// This way, inputs stores at a hash serve as guards that need to be verified before
     /// the transaction can be stored.
-    pub fn set_tx_ptr(&mut self, hash: Hash32, ptr_tx: FilePtr, verified_inputs: Vec<FilePtr>) -> bool {
+    ///
+    /// Similarly, blockheader_guards need to be connected before a block can be stored
+    pub fn set(&mut self, hash: Hash32, store_ptr: FilePtr, verified_ptrs: Vec<FilePtr>) -> bool {
 
         // this loops through retries when the CAS operation fails
         loop {
             match self.find_node(hash) {
-                FindNodeResult::NotFound(ptr) => {
+                FindNodeResult::NotFound(target) => {
 
                     // create and write a leaf;
-                    let new_leaf     = Leaf::new(ptr_tx);
+                    let new_leaf     = Leaf::new(store_ptr);
                     let new_leaf_ptr = self.fileset.write_fixed(&new_leaf);
 
                     // create and write a node holding the leaf
@@ -215,7 +217,7 @@ impl HashIndex {
                     let new_node_ptr = self.fileset.write_fixed(&new_node);
 
                     // then atomically update the pointer
-                    if ptr.atomic_replace(FilePtr::null(), new_node_ptr) {
+                    if target.atomic_replace(FilePtr::null(), new_node_ptr) {
                         return true;
                     }
 
@@ -224,18 +226,18 @@ impl HashIndex {
 
                     let first_value_ptr = node.leaf;
 
-                    // check if there is anything waiting that is not supplied in verified_inputs
+                    // check if there is anything waiting that is not supplied in `verified_ptrs`
                     if !self
                         .collect_node_values(node)
                         .into_iter()
-                        .any(|val| verified_inputs.contains(&val)) {
+                        .any(|val| verified_ptrs.contains(&val)) {
 
                         return false;
                     }
 
-                    // We don't need to keep the input-pointers
+                    // We don't need to keep the verified-ptrs
                     // Replace all with a new leaf
-                    let new_leaf = Leaf::new(ptr_tx);
+                    let new_leaf = Leaf::new(store_ptr);
                     let new_leaf_ptr = self.fileset.write_fixed(&new_leaf);
 
                     // then atomically update the pointer
@@ -249,10 +251,11 @@ impl HashIndex {
     }
 
 
-    /// Retrieves the fileptr for a tx to verify the output with an input
+    /// Retrieves the fileptr
     ///
-    /// If the tx doesn't exist, the given input_ptr is added atomically to block further adds
-    pub fn get_tx_for_output(&mut self, hash: Hash32, input_ptr: FilePtr) -> Option<FilePtr> {
+    /// If there is no primary ptr (block/tx) for the given hash
+    /// the given guard_ptr is added atomically to block further adds
+    pub fn get_or_set(&mut self, hash: Hash32, guard_ptr: FilePtr) -> Option<FilePtr> {
 
         // this loops through retries when the CAS operation fails
         loop {
@@ -260,10 +263,10 @@ impl HashIndex {
 
                 FindNodeResult::NotFound(ptr) => {
 
-                    // The transaction doesn't exist; we insert input_ptr instead
+                    // The transaction doesn't exist; we insert guard_ptr instead
 
                     // create and write a leaf;
-                    let new_leaf = Leaf::new(input_ptr);
+                    let new_leaf = Leaf::new(guard_ptr);
                     let new_leaf_ptr = self.fileset.write_fixed(&new_leaf);
 
                     // create and write a node holding the leaf
@@ -282,12 +285,13 @@ impl HashIndex {
                     let first_value_ptr = node.leaf;
                     let leaf: &Leaf = self.fileset.read_fixed(first_value_ptr);
 
-                    if leaf.value.is_transaction() {
+
+                    if leaf.value.is_transaction() || leaf.value.is_blockheader() {
                         return Some(leaf.value);
                     }
 
                     // create a new leaf, pointing to the previous one
-                    let new_leaf     = Leaf { value: input_ptr, next: node.leaf };
+                    let new_leaf     = Leaf { value: guard_ptr, next: node.leaf };
                     let new_leaf_ptr = self.fileset.write_fixed(&new_leaf);
 
                     // then atomically update the pointer
@@ -341,7 +345,7 @@ mod tests {
         let path = PathBuf::from(dir.path());
         let cfg = config::Config { root: path.clone() };
 
-        let idx = HashIndex::new(&cfg);
+        let _idx = HashIndex::new(&cfg);
 
         // We create a little transaction world:
         // The "transactions" are file pointers 1 to DATA_SIZE
@@ -365,7 +369,7 @@ mod tests {
                     let tx = FilePtr::new(0, rng.gen_range(10, DATA_SIZE));
                     let tx_hash = hash(tx.file_pos());
 
-                    let found_txs = idx.get_ptr(tx_hash.as_ref());
+                    let found_txs = idx.get(tx_hash.as_ref());
 
                     if !found_txs.is_empty() {
 
@@ -391,7 +395,7 @@ mod tests {
 
                             let input_ptr = FilePtr::new(0, tx.file_pos() as u32).as_input(1);
 
-                            let output_tx1 = idx.get_tx_for_output(output_hash.as_ref(), input_ptr);
+                            let output_tx1 = idx.get_or_set(output_hash.as_ref(), input_ptr);
 
                             if let Some(x) = output_tx1 {
                                 assert_eq!(x.is_transaction(), true);
@@ -399,11 +403,11 @@ mod tests {
                                 // script validation goes here
                             }
 
-                            idx.set_tx_ptr(tx_hash.as_ref(), tx, vec![input_ptr]);
+                            idx.set(tx_hash.as_ref(), tx, vec![input_ptr]);
 
                         }
                         else {
-                            idx.set_tx_ptr(tx_hash.as_ref(), tx, Vec::new());
+                            idx.set(tx_hash.as_ref(), tx, Vec::new());
                         }
                     }
 

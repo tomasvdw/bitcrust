@@ -33,6 +33,7 @@ use std::sync::atomic;
 
 use std::fmt::{Debug,Formatter,Error};
 
+// TODO: we should use set/get bits helpers instead of these masks
 
 const MASK_TYPE:    u64 = 0xE000_0000_0000_0000; // 3-bits
 
@@ -94,6 +95,9 @@ impl FilePtr {
         )
     }
 
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
 
     pub fn input_index(self) -> u32 {
         ((self.0 & MASK_INDEX1) >> 46) as u32
@@ -140,12 +144,18 @@ impl FilePtr {
 
     }
 
+
+
     pub fn is_transaction(&self) -> bool {
         (self.0 & MASK_TYPE) == TYPE_TRANSACTION
     }
 
     pub fn is_input(&self) -> bool {
         (self.0 & MASK_TYPE) == TYPE_INPUT
+    }
+
+    pub fn is_blockheader(&self) -> bool {
+        (self.0 & MASK_TYPE) == TYPE_BLOCK
     }
 
 }

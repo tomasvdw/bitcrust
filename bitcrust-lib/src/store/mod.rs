@@ -19,7 +19,6 @@
 //!
 
 
-// hmm; don't like this
 pub mod fileptr;
 
 mod flatfile;
@@ -29,6 +28,7 @@ mod block_content;
 mod hash_index;
 mod spent_tree;
 
+pub use self::spent_tree::SpendingError;
 
 use config;
 

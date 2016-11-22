@@ -77,11 +77,13 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
         };
 
         stree_pointers.push(ptr);
+        stree_pointers.append(&mut tx.get_output_fileptrs(store));
 
         Ok(())
 
     }).unwrap();
 
+    block.verify_and_store(store, stree_pointers);
 
     // TODO verify amounts
 }

@@ -3,15 +3,19 @@
 //!
 //! Handles block-level validation and storage
 
-/// 2016 Tomas, no rights reserved, no warranties given
+/// 2016 Tomas
 
 
 use std::convert;
 
-use hash;
 use buffer::*;
-use transaction::{Transaction, TransactionError};
+use hash::*;
+use store::SpendingError;
 
+use transaction::{Transaction, TransactionError};
+use store::Store;
+
+use store::fileptr::FilePtr;
 
 
 #[derive(Debug)]
@@ -22,6 +26,8 @@ pub enum BlockError {
 
     UnexpectedEndOfBuffer,
 
+
+    SpendingError(SpendingError),
     TransactionError(TransactionError)
 }
 
@@ -34,6 +40,7 @@ impl convert::From<EndOfBufferError> for BlockError {
 
 }
 
+// wrap transaction errors as block errors
 impl convert::From<TransactionError> for BlockError {
 
     fn from(inner: TransactionError) -> BlockError {
@@ -43,9 +50,18 @@ impl convert::From<TransactionError> for BlockError {
 
 }
 
+impl convert::From<SpendingError> for BlockError {
+    fn from(inner: SpendingError) -> BlockError {
+        BlockError::SpendingError(inner)
+    }
+}
+
+
 type BlockResult<T> = Result<T, BlockError>;
 
-
+/// Parsed block
+///
+/// The transactions are not yet parsed and referenced as a slice
 #[derive(Debug)]
 pub struct Block<'a> {
 
@@ -63,8 +79,8 @@ pub struct Block<'a> {
 pub struct BlockHeader<'a> {
 
     version:     u32,
-    prev_hash:   hash::Hash32<'a>,
-    merkle_root: hash::Hash32<'a>,
+    prev_hash:   Hash32<'a>,
+    merkle_root: Hash32<'a>,
     time:        u32,
     bits:        u32,
     nonce:       u32,
@@ -91,8 +107,51 @@ impl<'a> Block<'a> {
     }
 
 
-    pub fn verify(&self) -> BlockResult<()> {
+    /// Verifies the spending order and stores the block
+    ///
+    /// This assumes all transactions have already been verified
+    pub fn verify_and_store(&self, store: &mut Store, transactions: Vec<FilePtr>) -> BlockResult<()> {
 
+        let block_hash = Hash32Buf::double_sha256(self.header.to_raw());
+
+        let ptr = store.hash_index.get(block_hash.as_ref());
+
+        if ptr.iter().any(|ptr| ptr.is_blockheader()) {
+
+            // this block is already in
+            // TODO; distinct ok-result
+            return Ok(())
+        }
+
+        // let's store the blockheader in block_content
+        let blockheader_ptr = store.block_content.write_blockheader(&self.header);
+
+
+
+
+        let previous = store.hash_index.get(self.header.prev_hash);
+        let previous = previous
+            .iter()
+            .find(|ptr| ptr.is_blockheader());
+
+
+
+/*
+        let ptr = match previous {
+            None       => store.spent_tree.store_orphan_block(transactions),
+            Some(prev) => store.spent_tree.store_and_connect_block(transactions, *prev)
+        } ?;
+*/
+
+
+        // TODO's
+        // create a list with spents
+        // store
+        // get_or_set previous
+        // From here we can have procedure reconnect:
+        // set header of list to point to previous
+        // make the link
+        // set_or_get
 
 
         Ok(())
@@ -154,8 +213,8 @@ impl<'a> Parse<'a> for BlockHeader<'a> {
 
         Ok(BlockHeader {
             version:     u32::parse(buffer)?,
-            prev_hash:   try!(hash::Hash32::parse(buffer)),
-            merkle_root: try!(hash::Hash32::parse(buffer)),
+            prev_hash:   try!(Hash32::parse(buffer)),
+            merkle_root: try!(Hash32::parse(buffer)),
             time:        try!(u32::parse(buffer)),
             bits:        try!(u32::parse(buffer)),
             nonce:       try!(u32::parse(buffer)),

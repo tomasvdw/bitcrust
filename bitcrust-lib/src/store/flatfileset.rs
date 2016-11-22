@@ -207,6 +207,13 @@ impl FlatFileSet {
         }
     }
 
+    pub fn read_mut_slice<T>(&mut self, ptr: FilePtr, count: usize) -> &'static mut [T] {
+
+        let flatfile   = self.get_flatfile(ptr.file_number());
+
+        flatfile.get_slice(ptr.file_pos(), count)
+    }
+
     pub fn alloc_slice<T>(&mut self, count: usize) -> &'static [T] {
 
         let ptr        = self.alloc_write_space((mem::size_of::<T>() * count) as u32);

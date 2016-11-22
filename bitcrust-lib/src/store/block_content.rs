@@ -6,8 +6,13 @@
 
 use config;
 
+use buffer::*;
+
 use store::fileptr::FilePtr;
 use store::flatfileset::FlatFileSet;
+
+use transaction::Transaction;
+use block::BlockHeader;
 
 const MB:                 u32 = 1024 * 1024;
 const FILE_SIZE:          u32 = 1024 * MB as u32;
@@ -41,8 +46,14 @@ impl BlockContent {
         self.fileset.write(buffer)
     }
 
-    pub fn read_fixed<T>(&mut self, pos: FilePtr) -> &'static T {
+    /*
+    pub fn read_blockheader(&mut self, pos: FilePtr) -> &'static BlockHeader {
         self.fileset.read_fixed(pos)
+    }*/
+
+    pub fn write_blockheader(&mut self, blockheader: &BlockHeader) -> FilePtr {
+        self.fileset.write(blockheader.to_raw())
     }
+
 }
 
