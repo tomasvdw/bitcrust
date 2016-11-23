@@ -236,7 +236,7 @@ impl FlatFileSet {
 
         // write size & buffer
         flatfile.put(&buffer_len, target_ptr.file_pos());
-        flatfile.put_bytes(buffer, target_ptr.file_pos() + 4);
+        flatfile.put_slice(buffer, target_ptr.file_pos() + 4);
 
         target_ptr
     }
@@ -252,6 +252,20 @@ impl FlatFileSet {
         let flatfile   = self.get_flatfile(target_ptr.file_number());
 
         flatfile.put(value, target_ptr.file_pos());
+
+        target_ptr
+    }
+
+    /// Appends the elements of the slice to flatfileset and returns a pointer
+    ///
+    /// The element count is not stored
+    pub fn write_all<T>(&mut self, value: &[T]) -> FilePtr {
+
+        let target_ptr = self.alloc_write_space((value.len() * mem::size_of::<T>()) as u32);
+
+        let flatfile   = self.get_flatfile(target_ptr.file_number());
+
+        flatfile.put_slice(value, target_ptr.file_pos());
 
         target_ptr
     }

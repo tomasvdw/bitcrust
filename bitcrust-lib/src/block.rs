@@ -90,6 +90,7 @@ pub struct BlockHeader<'a> {
 
 impl<'a> Block<'a> {
 
+
     /// Parses the block from a raw blob
     ///
     /// The transactions will not be parsed yet, and simply stored as a slice
@@ -112,6 +113,8 @@ impl<'a> Block<'a> {
     /// This assumes all transactions have already been verified
     pub fn verify_and_store(&self, store: &mut Store, transactions: Vec<FilePtr>) -> BlockResult<()> {
 
+        let _m = store.metrics.start("block.spenttree.store");
+
         let block_hash = Hash32Buf::double_sha256(self.header.to_raw());
 
         let ptr = store.hash_index.get(block_hash.as_ref());
@@ -120,16 +123,20 @@ impl<'a> Block<'a> {
 
             // this block is already in
             // TODO; distinct ok-result
+            println!("Already exists");
             return Ok(())
         }
 
         // let's store the blockheader in block_content
         let blockheader_ptr = store.block_content.write_blockheader(&self.header);
 
+        let (spent_tree_start, spent_tree_end) = store.spent_tree.store_block(blockheader_ptr, transactions);
 
+        let previous = store.hash_index.get_or_set(self.header.prev_hash, spent_tree_end.as_guardblock());
+        if let Some(previous) = previous {
 
-
-        let previous = store.hash_index.get(self.header.prev_hash);
+            store.spent_tree.set_previous(spent_tree_start, previous);
+        }
         let previous = previous
             .iter()
             .find(|ptr| ptr.is_blockheader());
@@ -204,6 +211,9 @@ impl<'a> Block<'a> {
 }
 
 
+
+
+
 impl<'a> Parse<'a> for BlockHeader<'a> {
 
     /// Parses the block-header
@@ -232,6 +242,7 @@ impl<'a> ToRaw<'a> for BlockHeader<'a> {
 
 
 
+
 #[cfg(test)]
 mod tests {
 
@@ -242,9 +253,7 @@ mod tests {
     use buffer;
     use transaction;
 
-    #[test]
-    fn test_blockheader_read()  {
-        let hex = "0100000000000000000000000000000000000000000000000000000000000000\
+    const block0: &'static str = "0100000000000000000000000000000000000000000000000000000000000000\
                    000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa\
                    4b1e5e4a29ab5f49ffff001d1dac2b7c01010000000100000000000000000000\
                    00000000000000000000000000000000000000000000ffffffff4d04ffff001d\
@@ -254,8 +263,12 @@ mod tests {
                    1967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4\
                    f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000";
 
+    #[test]
+    fn test_blockheader_read()  {
 
-        let slice = &rustc_serialize::hex::FromHex::from_hex(hex).unwrap();
+
+
+        let slice = &rustc_serialize::hex::FromHex::from_hex(block0).unwrap();
         let mut buf = buffer::Buffer::new(slice);
 
         let hdr = BlockHeader::parse(&mut buf).unwrap();
@@ -271,6 +284,11 @@ mod tests {
         assert_eq!(txs[0].txs_out.len(), 1);
 
     }
+
+    fn test_spenttree() {
+
+    }
+
 
 
     /*

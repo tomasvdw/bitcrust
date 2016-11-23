@@ -134,9 +134,9 @@ impl FlatFile {
 
     }
 
-    pub fn put_bytes(&self, value: &[u8], filepos: usize) {
+    pub fn put_slice<T>(&self, value: &[T], filepos: usize) {
 
-        let target: &mut u8 = unsafe {
+        let target: &mut T = unsafe {
             mem::transmute( self.ptr.offset(filepos as isize))
         };
 

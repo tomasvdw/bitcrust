@@ -1,7 +1,8 @@
 
 # Flatfiles
 
-Various data is stored in *flatfiles*. A datatype is associate with a path and a prefix and the data is stored
+Various data is stored in *flatfilesets* [(src)](../bitcrust-lib/src/store/flatfileset.rs). 
+A datatype is associate with a path and a prefix and the data is stored
 as sequential records in files of the format path/prefix-XXXX.
 
 Here XXXX is a hex signed file-sequence number and the maximum file size; the files are of fixed size to allow 
@@ -15,23 +16,25 @@ Each file starts with a 16 byte header:
 8 bytes reserved.
 
 In normal operation the files are append-only and writes and reads occur lock-free. Writes will first increase the 
-write-pointer (using atomic CAS) and then write the record at the location of the previous write pointer.
+write-pointer (using atomic compare-and-swap) and then write the record at the location of the previous write pointer.
 
-Records in the files can be identified with 48-bit pointers (16-bit fileno and 32-bit filepos).
+Data in the files can be identified with 46-bit pointers (16-bit fileno and 30-bit filepos) [(src)](../bitcrust-lib/src/store/fileptr.rs)
 
 ## Block_Content
 
-Transactions are stored in flatfiles `block_content/bc-XXXX` 
+Transactions and blockheaders are stored in flatfiles `block_content/bc-XXXX` 
 
 Transanctions are prefixed with a 4-byte length and written in network format.
 
+Blockheaders are not length-prefixed, and also stored in block format
+
 ## Hash_Index
 
-The hash index is used to lookup fileptrs from 
+The hash index is used to lookup fileptrs from hashes of both blocks and transactions
 
 ## Spenttree
 
-Files with the name 'stree/st-XXXX' contain the spent-tree; Records are 16 byte long.
+Files with the name 'spent_tree/st-XXXX' contain the spent-tree; Records are 16 byte long.
 
 Three types of records exist:
 

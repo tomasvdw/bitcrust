@@ -11,7 +11,7 @@ use store::flatfileset::FlatFileSet;
 ///
 /// The skips point to other Records; at least the previous.
 ///
-/// The exact format is still in flux.
+/// The exact format is still in work-in-progress.
 ///
 pub struct Record {
     ptr:   FilePtr,
@@ -28,7 +28,7 @@ impl Record {
     }
 
     fn set_bits(&mut self, start: u64, value: u64) {
-        self.skips |= (value << start)
+        self.skips |= value << start
     }
 
     /*
@@ -56,6 +56,12 @@ impl Record {
         }
     }
 
+    pub fn set_skip_previous(&mut self) {
+        self.set_bits(0,1)
+    }
+
+
+
     /// Initiazes the previous pointer and the skip-list for this record
     pub fn set_skips(&mut self, self_ptr: FilePtr, previous: Option<FilePtr>) {
         if previous.is_none() {
@@ -63,6 +69,8 @@ impl Record {
             return;
         }
         let previous = previous.unwrap();
+
+        assert!(self_ptr.file_pos() > previous.file_pos());
 
         if self_ptr.file_number() != previous.file_number() {
             self.skips = previous.as_u64();

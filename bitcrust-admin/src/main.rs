@@ -20,7 +20,7 @@ fn main() {
 
 
     let mut block = 0;
-    for fileno in 0..1 {
+    for fileno in 0..100 {
         let name = format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", fileno);
         println!("Processing {}", name);
         let f = File::open(name).unwrap();
@@ -42,7 +42,7 @@ fn main() {
                 println!("Processed block {}", block);
             }
 
-            if block == 75000 {
+            if block == 150000 {
                 break;
             }
 

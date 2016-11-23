@@ -18,7 +18,10 @@
 /// after all [spent-outputs] in that block have been checked. This entails scanning back the chain.
 /// The scan is succesful if the transaction is found and unsuccesful if it is not found or if the
 /// same spent-output is found before the transaction.
-
+///
+/// TODO
+/// Refactor FilePtr & Record to be typed as what they point to
+///
 use std::mem;
 
 
@@ -62,49 +65,52 @@ impl SpentTree {
     }
 
 
+    /// Converts the set of block_content-fileptrs
+    /// into a set of records to be stored in the spent_tree
+    ///
     pub fn create_block(blockheader: FilePtr, file_ptrs: Vec<FilePtr>) -> Vec<Record> {
 
         let mut result: Vec<Record> = Vec::with_capacity(file_ptrs.len()+1);
 
+        // TODO: stronger typing!
         result.push(Record::new(blockheader));
 
         let mut previous: Option<FilePtr> = None;
-
+//        println!("PTRS: {:?}", file_ptrs);
         for (idx, ptr) in file_ptrs.iter().enumerate() {
 
             let mut r = Record::new(*ptr);
-            r.set_skips(*ptr, previous);
+
+            r.set_skip_previous();
 
             result.push(r);
 
             previous = Some(*ptr);
         };
 
+
         result
     }
 
-    /// Stores a block without parent
+
+
+    /// Stores a block in the spent_tree. The block will be initially orphan.
     ///
-    pub fn store_block(&mut self, blockheader: FilePtr, file_ptrs: Vec<FilePtr>) -> Result<FilePtr, SpendingError> {
+    /// The result is a pointer to the first and last record
+    pub fn store_block(&mut self, blockheader: FilePtr, file_ptrs: Vec<FilePtr>) -> (FilePtr, FilePtr) {
+
+        let block = SpentTree::create_block(blockheader, file_ptrs);
 
 
-        let size = file_ptrs.len() * mem::size_of::<Record>();
+        let result_ptr = self.fileset.write_all(&block);
+        let end_ptr = result_ptr.offset((block.len()-1) * mem::size_of::<Record>());
 
-        let target = self.fileset.alloc_write_space(size as u32);
-
-
-
-        unimplemented!()
-
+        (result_ptr, end_ptr)
     }
 
-    ///
-    pub fn store_and_connect_block(&mut self, file_ptrs: Vec<FilePtr>, previous: FilePtr)
-        -> Result<FilePtr, SpendingError> {
+    pub fn set_previous(&mut self, target: FilePtr, previous: FilePtr) {
 
-        unimplemented!()
     }
-
 
 }
 

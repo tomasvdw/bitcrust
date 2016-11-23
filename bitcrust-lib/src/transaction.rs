@@ -157,15 +157,17 @@ impl<'a> Transaction<'a> {
     /// Uses FilePtr::null placeholder for outputs not found
     pub fn get_output_fileptrs(&self, store: &mut Store) -> Vec<FilePtr> {
 
-        self.txs_in.iter().map(|input| {
+        self.txs_in.iter()
+            .filter(|tx_in| !tx_in.prev_tx_out.is_null())
+            .map(|input| {
 
-            store.hash_index
-                .get(input.prev_tx_out)
-                .iter()
-                .find(|ptr| ptr.is_transaction())
-                .map_or(FilePtr::null(), |ptr| ptr.as_output(input.prev_tx_out_idx))
-
-        }).collect()
+                store.hash_index
+                    .get(input.prev_tx_out)
+                    .iter()
+                    .find(|ptr| ptr.is_transaction())
+                    .map_or(FilePtr::null(), |ptr| ptr.as_output(input.prev_tx_out_idx))
+            })
+            .collect()
     }
 
     /// Verifies and stores

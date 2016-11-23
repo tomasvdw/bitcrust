@@ -95,6 +95,20 @@ impl FilePtr {
         )
     }
 
+    pub fn as_guardblock(self) -> FilePtr {
+
+        FilePtr(
+            self.0 | TYPE_GUARD_BLOCK
+        )
+    }
+
+    pub fn as_block(self) -> FilePtr {
+
+        FilePtr(
+            self.0 | TYPE_BLOCK
+        )
+    }
+
     pub fn as_u64(self) -> u64 {
         self.0
     }
@@ -113,7 +127,9 @@ impl FilePtr {
     }
 
 
-
+    pub fn offset(self, offset :usize) -> FilePtr {
+        FilePtr(self.0 + offset as u64)
+    }
 
     /// We use a null value as magic NULL value. This is safe
     /// because we're never pointing to the header

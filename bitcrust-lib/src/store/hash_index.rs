@@ -18,7 +18,7 @@
 //!
 //! * a set of fileptr pointing to guard blocks
 //!  The block cannot be found, but the blocks pointed to by these ptrs are having the given hash as previous block;
-//!  they are "expecting" this block
+//!  they are "expecting" this block, and should be appended when this block comes in
 //!
 //!
 
