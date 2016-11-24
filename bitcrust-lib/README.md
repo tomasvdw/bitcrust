@@ -36,4 +36,4 @@ When transactions are stored, only their scripts are validated. When blocks come
    Here we see a spent-tree with two blocks, where the 3rd transaction has one input referencing the 1st transaction.
    
    
-   ![Spent tree example](https://github.com/tomasvdw/bitcrust/blob/master/doc/spent-tree1.svg?raw=true "Spent-tree example")
+   ![Spent tree example](https://cdn.rawgit.com/tomasvdw/bitcrust/master/doc/spent-tree1.svg "Spent-tree example")
