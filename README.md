@@ -5,7 +5,7 @@
 
 
 **Bitcrust** is a full software suite for bitcoin in development. Currently the focus and progress is on 
- _[bitcrust-db](bitcrust-lib/README.md)_: a storage-engine which uses a novel approach to block-storage to 
+ _[bitcrust-db](bitcrust-lib/)_: a storage-engine which uses a novel approach to block-storage to 
 provides a high performance, _lock-free_ concurrent R/W access, and 
 fully parallel block verification.   
 
@@ -33,11 +33,11 @@ cargo test
 
 Bitcrust is planned to have the following components:
 
-* _[bitcrust-db](bitcrust-lib/README.md)_ Bitcrust-db is the library component that verfies and stores blocks 
+* _[bitcrust-db](bitcrust-lib/)_ Bitcrust-db is the library component that verfies and stores blocks 
 and transactions. 
 * _bitcrust-net (planned)_ P2P bitcoin protocol implementation
 * _bitcrust-mapreduce (planned)_ A scriptable indexing framework
-* _bitcrust-monitor (planned)_ A scriptable indexing framework
+* _bitcrust-monitor (planned)_ Terminal based query and monitoring tool 
 * _bitcrust-node (planned)_  
 * _bitcrust-wallet (planned)_
 
