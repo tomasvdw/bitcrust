@@ -19,12 +19,13 @@ block verification.
 
 ## Block content
 
-Transactions are stored on disk after they have been verified. 
+Transactions are stored on disk after they have been verified even when not yet in a block.
+ This means they are only written once. 
 Unconfirmed transactions are not necessarily kept in memory, as 
-they to be bad canditdates to pollute precious RAM space. After the scripts
-are verified, the transaction contents is only rarely needed.
+they only pollute precious RAM space. After the scripts
+are verified and transactions are relayed, the transaction contents is only rarely needed.
 
-Blockheaders are stored in the same data-files, and both transactions
+Blockheaders are stored in the same data-files (to ensure rough ordering), and both transactions
  and blocks are referenced by 48-bit file-pointers.
 
 For more details, check the [store](src/store/) documentation
@@ -59,13 +60,15 @@ a *loose skip tree*. Similarly to a skip list, each record contains a set of "hi
       
 As the vast majority of spents refer to recent transactions, such skip tree can reduce the average number of nodes traversed per lookup to  about 100.
 
-Developers with knowledge about B-Trees and hash-tables may start to giggle at such high number of nodes per lookup, but they would be forgetting the major gains of the approach:
+Developers with knowledge about B-Trees and hash-tables may start to giggle at such high number of nodes per lookup, but they would be forgetting the major gains, which makes this 
+approach outperform other structures:
 
-* Superior locality of reference. As the majority of lookups is in the end of the tree, the accessed memory usually fits in the CPU cache.
-* The data structre is append-only, absolving the need for tranactional adding and removal of UTXO pointers. Adding to the tree 
+* Superior locality of reference. As the majority of lookups is in the end of the tree, the accessed memory usually fits in the CPU cache. 
+This in sheer contrast with the UTXO set which is randomly scattered. 
+* The data structure is append-only, absolving the need for transactional adding and removal of UTXO pointers. Adding to the tree 
 is done concurrently using CAS-semantics.
-* The structure is a tree on disk. This absolves the need for reorgs and for 
-writing undo-information. A reorg in bitcurst is simply the pointing to a different tip.
+* The tree structure is maintained on disk. This absolves the need for reorgs and for 
+writing undo-information. A reorg in bitcrust is simply the pointing to a different tip.
 * Parallel block validation. As there is no "main chain" at the storage level, concurrent blocks can
 be verified in parallel.
 
@@ -83,5 +86,5 @@ The long-lasting validation of block A does not at any point
  block the validation of block B, C and D.
  
  The actual orphaning and breaking of the connection (as well as deprioritizing) 
- can be implemented using the same cost/benefit analysis as other DOS protection.
+ can be implemented using the same per peer cost/benefit analysis as other DOS protection.
   
