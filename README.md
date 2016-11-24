@@ -42,7 +42,7 @@ and transactions.
 * _bitcrust-wallet (planned)_
 
 
-![Components of bitcrust](https://github.com/tomasvdw/bitcrust/blob/master/doc/components.svg "Dependencies")
+![Components of bitcrust](https://github.com/tomasvdw/bitcrust/blob/master/doc/components.svg?raw=true "Dependencies")
 
 
 ## Contribute
