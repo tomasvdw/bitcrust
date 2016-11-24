@@ -95,7 +95,7 @@ impl FlatFile {
             }
             thread::sleep(time::Duration::from_millis(50));
         }
-        panic!(format!("Data file '{:?}' exists but has invalid size", path));
+        panic!(format!("Data file '{:?}' exists but has invalid size", path))
     }
 
 

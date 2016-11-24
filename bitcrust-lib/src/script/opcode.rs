@@ -2,7 +2,7 @@
  * 2016 Tomas van der Wansem
 
  * CURRENTLY ONLY USED FOR DEBUG-RENDERING
- * Actual script processing is done in
+ * Actual script processing is done in libbitcoinconsensus
  */
  
 
