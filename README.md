@@ -33,7 +33,7 @@ cargo test
 
 Bitcrust is planned to have the following components:
 
-* _[bitcrust-db](bitcrust-lib/)_ Bitcrust-db is the library component that verfies and stores blocks 
+* _[bitcrust-db](bitcrust-lib/)_ Bitcrust-db is the library component that verifies and stores blocks 
 and transactions. 
 * _bitcrust-net (planned)_ P2P bitcoin protocol implementation
 * _bitcrust-mapreduce (planned)_ A scriptable indexing framework
