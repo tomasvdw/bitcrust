@@ -24,6 +24,7 @@ pub struct Record {
 impl Record {
 
     fn get_bits(&self, start: u64, length: u64) -> u64 {
+
         (self.skips >> start) & ((2^length)-1)
     }
 
@@ -38,7 +39,7 @@ impl Record {
             1 => Some( self.before_in_memory(1) ),
             2 => Some( self.before_in_memory( self.skips_bit_3_to_16())),
             3 => None,
-            _ => panic!()
+            _ => unreachable!()
         }
     }
     */
@@ -99,6 +100,8 @@ impl Record {
 
 #[cfg(test)]
 mod tests {
+
+
 
 
 

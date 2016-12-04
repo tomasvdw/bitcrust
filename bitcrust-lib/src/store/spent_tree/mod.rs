@@ -19,8 +19,8 @@
 /// The scan is succesful if the transaction is found and unsuccesful if it is not found or if the
 /// same spent-output is found before the transaction.
 ///
-/// TODO
-/// Refactor FilePtr & Record to be typed as what they point to
+///
+///
 ///
 use std::mem;
 
@@ -112,5 +112,63 @@ impl SpentTree {
 
     }
 
+}
+
+
+#[cfg(test)]
+mod tests {
+
+    extern crate tempdir;
+    use store::fileptr::FilePtr;
+    use std::path::PathBuf;
+
+    use super::*;
+
+    /// Macro to create a block for the spent_tree tests
+    /// blockheaders and txs are unqiue numbers (fileptrs but where they point to doesn't matter
+    /// for the spent_tree).
+    ///
+    /// Construct a block as
+    ///
+    /// ```
+    /// (blk 1 =>                 /* bloocknr */
+    ///   [tx 2],                /* tx with no inputs  */
+    ///   [tx 3 => (2;0),(2;1)]  /* tx with two inputs referencing tx 2 ouput 0 and 1
+    /// )
+    ///
+
+    macro_rules! block {
+
+        (blk $header:expr =>
+          $( [tx $tx:expr  $(=> $( ($tx_in:expr;$tx_in_idx:expr) ),+)*] ),+
+        )
+        =>
+        (  ( FilePtr::new(0,$header),
+               $( FilePtr::new(0,$tx), $( $( FilePtr::new(0,$tx_in).as_input($tx_in_idx) ),+ )* ),+
+            )
+        )
+
+    }
+
+    #[test]
+    fn test_spent_tree() {
+
+        //let block1 = block!(blk 1 -> [tx 2], [tx 3, spents (2;0),(2;1)] );
+        let block1 = block!(blk 1 =>
+            [tx 2 => (2;1),(2;0)],
+            [tx 3]
+        );
+
+/*
+        let dir = tempdir::TempDir::new("test1").unwrap();
+        let cfg = config::Config { root: PathBuf::from(dir.path) };
+
+        let st  = SpentTree::new(&cfg);
+  (*/
+
+
+
+
+    }
 }
 
