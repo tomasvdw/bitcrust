@@ -117,6 +117,7 @@ impl<'a> Block<'a> {
 
         let block_hash = Hash32Buf::double_sha256(self.header.to_raw());
 
+        // see if it exists
         let ptr = store.hash_index.get(block_hash.as_ref());
 
         if ptr.iter().any(|ptr| ptr.is_blockheader()) {
@@ -130,12 +131,12 @@ impl<'a> Block<'a> {
         // let's store the blockheader in block_content
         let blockheader_ptr = store.block_content.write_blockheader(&self.header);
 
-        let (spent_tree_start, spent_tree_end) = store.spent_tree.store_block(blockheader_ptr, transactions);
+        let block_ptr = store.spent_tree.store_block(blockheader_ptr, transactions);
 
-        let previous = store.hash_index.get_or_set(self.header.prev_hash, spent_tree_end.as_guardblock());
+        let previous = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.end.as_guardblock());
         if let Some(previous) = previous {
 
-            store.spent_tree.set_previous(spent_tree_start, previous);
+            store.spent_tree.set_previous(block_ptr.start, previous);
         }
         let previous = previous
             .iter()

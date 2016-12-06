@@ -46,6 +46,11 @@ pub enum SpendingError {
     OutputAlreadySpent,
 }
 
+pub struct BlockPtr {
+    pub start: FilePtr,
+    pub end:   FilePtr
+}
+
 
 pub struct SpentTree {
 
@@ -97,7 +102,7 @@ impl SpentTree {
     /// Stores a block in the spent_tree. The block will be initially orphan.
     ///
     /// The result is a pointer to the first and last record
-    pub fn store_block(&mut self, blockheader: FilePtr, file_ptrs: Vec<FilePtr>) -> (FilePtr, FilePtr) {
+    pub fn store_block(&mut self, blockheader: FilePtr, file_ptrs: Vec<FilePtr>) -> BlockPtr {
 
         let block = SpentTree::create_block(blockheader, file_ptrs);
 
@@ -105,7 +110,10 @@ impl SpentTree {
         let result_ptr = self.fileset.write_all(&block);
         let end_ptr = result_ptr.offset((block.len()-1) * mem::size_of::<Record>());
 
-        (result_ptr, end_ptr)
+        BlockPtr {
+            start: result_ptr,
+            end: end_ptr
+        }
     }
 
     pub fn set_previous(&mut self, target: FilePtr, previous: FilePtr) {
@@ -121,6 +129,7 @@ mod tests {
     extern crate tempdir;
     use store::fileptr::FilePtr;
     use std::path::PathBuf;
+    use  config;
 
     use super::*;
 
@@ -143,9 +152,9 @@ mod tests {
           $( [tx $tx:expr  $(=> $( ($tx_in:expr;$tx_in_idx:expr) ),+)*] ),+
         )
         =>
-        (  ( FilePtr::new(0,$header),
+        (  ( FilePtr::new(0,$header), vec![
                $( FilePtr::new(0,$tx), $( $( FilePtr::new(0,$tx_in).as_input($tx_in_idx) ),+ )* ),+
-            )
+            ])
         )
 
     }
@@ -159,12 +168,16 @@ mod tests {
             [tx 3]
         );
 
-/*
-        let dir = tempdir::TempDir::new("test1").unwrap();
-        let cfg = config::Config { root: PathBuf::from(dir.path) };
 
-        let st  = SpentTree::new(&cfg);
-  (*/
+        let dir = tempdir::TempDir::new("test1").unwrap();
+        //let path = PathBuf::from(dir.path());
+        let cfg = config::Config { root: PathBuf::from(dir.path()) };
+
+        let mut st  = SpentTree::new(&cfg);
+
+
+        st.store_block(block1.0, block1.1);
+
 
 
 
