@@ -3,7 +3,54 @@
 //!
 //! Handles block-level validation and storage
 
-/// 2016 Tomas
+/*
+
+Block storing is a tricky part; blocks are stored in the spent-tree and referenced in the
+ hash-index
+
+ This can go out of order:  For instance consider 5 blocks added in the order A, B, D, E, C
+ Each block has the previous letter as prev_block_hash
+
+ We show the actions on hashindex (hi) and spent-tree (st)
+
+ A:
+    st.store_block(A)
+    fn do_connect(null,A) =
+      (prev = null, no get_or_set)
+      hi.set(A)
+
+ B:
+    st.store_block(B)
+    hi.get_or_set(A, guard[B]) returns A
+    fn do_connect(A,B) =
+      st.connect_block(A,B)
+      hi.set(B)
+
+
+ D:
+    st.store_block(D)
+    hi.get_or_set(C, guard[D]) return none & adds guard[D] at hash C
+
+ E:
+   st.store_block(E)
+   hi.get_or_set(D, guard[E]) return none & adds guard[E] at hash D
+
+ C:
+   st.store_block(C)
+   hi.get_or_set(B, guard[C]) returns B
+   fn do_connect(B,C) =
+      st.connect_block(B,C)
+      hi.set(C) -> fail due to guard([D])
+
+        loop {
+            hi.get(C) -> return guard[D]
+            do_connect(C,D)
+            hi.set(C, guard([D]) -> fail or break
+        }
+
+
+*/
+
 
 
 use std::convert;
@@ -128,17 +175,31 @@ impl<'a> Block<'a> {
             return Ok(())
         }
 
+        /*
+         * There are three scenario's:
+         * A. Previous exists; no next one exists
+         *    get_or_set(prev_hash) returns the previous;
+         *    set(this_hash) stores this one
+         * B. Pre
+         */
+
+
         // let's store the blockheader in block_content
         let blockheader_ptr = store.block_content.write_blockheader(&self.header);
 
+
+        // now we store the block in the spent_tree
         let block_ptr = store.spent_tree.store_block(blockheader_ptr, transactions);
 
-        let previous = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.end.as_guardblock());
-        if let Some(previous) = previous {
+        // we retrieve the pointer to the end of the previous block from the hash-index
+        let previous_end = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.end.as_guardblock());
+        if let Some(previous) = previous_end {
 
-            store.spent_tree.set_previous(block_ptr.start, previous);
+            store.spent_tree.connect_block(block_ptr.start, previous);
+
+            let ptr = store.hash_index.get(block_hash.as_ref());
         }
-        let previous = previous
+        let previous = previous_end
             .iter()
             .find(|ptr| ptr.is_blockheader());
 

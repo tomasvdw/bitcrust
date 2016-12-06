@@ -75,9 +75,8 @@ impl SpentTree {
     ///
     pub fn create_block(blockheader: FilePtr, file_ptrs: Vec<FilePtr>) -> Vec<Record> {
 
-        let mut result: Vec<Record> = Vec::with_capacity(file_ptrs.len()+1);
+        let mut result: Vec<Record> = Vec::with_capacity(file_ptrs.len()+2);
 
-        // TODO: stronger typing!
         result.push(Record::new(blockheader));
 
         let mut previous: Option<FilePtr> = None;
@@ -92,6 +91,8 @@ impl SpentTree {
 
             previous = Some(*ptr);
         };
+
+        result.push(Record::new(blockheader));
 
 
         result
@@ -116,7 +117,9 @@ impl SpentTree {
         }
     }
 
-    pub fn set_previous(&mut self, target: FilePtr, previous: FilePtr) {
+    pub fn connect_block(&mut self, target_end: FilePtr, previous: FilePtr) {
+
+
 
     }
 
@@ -176,7 +179,14 @@ mod tests {
         let mut st  = SpentTree::new(&cfg);
 
 
-        st.store_block(block1.0, block1.1);
+        let block_ptr = st.store_block(block1.0, block1.1);
+
+        let block2 = block!(blk 4 =>
+            [tx 3 => (2;1),(2;0)],
+            [tx 4]
+        );
+
+        let block_ptr2 = st.store_block(block1.0, block1.1);
 
 
 
