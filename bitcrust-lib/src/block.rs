@@ -48,6 +48,20 @@ Block storing is a tricky part; blocks are stored in the spent-tree and referenc
             hi.set(C, guard([D]) -> fail or break
         }
 
+  Now let us consider what happens when C' is inserted *during* processing of B. Copyied from B above:
+  B:
+    st.store_block(B)
+    hi.get_or_set(A, guard[B]) returns A
+    fn do_connect(A,B) =
+      st.connect_block(A,B)
+        < here C' is inserted as B -> guard[C']
+      hi.set(B) -> fail due to guard[C']
+      loop {
+            hi.get(B) -> return guard[C']
+            do_connect(B,C')
+            hi.set(B, guard([C']) -> success!
+        }
+
 
 */
 
@@ -135,6 +149,59 @@ pub struct BlockHeader<'a> {
     raw:         &'a[u8],
 }
 
+
+// Connects two blocks (A,B) in the spent-tree and then stores the hash of B in the hash-index
+// this may cause itself being called recursively for (B,C)
+fn connect_and_store(store: &mut Store,
+                     this_block_hash: Hash32,
+                     previous_block_end: FilePtr,
+                     this_block_start: FilePtr) -> BlockResult<()>
+{
+
+
+    let this_block_end = store.spent_tree.connect_block(previous_block_end, this_block_start)?;
+
+
+    if store.hash_index.set(this_block_hash, this_block_end, vec![]) {
+        return Ok(());
+    }
+
+    // there are one or more guards waiting that we must solve
+    let mut solved_guards: Vec<FilePtr> = vec![];
+    loop {
+
+        let guards = store.hash_index.get(this_block_hash);
+
+        if guards.iter().any(|ptr| ptr.is_blockheader()) {
+            // this is not a guard, this is _this_ block. It seems the block
+            // was added by a concurrent user
+            return Ok(());
+        }
+
+        for ptr in guards.iter() {
+            if solved_guards.contains(ptr) {
+                continue;
+            }
+
+        }
+
+
+
+
+    }
+
+    /*    st.connect_block(A,B)
+        hi.set(B) -> fail due to guard[C']
+        loop {
+        hi.get(B) -> return guard[C']
+        do_connect(B,C')
+        hi.set(B, guard([C']) -> success!
+        }
+*/
+}
+
+
+
 impl<'a> Block<'a> {
 
 
@@ -155,12 +222,13 @@ impl<'a> Block<'a> {
     }
 
 
+
     /// Verifies the spending order and stores the block
     ///
-    /// This assumes all transactions have already been verified
+    /// This assumes all transactions have already been (script) verified
     pub fn verify_and_store(&self, store: &mut Store, transactions: Vec<FilePtr>) -> BlockResult<()> {
 
-        let _m = store.metrics.start("block.spenttree.store");
+        //let _m = store.metrics.start("block.spenttree.store");
 
         let block_hash = Hash32Buf::double_sha256(self.header.to_raw());
 
@@ -175,14 +243,6 @@ impl<'a> Block<'a> {
             return Ok(())
         }
 
-        /*
-         * There are three scenario's:
-         * A. Previous exists; no next one exists
-         *    get_or_set(prev_hash) returns the previous;
-         *    set(this_hash) stores this one
-         * B. Pre
-         */
-
 
         // let's store the blockheader in block_content
         let blockheader_ptr = store.block_content.write_blockheader(&self.header);
@@ -192,35 +252,14 @@ impl<'a> Block<'a> {
         let block_ptr = store.spent_tree.store_block(blockheader_ptr, transactions);
 
         // we retrieve the pointer to the end of the previous block from the hash-index
-        let previous_end = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.end.as_guardblock());
-        if let Some(previous) = previous_end {
+        let previous_end = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.start.as_guardblock());
+        if let Some(previous_end) = previous_end {
 
-            store.spent_tree.connect_block(block_ptr.start, previous);
+            connect_and_store(store, block_hash.as_ref(), previous_end, block_ptr.start);
 
-            let ptr = store.hash_index.get(block_hash.as_ref());
+
+
         }
-        let previous = previous_end
-            .iter()
-            .find(|ptr| ptr.is_blockheader());
-
-
-
-/*
-        let ptr = match previous {
-            None       => store.spent_tree.store_orphan_block(transactions),
-            Some(prev) => store.spent_tree.store_and_connect_block(transactions, *prev)
-        } ?;
-*/
-
-
-        // TODO's
-        // create a list with spents
-        // store
-        // get_or_set previous
-        // From here we can have procedure reconnect:
-        // set header of list to point to previous
-        // make the link
-        // set_or_get
 
 
         Ok(())

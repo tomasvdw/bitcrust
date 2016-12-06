@@ -117,10 +117,14 @@ impl SpentTree {
         }
     }
 
-    pub fn connect_block(&mut self, target_end: FilePtr, previous: FilePtr) {
+    pub fn connect_block(&mut self, previous_end: FilePtr, target_end: FilePtr) -> Result<FilePtr, SpendingError> {
 
 
+        unimplemented!();
+    }
 
+    pub fn get_block_hash() {
+        unimplemented!();
     }
 
 }
@@ -143,7 +147,7 @@ mod tests {
     /// Construct a block as
     ///
     /// ```
-    /// (blk 1 =>                 /* bloocknr */
+    /// (blk 1 =>                 /* blocknr */
     ///   [tx 2],                /* tx with no inputs  */
     ///   [tx 3 => (2;0),(2;1)]  /* tx with two inputs referencing tx 2 ouput 0 and 1
     /// )
@@ -186,7 +190,7 @@ mod tests {
             [tx 4]
         );
 
-        let block_ptr2 = st.store_block(block1.0, block1.1);
+        let block_ptr2 = st.store_block(block2.0, block2.1);
 
 
 
