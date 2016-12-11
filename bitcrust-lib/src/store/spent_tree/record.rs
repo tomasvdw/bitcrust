@@ -14,7 +14,7 @@ use store::flatfileset::FlatFileSet;
 /// The exact format is still in work-in-progress.
 ///
 pub struct Record {
-    ptr:   FilePtr,
+    pub ptr:   FilePtr,
     skips: u64
 }
 

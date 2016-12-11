@@ -11,7 +11,7 @@ Block storing is a tricky part; blocks are stored in the spent-tree and referenc
  This can go out of order:  For instance consider 5 blocks added in the order A, B, D, E, C
  Each block has the previous letter as prev_block_hash
 
- We show the actions on hashindex (hi) and spent-tree (st)
+ We show the some pseudocode for actions on hashindex (hi) and spent-tree (st)
 
  A:
     st.store_block(A)
@@ -151,30 +151,30 @@ pub struct BlockHeader<'a> {
 
 
 // Connects two blocks (A,B) in the spent-tree and then stores the hash of B in the hash-index
-// this may cause itself being called recursively for (B,C)
-fn connect_and_store(store: &mut Store,
-                     this_block_hash: Hash32,
-                     previous_block_end: FilePtr,
-                     this_block_start: FilePtr) -> BlockResult<()>
+// this may cause itself being called recursively for (B,C) if needed
+fn connect_and_store_block(
+         store:                 &mut Store,
+         this_block_hash:       Hash32,
+         previous_block_end:    FilePtr,
+         this_block_start:      FilePtr)
+
+        -> BlockResult<()>
 {
 
-
+    // connect the blocks
     let this_block_end = store.spent_tree.connect_block(previous_block_end, this_block_start)?;
 
 
-    if store.hash_index.set(this_block_hash, this_block_end, vec![]) {
-        return Ok(());
-    }
 
-    // there are one or more guards waiting that we must solve
+    // we can now store the reference in the hash-index unless there are guards that need to be solved
     let mut solved_guards: Vec<FilePtr> = vec![];
-    loop {
+    while !store.hash_index.set(this_block_hash, this_block_end, &solved_guards) {
 
         let guards = store.hash_index.get(this_block_hash);
 
         if guards.iter().any(|ptr| ptr.is_blockheader()) {
             // this is not a guard, this is _this_ block. It seems the block
-            // was added by a concurrent user
+            // was added by a concurrent user; will do fine.
             return Ok(());
         }
 
@@ -183,12 +183,16 @@ fn connect_and_store(store: &mut Store,
                 continue;
             }
 
+            let hash = store.get_block_hash(*ptr);
+
+            // call self recusrively; the guard block has this as previous
+            connect_and_store_block(store, hash.as_ref(), this_block_end, *ptr)?;
+
+            solved_guards.push(*ptr);
         }
-
-
-
-
     }
+
+    Ok(())
 
     /*    st.connect_block(A,B)
         hi.set(B) -> fail due to guard[C']
@@ -230,6 +234,7 @@ impl<'a> Block<'a> {
 
         //let _m = store.metrics.start("block.spenttree.store");
 
+
         let block_hash = Hash32Buf::double_sha256(self.header.to_raw());
 
         // see if it exists
@@ -253,9 +258,11 @@ impl<'a> Block<'a> {
 
         // we retrieve the pointer to the end of the previous block from the hash-index
         let previous_end = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.start.as_guardblock());
+
+
         if let Some(previous_end) = previous_end {
 
-            connect_and_store(store, block_hash.as_ref(), previous_end, block_ptr.start);
+            connect_and_store_block(store, block_hash.as_ref(), previous_end, block_ptr.start);
 
 
 
@@ -354,7 +361,7 @@ mod tests {
     use buffer;
     use transaction;
 
-    const block0: &'static str = "0100000000000000000000000000000000000000000000000000000000000000\
+    const BLOCK0: &'static str = "0100000000000000000000000000000000000000000000000000000000000000\
                    000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa\
                    4b1e5e4a29ab5f49ffff001d1dac2b7c01010000000100000000000000000000\
                    00000000000000000000000000000000000000000000ffffffff4d04ffff001d\
@@ -369,7 +376,7 @@ mod tests {
 
 
 
-        let slice = &rustc_serialize::hex::FromHex::from_hex(block0).unwrap();
+        let slice = &rustc_serialize::hex::FromHex::from_hex(BLOCK0).unwrap();
         let mut buf = buffer::Buffer::new(slice);
 
         let hdr = BlockHeader::parse(&mut buf).unwrap();

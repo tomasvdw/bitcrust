@@ -46,10 +46,7 @@ impl BlockContent {
         self.fileset.write(buffer)
     }
 
-    /*
-    pub fn read_blockheader(&mut self, pos: FilePtr) -> &'static BlockHeader {
-        self.fileset.read_fixed(pos)
-    }*/
+
 
     pub fn write_blockheader(&mut self, blockheader: &BlockHeader) -> FilePtr {
         self.fileset.write(blockheader.to_raw())

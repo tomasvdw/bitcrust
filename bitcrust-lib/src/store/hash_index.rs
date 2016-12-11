@@ -201,7 +201,7 @@ impl HashIndex {
     /// the transaction can be stored.
     ///
     /// Similarly, blockheader_guards need to be connected before a block can be stored
-    pub fn set(&mut self, hash: Hash32, store_ptr: FilePtr, verified_ptrs: Vec<FilePtr>) -> bool {
+    pub fn set(&mut self, hash: Hash32, store_ptr: FilePtr, verified_ptrs: &[FilePtr]) -> bool {
 
         // this loops through retries when the CAS operation fails
         loop {
@@ -403,11 +403,11 @@ mod tests {
                                 // script validation goes here
                             }
 
-                            idx.set(tx_hash.as_ref(), tx, vec![input_ptr]);
+                            idx.set(tx_hash.as_ref(), tx, &[input_ptr]);
 
                         }
                         else {
-                            idx.set(tx_hash.as_ref(), tx, Vec::new());
+                            idx.set(tx_hash.as_ref(), tx, &[]);
                         }
                     }
 

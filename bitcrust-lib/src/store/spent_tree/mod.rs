@@ -30,6 +30,10 @@ use config;
 use store::fileptr::FilePtr;
 use store::flatfileset::FlatFileSet;
 
+use store::block_content::BlockContent;
+
+use hash::*;
+
 mod record;
 use self::record::Record;
 
@@ -99,6 +103,15 @@ impl SpentTree {
     }
 
 
+    /// Retrieves the data pointed to by the spent-tree record at `ptr`
+    /// This resolves the indirection: The passed ptr points to the spent-tree record
+    /// This record points to the block_content
+    pub fn load_data_from_spent_tree_ptr<'a>(&'a mut self, block_content: &'a mut BlockContent, ptr: FilePtr) -> &[u8] {
+        let rec: &Record = self.fileset.read_fixed(ptr);
+        let ptr = rec.ptr;
+
+        block_content.read(ptr)
+    }
 
     /// Stores a block in the spent_tree. The block will be initially orphan.
     ///
@@ -120,12 +133,9 @@ impl SpentTree {
     pub fn connect_block(&mut self, previous_end: FilePtr, target_end: FilePtr) -> Result<FilePtr, SpendingError> {
 
 
-        unimplemented!();
+        unimplemented!()
     }
 
-    pub fn get_block_hash() {
-        unimplemented!();
-    }
 
 }
 
@@ -152,7 +162,6 @@ mod tests {
     ///   [tx 3 => (2;0),(2;1)]  /* tx with two inputs referencing tx 2 ouput 0 and 1
     /// )
     ///
-
     macro_rules! block {
 
         (blk $header:expr =>

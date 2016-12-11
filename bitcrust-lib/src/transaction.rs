@@ -207,7 +207,7 @@ impl<'a> Transaction<'a> {
             // Store reference in the hash_index.
             // This may fail if since ^^ get_ptr new dependent txs were added,
             // in which case we must try again.
-            if store.hash_index.set(hash_buf.as_ref(), ptr, existing_ptrs) {
+            if store.hash_index.set(hash_buf.as_ref(), ptr, &existing_ptrs) {
 
                 return Ok(TransactionOk::VerifiedAndStored(ptr))
             }
