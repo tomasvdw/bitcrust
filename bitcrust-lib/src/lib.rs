@@ -16,12 +16,18 @@
 
 
 extern crate memmap;
-
 extern crate lmdb_rs;
 extern crate itertools;
 extern crate rand;
-
 extern crate ring;
+
+#[macro_use]
+pub extern crate slog ;
+extern crate slog_term ;
+
+use slog::DrainExt;
+
+
 
 mod ffi;
 pub mod metrics;
@@ -42,6 +48,7 @@ mod store;
 
 mod config;
 use store::Store;
+
 
 
 

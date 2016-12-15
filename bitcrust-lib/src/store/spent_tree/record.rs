@@ -20,15 +20,74 @@ pub struct Record {
 
 
 
+/// A filepointer that points to a record in the SpentTree
+#[derive(Copy,Clone)]
+pub struct RecordPtr {
+    pub ptr: FilePtr
+}
+
+impl RecordPtr {
+
+    pub fn new(ptr: FilePtr) -> Self {
+        RecordPtr { ptr: ptr }
+    }
+
+    pub fn set_skips(self, fileset: &mut FlatFileSet, previous: Option<RecordPtr>) {
+
+        let  rec: &mut Record = fileset.read_fixed(self.ptr);
+
+        if previous.is_none() {
+            rec.set_bits(0,3);
+            return;
+        }
+        let previous = previous.unwrap();
+
+        assert!(self.ptr.file_pos() > previous.ptr.file_pos());
+
+        if self.ptr.file_number() != previous.ptr.file_number() {
+            rec.skips = previous.ptr.as_u64();
+            return;
+        }
+
+        let diff = (self.ptr.file_pos() - previous.ptr.file_pos()) as u64;
+        match diff {
+            1 => {
+                rec.set_bits(0,1); //.skips[0] = 0b0100_0000;
+            },
+            2 ... 0b0011_1111_1111_1111 => {
+                rec.set_bits(0,2);
+                rec.set_bits(2, diff);
+            },
+            _ => {
+                rec.skips = previous.ptr.as_u64();
+                return;
+            }
+        }
+
+    }
+
+    pub fn prev(self, fileset: &mut FlatFileSet) -> RecordPtr {
+        self
+    }
+
+    pub fn prev_in_block(self, fileset: &mut FlatFileSet) -> RecordPtr {
+        self
+    }
+
+    pub fn next_in_block(self, fileset: &mut FlatFileSet) -> RecordPtr {
+        self
+    }
+}
+
 
 impl Record {
 
-    fn get_bits(&self, start: u64, length: u64) -> u64 {
+    pub fn get_bits(&self, start: u64, length: u64) -> u64 {
 
         (self.skips >> start) & ((2^length)-1)
     }
 
-    fn set_bits(&mut self, start: u64, value: u64) {
+    pub fn set_bits(&mut self, start: u64, value: u64) {
         self.skips |= value << start
     }
 
@@ -63,35 +122,11 @@ impl Record {
 
 
 
+
     /// Initiazes the previous pointer and the skip-list for this record
+    /// [currently just the previous]
     pub fn set_skips(&mut self, self_ptr: FilePtr, previous: Option<FilePtr>) {
-        if previous.is_none() {
-            self.set_bits(0,3);
-            return;
-        }
-        let previous = previous.unwrap();
 
-        assert!(self_ptr.file_pos() > previous.file_pos());
-
-        if self_ptr.file_number() != previous.file_number() {
-            self.skips = previous.as_u64();
-            return;
-        }
-
-        let diff = (self_ptr.file_pos() - previous.file_pos()) as u64;
-        match diff {
-            1 => {
-                self.set_bits(0,1); //.skips[0] = 0b0100_0000;
-            },
-            2 ... 0b0011_1111_1111_1111 => {
-                self.set_bits(0,2);
-                self.set_bits(2, diff);
-            },
-            _ => {
-                self.skips = previous.as_u64();
-                return;
-            }
-        }
 
     }
 }

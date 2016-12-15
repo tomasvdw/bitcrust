@@ -283,7 +283,7 @@ impl FlatFileSet {
     }
 
     /// Reads the fixed size buffer at the given position
-    pub fn read_fixed<T>(&mut self, pos: FilePtr) -> &'static T {
+    pub fn read_fixed<T>(&mut self, pos: FilePtr) -> &'static mut T {
 
         let fileno   = pos.file_number();
         let filepos  = pos.file_pos();

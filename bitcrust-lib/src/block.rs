@@ -76,6 +76,7 @@ use store::SpendingError;
 use transaction::{Transaction, TransactionError};
 use store::Store;
 
+use store::RecordPtr;
 use store::fileptr::FilePtr;
 
 
@@ -155,8 +156,8 @@ pub struct BlockHeader<'a> {
 fn connect_and_store_block(
          store:                 &mut Store,
          this_block_hash:       Hash32,
-         previous_block_end:    FilePtr,
-         this_block_start:      FilePtr)
+         previous_block_end:    RecordPtr,
+         this_block_start:      RecordPtr)
 
         -> BlockResult<()>
 {
@@ -165,10 +166,9 @@ fn connect_and_store_block(
     let this_block_end = store.spent_tree.connect_block(previous_block_end, this_block_start)?;
 
 
-
     // we can now store the reference in the hash-index unless there are guards that need to be solved
     let mut solved_guards: Vec<FilePtr> = vec![];
-    while !store.hash_index.set(this_block_hash, this_block_end, &solved_guards) {
+    while !store.hash_index.set(this_block_hash, this_block_end.ptr, &solved_guards) {
 
         let guards = store.hash_index.get(this_block_hash);
 
@@ -186,7 +186,7 @@ fn connect_and_store_block(
             let hash = store.get_block_hash(*ptr);
 
             // call self recusrively; the guard block has this as previous
-            connect_and_store_block(store, hash.as_ref(), this_block_end, *ptr)?;
+            connect_and_store_block(store, hash.as_ref(), this_block_end, RecordPtr::new(*ptr))?;
 
             solved_guards.push(*ptr);
         }
@@ -233,7 +233,7 @@ impl<'a> Block<'a> {
     pub fn verify_and_store(&self, store: &mut Store, transactions: Vec<FilePtr>) -> BlockResult<()> {
 
         //let _m = store.metrics.start("block.spenttree.store");
-
+        trace!(store.logger, "starting"; "what" => "the_thing");
 
         let block_hash = Hash32Buf::double_sha256(self.header.to_raw());
 
@@ -257,16 +257,18 @@ impl<'a> Block<'a> {
         let block_ptr = store.spent_tree.store_block(blockheader_ptr, transactions);
 
         // we retrieve the pointer to the end of the previous block from the hash-index
-        let previous_end = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.start.as_guardblock());
+        let previous_end = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.start.ptr.as_guardblock());
+
 
 
         if let Some(previous_end) = previous_end {
 
-            connect_and_store_block(store, block_hash.as_ref(), previous_end, block_ptr.start);
+            connect_and_store_block(store, block_hash.as_ref(), RecordPtr::new(previous_end), block_ptr.start);
 
 
 
         }
+
 
 
         Ok(())

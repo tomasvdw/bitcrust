@@ -20,7 +20,7 @@ fn main() {
 
 
     let mut block = 0;
-    for fileno in 0..100 {
+    for fileno in 0..10 {
         let name = format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", fileno);
         println!("Processing {}", name);
         let f = File::open(name).unwrap();

@@ -19,7 +19,13 @@
 //!
 
 
+use slog ;
+
+use slog_term;
+use slog::DrainExt;
+
 pub mod fileptr;
+
 
 mod flatfile;
 mod flatfileset;
@@ -29,6 +35,7 @@ mod hash_index;
 mod spent_tree;
 
 pub use self::spent_tree::SpendingError;
+pub use self::spent_tree::record::RecordPtr;
 
 use config;
 use hash::*;
@@ -52,6 +59,8 @@ pub struct Store {
 
 
     pub metrics:       Metrics,
+
+    pub logger:        slog::Logger
 }
 
 
@@ -67,6 +76,7 @@ impl Store {
             spent_tree:    spent_tree::SpentTree::new(&cfg),
 
             metrics:       Metrics::new(),
+            logger:        slog::Logger::root(slog_term::streamer().build().fuse(), o!()),
         }
     }
 
@@ -113,8 +123,8 @@ mod tests {
 
         // both the start end the end should point to the block_content and
         // the hash should be equal to the original
-        assert_eq!(hash.as_ref(), store.get_block_hash(blockptr.start).as_ref());
-        assert_eq!(hash.as_ref(), store.get_block_hash(blockptr.end).as_ref());
+        assert_eq!(hash.as_ref(), store.get_block_hash(blockptr.start.ptr).as_ref());
+        assert_eq!(hash.as_ref(), store.get_block_hash(blockptr.end.ptr).as_ref());
 
 
 

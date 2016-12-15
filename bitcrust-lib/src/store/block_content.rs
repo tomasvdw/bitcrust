@@ -24,8 +24,9 @@ const PREFIX:  &'static str   = "bc-";
 pub struct BlockContent {
 
     fileset:    FlatFileSet,
-
 }
+
+
 
 impl BlockContent {
     pub fn new(cfg: &config::Config) -> BlockContent {

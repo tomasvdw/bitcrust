@@ -34,8 +34,8 @@ use store::block_content::BlockContent;
 
 use hash::*;
 
-mod record;
-use self::record::Record;
+pub mod record;
+pub use self::record::{Record,RecordPtr};
 
 const MB:                 u32 = 1024 * 1024;
 const FILE_SIZE:          u32 = 1024 * MB as u32;
@@ -51,8 +51,8 @@ pub enum SpendingError {
 }
 
 pub struct BlockPtr {
-    pub start: FilePtr,
-    pub end:   FilePtr
+    pub start: RecordPtr,
+    pub end:   RecordPtr
 }
 
 
@@ -81,7 +81,7 @@ impl SpentTree {
 
         let mut result: Vec<Record> = Vec::with_capacity(file_ptrs.len()+2);
 
-        result.push(Record::new(blockheader));
+        result.push(Record::new(blockheader.as_block()));
 
         let mut previous: Option<FilePtr> = None;
 //        println!("PTRS: {:?}", file_ptrs);
@@ -96,7 +96,7 @@ impl SpentTree {
             previous = Some(*ptr);
         };
 
-        result.push(Record::new(blockheader));
+        result.push(Record::new(blockheader.as_block()));
 
 
         result
@@ -125,15 +125,33 @@ impl SpentTree {
         let end_ptr = result_ptr.offset((block.len()-1) * mem::size_of::<Record>());
 
         BlockPtr {
-            start: result_ptr,
-            end: end_ptr
+            start: RecordPtr::new(result_ptr),
+            end:   RecordPtr::new(end_ptr)
         }
     }
 
-    pub fn connect_block(&mut self, previous_end: FilePtr, target_end: FilePtr) -> Result<FilePtr, SpendingError> {
+    /// Verifies of each output in the block at target_start
+    pub fn connect_block(&mut self, previous_end: RecordPtr, target_start: RecordPtr) -> Result<RecordPtr, SpendingError> {
+
+        target_start.set_skips(&mut self.fileset, Some(previous_end));
+
+        /*
+        // find end
+        let mut this_ptr = target_start;
+        loop {
+            this_ptr = this_ptr.offset(1);
+
+            let rec: &Record = self.fileset.read_fixed(target_start);
+            if rec.ptr.is_blockheader() {
+                return Ok(this_ptr);
+            }
+
+            //return Ok(this_ptr);
+
+        }*/
+        Ok(target_start)
 
 
-        unimplemented!()
     }
 
 
@@ -187,7 +205,7 @@ mod tests {
 
         let dir = tempdir::TempDir::new("test1").unwrap();
         //let path = PathBuf::from(dir.path());
-        let cfg = config::Config { root: PathBuf::from(dir.path()) };
+        let cfg = config::Config { root: PathBuf::from("tmp")  }; //dir.path())
 
         let mut st  = SpentTree::new(&cfg);
 
@@ -195,11 +213,18 @@ mod tests {
         let block_ptr = st.store_block(block1.0, block1.1);
 
         let block2 = block!(blk 4 =>
-            [tx 3 => (2;1),(2;0)],
-            [tx 4]
+            [tx 5 => (2;2),(2;3)],
+            [tx 6]
         );
 
         let block_ptr2 = st.store_block(block2.0, block2.1);
+
+
+        st.connect_block(block_ptr.end, block_ptr2.start);
+
+
+        // now we check if we can browse back
+
 
 
 

@@ -104,7 +104,7 @@ impl FlatFile {
     /// No checks are done: filepos must point to a correct location
     ///
     /// The resulting reference is static as it points to a never-closing memmap
-    pub fn get<T>(&self, filepos: usize) -> &'static T {
+    pub fn get<T>(&self, filepos: usize) -> &'static mut T {
 
         unsafe {
             mem::transmute( self.ptr.offset(filepos as isize))
