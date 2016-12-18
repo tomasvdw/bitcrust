@@ -33,6 +33,8 @@ use std::sync::atomic;
 
 use std::fmt::{Debug,Formatter,Error};
 
+use std::ops::Add;
+
 // TODO: we should use set/get bits helpers instead of these masks
 
 const MASK_TYPE:    u64 = 0xE000_0000_0000_0000; // 3-bits
@@ -127,8 +129,10 @@ impl FilePtr {
     }
 
 
-    pub fn offset(self, offset :usize) -> FilePtr {
-        FilePtr(self.0 + offset as u64)
+    pub fn offset(self, offset : i32) -> FilePtr
+
+    {
+        FilePtr((self.0 as i32 + offset) as u64)
     }
 
     /// We use a null value as magic NULL value. This is safe

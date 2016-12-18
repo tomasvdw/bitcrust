@@ -70,12 +70,12 @@ impl RecordPtr {
         self
     }
 
-    pub fn prev_in_block(self, fileset: &mut FlatFileSet) -> RecordPtr {
-        self
+    pub fn prev_in_block(self) -> RecordPtr {
+        RecordPtr::new(self.ptr.offset(-1))
     }
 
-    pub fn next_in_block(self, fileset: &mut FlatFileSet) -> RecordPtr {
-        self
+    pub fn next_in_block(self) -> RecordPtr {
+        RecordPtr::new(self.ptr.offset(1))
     }
 }
 
@@ -122,13 +122,6 @@ impl Record {
 
 
 
-
-    /// Initiazes the previous pointer and the skip-list for this record
-    /// [currently just the previous]
-    pub fn set_skips(&mut self, self_ptr: FilePtr, previous: Option<FilePtr>) {
-
-
-    }
 }
 
 

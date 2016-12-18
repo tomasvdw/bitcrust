@@ -96,7 +96,10 @@ impl SpentTree {
             previous = Some(*ptr);
         };
 
-        result.push(Record::new(blockheader.as_block()));
+        let mut rec_end = Record::new(blockheader.as_block());
+        rec_end.set_skip_previous();
+
+        result.push(rec_end);
 
 
         result
@@ -122,7 +125,7 @@ impl SpentTree {
 
 
         let result_ptr = self.fileset.write_all(&block);
-        let end_ptr = result_ptr.offset((block.len()-1) * mem::size_of::<Record>());
+        let end_ptr = result_ptr.offset(((block.len()-1) * mem::size_of::<Record>()) as i32);
 
         BlockPtr {
             start: RecordPtr::new(result_ptr),
@@ -183,11 +186,11 @@ mod tests {
     macro_rules! block {
 
         (blk $header:expr =>
-          $( [tx $tx:expr  $(=> $( ($tx_in:expr;$tx_in_idx:expr) ),+)*] ),+
+          $( [tx $tx:expr  $( => $(   ($tx_in:expr;$tx_in_idx:expr) ),* ),* ] ),*
         )
         =>
         (  ( FilePtr::new(0,$header), vec![
-               $( FilePtr::new(0,$tx), $( $( FilePtr::new(0,$tx_in).as_input($tx_in_idx) ),+ )* ),+
+               $( FilePtr::new(0,$tx)  $( ,  $( FilePtr::new(0,$tx_in).as_input($tx_in_idx) ),* ),* ),*
             ])
         )
 
@@ -196,7 +199,7 @@ mod tests {
     #[test]
     fn test_spent_tree() {
 
-        //let block1 = block!(blk 1 -> [tx 2], [tx 3, spents (2;0),(2;1)] );
+
         let block1 = block!(blk 1 =>
             [tx 2 => (2;1),(2;0)],
             [tx 3]
@@ -214,7 +217,7 @@ mod tests {
 
         let block2 = block!(blk 4 =>
             [tx 5 => (2;2),(2;3)],
-            [tx 6]
+            [tx 6 ]
         );
 
         let block_ptr2 = st.store_block(block2.0, block2.1);
@@ -224,9 +227,6 @@ mod tests {
 
 
         // now we check if we can browse back
-
-
-
 
 
 
