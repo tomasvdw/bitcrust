@@ -47,6 +47,8 @@ pub mod script;
 mod store;
 
 mod config;
+
+mod merkle_tree;
 use store::Store;
 
 

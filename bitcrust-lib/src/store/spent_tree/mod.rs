@@ -226,6 +226,7 @@ mod tests {
         st.connect_block(block_ptr.end, block_ptr2.start);
 
 
+
         // now we check if we can browse back
 
 

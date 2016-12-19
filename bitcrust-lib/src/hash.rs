@@ -10,6 +10,7 @@ use ring;
 
 
 /// Owned, 32-byte hash value
+#[derive(Copy,Clone)]
 pub struct Hash32Buf([u8;32]);
 
 impl Hash32Buf {
@@ -34,6 +35,16 @@ impl Hash32Buf {
 
         // convert to HashBuf
         Hash32Buf::from_slice(digest2.as_ref())
+    }
+
+    /// Hashes the input twice with SHA256 and returns an owned buffer;
+ /// Can be extracted as an Hash32 using as_ref()
+    pub fn double_sha256_from_pair(first: Hash32, second: Hash32) -> Hash32Buf {
+        let mut v: Vec<u8> = Vec::new();
+        v.extend(first.0.iter());
+        v.extend(second.0.iter());
+
+        Hash32Buf::double_sha256(&v)
     }
 }
 
