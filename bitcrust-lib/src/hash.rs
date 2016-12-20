@@ -143,6 +143,6 @@ mod test {
 
         assert_eq!(hash3, paired);
 
-        }
+    }
 }
 
