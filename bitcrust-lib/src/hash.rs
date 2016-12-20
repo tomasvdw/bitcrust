@@ -10,7 +10,7 @@ use ring;
 
 
 /// Owned, 32-byte hash value
-#[derive(Copy,Clone)]
+#[derive(Copy,Clone,PartialEq)]
 pub struct Hash32Buf([u8;32]);
 
 impl Hash32Buf {
@@ -110,13 +110,39 @@ impl Debug for Hash32Buf {
 
 #[cfg(test)]
 mod test {
-    
-    use super::*;
-    
+    use util::*;
+    use super::{Hash32Buf,Hash32};
+
+
     #[test]
     fn test_format_hash32() {
         
         println!("{:?}", Hash32(&[0;32]));
     }
+
+    #[test]
+    fn test_hash0() {
+        assert!(Hash32(&[0;32]).is_null())
+
+    }
+
+
+    #[test]
+    fn test_double_hash() {
+
+
+        const HASH1: &'static str = "212300e77d897f2f059366ed03c8bf2757bc2b1dd30df15d34f6f1ee521e58e8";
+        const HASH2: &'static str = "4feec9316077e49b59bc23173303e13be9e9f5f9fa0660a58112a04a65a84ef1";
+        const HASH3: &'static str = "03b750bf691caf40b7e33d8e15f64dd16becf944b39a82710d6d257159361b93";
+
+        let hash1 = Hash32Buf::from_slice(&from_hex_rev(HASH1));
+        let hash2 = Hash32Buf::from_slice(&from_hex_rev(HASH2));
+        let hash3 = Hash32Buf::from_slice(&from_hex_rev(HASH3));
+
+        let paired = Hash32Buf::double_sha256_from_pair(hash1.as_ref(), hash2.as_ref());
+
+        assert_eq!(hash3, paired);
+
+        }
 }
 

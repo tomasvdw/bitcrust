@@ -1,6 +1,6 @@
 //! Merkle tree implementation
 //!
-//! Can be calculated "rolling"; it only needs to keep .5 hash per level of the tree
+
 
 
 use std::cell::RefCell;
@@ -30,7 +30,10 @@ fn shrink_merkle_tree(hashes: Vec<Hash32Buf>) -> Vec<Hash32Buf> {
         let ref first = hashes[n*2];
         let ref second = hashes.get(n*2+1).unwrap_or(&first);
 
-        result.push(Hash32Buf::double_sha256_from_pair(first.as_ref(),second.as_ref()))
+        result.push(Hash32Buf::double_sha256_from_pair(
+            first.as_ref(),
+            second.as_ref())
+        );
     }
 
     shrink_merkle_tree(result)
@@ -55,5 +58,15 @@ impl MerkleTree {
         assert!(!self.hashes.is_empty());
 
         shrink_merkle_tree(self.hashes.clone())[0]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+
+    fn test_merkle1() {
+
+
     }
 }

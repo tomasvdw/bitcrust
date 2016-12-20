@@ -35,6 +35,7 @@ pub mod metrics;
 mod buffer;
 use buffer::*;
 
+mod util;
 
 pub use block::Block;
 
@@ -104,8 +105,7 @@ pub fn add_transaction(_: &[u8]) {
 #[cfg(test)]
 mod tests {
 
-    extern crate rustc_serialize;
-
+    use util::*;
     use super::*;
 
     #[test]
@@ -121,7 +121,7 @@ mod tests {
            f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000";
 
 
-        let slice = &rustc_serialize::hex::FromHex::from_hex(hex).unwrap();
+        let slice = &from_hex(hex);
         let mut store = init();
 
         add_block(&mut store, slice);

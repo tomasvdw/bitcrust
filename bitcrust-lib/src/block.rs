@@ -356,9 +356,9 @@ impl<'a> ToRaw<'a> for BlockHeader<'a> {
 #[cfg(test)]
 mod tests {
 
-    extern crate rustc_serialize;
 
     use super::*;
+    use util::*;
     use buffer::Parse;
     use buffer;
     use transaction;
@@ -378,7 +378,7 @@ mod tests {
 
 
 
-        let slice = &rustc_serialize::hex::FromHex::from_hex(BLOCK0).unwrap();
+        let slice = &from_hex(BLOCK0);
         let mut buf = buffer::Buffer::new(slice);
 
         let hdr = BlockHeader::parse(&mut buf).unwrap();

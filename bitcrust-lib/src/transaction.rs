@@ -332,7 +332,7 @@ impl<'a> fmt::Debug for TxOutput<'a> {
 
 #[cfg(test)]
 mod tests {
-    extern crate rustc_serialize;
+    use util::*;
     use super::*;
     use buffer;
     use buffer::Parse;
@@ -356,7 +356,7 @@ mod tests {
                       66ba59d004d83088ac80f0fa02000000001976a914c3813e88eeddeba7de\
                       fe159bf9df3f210652571c88ac00000000";
 
-        let slice = &rustc_serialize::hex::FromHex::from_hex(tx_hex).unwrap();
+        let slice = &from_hex(tx_hex);
         let mut buf = buffer::Buffer::new(slice);
 
         let tx = Transaction::parse(&mut buf);

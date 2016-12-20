@@ -12,7 +12,7 @@ path = "bitcrust-lib/src/lib.rs"
 [dependencies]
 lmdb-rs = "0.7"
 byteorder = "0.5"
-rustc-serialize = "0.3"
+
 itertools = "0.5.1"
 memmap = "0.4"
 libc = "0.2.16"
