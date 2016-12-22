@@ -42,6 +42,7 @@ impl RecordPtr {
         }
         let previous = previous.unwrap();
 
+        // we can only go backwards
         assert!(self.ptr.file_pos() > previous.ptr.file_pos());
 
         if self.ptr.file_number() != previous.ptr.file_number() {
@@ -66,16 +67,35 @@ impl RecordPtr {
 
     }
 
+
+    /// Get the previous pointer; this mirrors the ^^ set_skips function
     pub fn prev(self, fileset: &mut FlatFileSet) -> RecordPtr {
-        self
+        let  rec: &mut Record = fileset.read_fixed(self.ptr);
+
+        if !rec.ptr.is_blockheader() {
+            self.prev_in_block()
+        }
+        else {
+
+            match rec.get_bits(0,2) {
+
+                1 => RecordPtr::new(self.ptr.offset(-16)),
+
+                2 => RecordPtr::new(self.ptr.offset(- (rec.get_bits(2,62) as i32))),
+
+                _ => RecordPtr::new(FilePtr::from_u64(rec.skips)),
+
+            }
+
+        }
     }
 
     pub fn prev_in_block(self) -> RecordPtr {
-        RecordPtr::new(self.ptr.offset(-1))
+        RecordPtr::new(self.ptr.offset(-16))
     }
 
     pub fn next_in_block(self) -> RecordPtr {
-        RecordPtr::new(self.ptr.offset(1))
+        RecordPtr::new(self.ptr.offset(16))
     }
 }
 
@@ -84,7 +104,7 @@ impl Record {
 
     pub fn get_bits(&self, start: u64, length: u64) -> u64 {
 
-        (self.skips >> start) & ((2^length)-1)
+        (self.skips >> start) & ((1<<length)-1)
     }
 
     pub fn set_bits(&mut self, start: u64, value: u64) {

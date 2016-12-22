@@ -190,7 +190,7 @@ mod tests {
         )
         =>
         (  ( FilePtr::new(0,$header), vec![
-               $( FilePtr::new(0,$tx)  $( ,  $( FilePtr::new(0,$tx_in).as_input($tx_in_idx) ),* ),* ),*
+               $( FilePtr::new(0,$tx)  $( ,  $( FilePtr::new(0,$tx_in).as_output($tx_in_idx) ),* ),* ),*
             ])
         )
 
@@ -227,7 +227,41 @@ mod tests {
 
 
 
-        // now we check if we can browse back
+        // this is a bit cumbersome, but we have no accessor function yet so we'll allow this for the
+        // test
+        macro_rules! resolve { ($pt:ident) => (st.fileset.read_fixed::<Record>($pt.ptr).ptr) };
+
+        // we browse backwards and test all values
+        let mut p = block_ptr2.end;
+        assert!   (resolve!(p).is_blockheader());
+        assert_eq!(resolve!(p).file_pos(), 4);
+
+        let p = { p.prev(&mut st.fileset) };
+        assert!(resolve!(p).is_transaction());
+        assert_eq!(resolve!(p).file_pos(), 6);
+
+        let p = { p.prev(&mut st.fileset) };
+        assert!(resolve!(p).is_output());
+        assert_eq!(resolve!(p).file_pos(), 2);
+        assert_eq!(resolve!(p).output_index(), 3);
+
+        let p = { p.prev(&mut st.fileset) };
+        assert!(resolve!(p).is_output());
+        assert_eq!(resolve!(p).file_pos(), 2);
+        assert_eq!(resolve!(p).output_index(), 2);
+
+        let p = { p.prev(&mut st.fileset) };
+        assert!(resolve!(p).is_transaction());
+        assert_eq!(resolve!(p).file_pos(), 5);
+
+        let p = { p.prev(&mut st.fileset) };
+        assert!   (resolve!(p).is_blockheader());
+        assert_eq!(resolve!(p).file_pos(), 4);
+
+
+        let p = { p.prev(&mut st.fileset) };
+        assert!   (resolve!(p).is_blockheader());
+        assert_eq!(resolve!(p).file_pos(), 1);
 
 
 

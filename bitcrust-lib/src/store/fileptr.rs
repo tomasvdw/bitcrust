@@ -84,6 +84,7 @@ impl FilePtr {
         )
     }
 
+
     /// Creates a new fileptr from an existing one as input
     ///
     pub fn as_output(self, index: u32) -> FilePtr {
@@ -115,8 +116,16 @@ impl FilePtr {
         self.0
     }
 
+    pub fn from_u64(v: u64) -> Self {
+        FilePtr(v)
+    }
+
     pub fn input_index(self) -> u32 {
         ((self.0 & MASK_INDEX1) >> 46) as u32
+    }
+
+    pub fn output_index(self) -> u32 {
+        ((self.0 & MASK_INDEX2) >> 46) as u32
     }
 
     pub fn file_number(self) -> i16 {
@@ -177,6 +186,11 @@ impl FilePtr {
     pub fn is_blockheader(&self) -> bool {
         (self.0 & MASK_TYPE) == TYPE_BLOCK
     }
+
+    pub fn is_output(&self) -> bool {
+        (self.0 & TYPE_OUTPUT_MIN) == TYPE_OUTPUT_MIN
+    }
+
 
 }
 
