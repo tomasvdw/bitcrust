@@ -154,6 +154,7 @@ impl FilePtr {
         FilePtr(0)
     }
 
+
     /// Set self to `new_value` only if it is now set to `current_value` using Compare-And-Swap
     /// semantics
     ///

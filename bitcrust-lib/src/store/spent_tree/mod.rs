@@ -136,24 +136,59 @@ impl SpentTree {
     /// Verifies of each output in the block at target_start
     pub fn connect_block(&mut self, previous_end: RecordPtr, target_start: RecordPtr) -> Result<RecordPtr, SpendingError> {
 
-        target_start.set_skips(&mut self.fileset, Some(previous_end));
 
-        /*
-        // find end
         let mut this_ptr = target_start;
         loop {
-            this_ptr = this_ptr.offset(1);
 
-            let rec: &Record = self.fileset.read_fixed(target_start);
-            if rec.ptr.is_blockheader() {
+            this_ptr = this_ptr.next_in_block();
+
+            let record = self.fileset.read_fixed::<Record>(this_ptr.ptr);
+
+            // done?
+            if record.ptr.is_blockheader() {
+
+                // we can now make the actual connection
+                target_start.set_previous(&mut self.fileset, Some(previous_end));
+
                 return Ok(this_ptr);
             }
 
-            //return Ok(this_ptr);
+            if record.ptr.is_transaction() {
+                continue;
+            }
 
-        }*/
-        Ok(target_start)
+            debug_assert!(record.ptr.is_output());
 
+            // now we scan backwards to see if we find this one
+            // both in the current block from this_ptr as in the previous block
+            let mut tx_found = false;
+            for chain in [this_ptr, previous_end].iter() {
+
+                for prev_rec in chain.iter(&mut self.fileset) {
+                    println!("Seek {:?}", prev_rec.ptr);
+
+                    if prev_rec.ptr.file_pos() == record.ptr.file_pos()
+                        && prev_rec.ptr.file_number() == record.ptr.file_number() {
+                        if prev_rec.ptr.is_transaction() {
+                            tx_found = true;
+                            break;
+                        }
+                    }
+                    if prev_rec.ptr.is_output()
+                        && prev_rec.ptr.output_index() == record.ptr.output_index() {
+                        return Err(SpendingError::OutputAlreadySpent);
+                    }
+                }
+                if tx_found {
+                    break;
+                }
+            }
+            if !tx_found {
+                println!("Not found {:?}", record.ptr);
+                return Err(SpendingError::OutputNotFound);
+            }
+
+        }
 
     }
 
@@ -223,7 +258,7 @@ mod tests {
         let block_ptr2 = st.store_block(block2.0, block2.1);
 
 
-        st.connect_block(block_ptr.end, block_ptr2.start);
+        st.connect_block(block_ptr.end, block_ptr2.start).unwrap();
 
 
 
@@ -263,8 +298,10 @@ mod tests {
         assert!   (resolve!(p).is_blockheader());
         assert_eq!(resolve!(p).file_pos(), 1);
 
+        // Now let's see if this also works with the iterator
+        //assert_eq!(block_ptr2.start.iter_forward(&mut st.fileset).count(), 5);
 
-
+        //assert_eq!(block_ptr2.end.iter_backwards(&mut st.fileset).count(), 10);
     }
 }
 

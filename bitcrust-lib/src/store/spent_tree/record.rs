@@ -13,6 +13,7 @@ use store::flatfileset::FlatFileSet;
 ///
 /// The exact format is still in work-in-progress.
 ///
+#[derive(Copy,Clone)]
 pub struct Record {
     pub ptr:   FilePtr,
     skips: u64
@@ -32,7 +33,7 @@ impl RecordPtr {
         RecordPtr { ptr: ptr }
     }
 
-    pub fn set_skips(self, fileset: &mut FlatFileSet, previous: Option<RecordPtr>) {
+    pub fn set_previous(self, fileset: &mut FlatFileSet, previous: Option<RecordPtr>) {
 
         let  rec: &mut Record = fileset.read_fixed(self.ptr);
 
@@ -45,6 +46,7 @@ impl RecordPtr {
         // we can only go backwards
         assert!(self.ptr.file_pos() > previous.ptr.file_pos());
 
+        // different file -> we'll store a full pointer
         if self.ptr.file_number() != previous.ptr.file_number() {
             rec.skips = previous.ptr.as_u64();
             return;
@@ -68,7 +70,7 @@ impl RecordPtr {
     }
 
 
-    /// Get the previous pointer; this mirrors the ^^ set_skips function
+    /// Get the previous pointer; this mirrors the ^^ set_previous function
     pub fn prev(self, fileset: &mut FlatFileSet) -> RecordPtr {
         let  rec: &mut Record = fileset.read_fixed(self.ptr);
 
@@ -96,6 +98,44 @@ impl RecordPtr {
 
     pub fn next_in_block(self) -> RecordPtr {
         RecordPtr::new(self.ptr.offset(16))
+    }
+
+
+    pub fn iter(self, fileset: &mut FlatFileSet) -> RecordBackwardsIterator {
+
+        RecordBackwardsIterator {
+            cur_ptr:   self,
+            fileset:   fileset
+        }
+
+    }
+
+
+}
+
+pub struct RecordBackwardsIterator<'a> {
+    cur_ptr:    RecordPtr,
+    fileset:    &'a mut FlatFileSet
+}
+
+
+/// Browsing backwards over the entire tree
+impl<'a> Iterator for RecordBackwardsIterator<'a> {
+    type Item = Record;
+
+    fn next(&mut self) -> Option<Record> {
+        if self.cur_ptr.ptr.is_null()  {
+            None
+        }
+        else {
+            self.cur_ptr = self.cur_ptr.prev(self.fileset);
+            let result = *self.fileset.read_fixed::<Record>(self.cur_ptr.ptr);
+
+            if result.skips == 0 {
+                self.cur_ptr.ptr = FilePtr::null()
+            };
+            Some(result)
+        }
     }
 }
 

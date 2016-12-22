@@ -232,8 +232,9 @@ impl<'a> Transaction<'a> {
 
                     // We can't find the transaction this input is pointing to
                     // Oddly, this is perfectly fine; we just postpone script validation
-                    // Until that transaction comes in
-                    // ^^ get_tx_for_output has placed apropriate guards in the hash_index
+                    // until that transaction comes in.
+                    //
+                    // ^^ get_or_set has placed appropriate guards in the hash_index
 
                     continue;
                 },
