@@ -199,7 +199,22 @@ impl FilePtr {
 
 impl Debug for FilePtr {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
-        write!(fmt, "fi={},fp={}, tot={:x}", self.file_number(), self.file_pos(), self.0)
+        if self.is_transaction() {
+            write!(fmt, "TX  {:x}.{:x} T={:x}", self.file_number(), self.file_pos(), self.0)
+        } else if self.is_blockheader() {
+            write!(fmt, "BLK {:x}.{:x} T={:x}", self.file_number(), self.file_pos(), self.0)
+        }
+        else if self.is_input() {
+            write!(fmt, "INP {:x}.{:x} idx={:x} T={:x}", self.file_number(), self.file_pos(), self.input_index(), self.0)
+        }
+        else if self.is_output() {
+            write!(fmt, "OUT {:x}.{:x} idx={:x} T={:x}", self.file_number(), self.file_pos(), self.output_index(), self.0)
+        }
+        else {
+            write!(fmt, "ERR T={:x}", self.0)
+        }
+
+
 
         //fmt.write_str(&x)
     }

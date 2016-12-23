@@ -13,7 +13,7 @@ use store::flatfileset::FlatFileSet;
 ///
 /// The exact format is still in work-in-progress.
 ///
-#[derive(Copy,Clone)]
+#[derive(Debug,Copy,Clone)]
 pub struct Record {
     pub ptr:   FilePtr,
     skips: u64
@@ -22,7 +22,7 @@ pub struct Record {
 
 
 /// A filepointer that points to a record in the SpentTree
-#[derive(Copy,Clone)]
+#[derive(Debug,Copy,Clone)]
 pub struct RecordPtr {
     pub ptr: FilePtr
 }

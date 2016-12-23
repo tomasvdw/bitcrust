@@ -45,7 +45,7 @@ const MAX_CONTENT_SIZE:   u32 = FILE_SIZE - 10 * MB as u32 ;
 const SUBPATH: &'static str   = "spent_tree";
 const PREFIX:  &'static str   = "st-";
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SpendingError {
     OutputNotFound,
     OutputAlreadySpent,
@@ -84,17 +84,12 @@ impl SpentTree {
 
         result.push(Record::new(blockheader.as_block()));
 
-        let mut previous: Option<FilePtr> = None;
-//        println!("PTRS: {:?}", file_ptrs);
         for (idx, ptr) in file_ptrs.iter().enumerate() {
 
             let mut r = Record::new(*ptr);
-
             r.set_skip_previous();
 
             result.push(r);
-
-            previous = Some(*ptr);
         };
 
         let mut rec_end = Record::new(blockheader.as_block());
@@ -160,6 +155,7 @@ impl SpentTree {
 
             debug_assert!(record.ptr.is_output());
 
+            println!("Testing {:?}", record.ptr);
             // now we scan backwards to see if we find this one
             // both in the current block from this_ptr as in the previous block
             let mut tx_found = false;
@@ -168,17 +164,22 @@ impl SpentTree {
                 for prev_rec in chain.iter(&mut self.fileset) {
                     println!("Seek {:?}", prev_rec.ptr);
 
-                    if prev_rec.ptr.file_pos() == record.ptr.file_pos()
-                        && prev_rec.ptr.file_number() == record.ptr.file_number() {
-                        if prev_rec.ptr.is_transaction() {
-                            tx_found = true;
-                            break;
-                        }
+                    // not the same tx
+                    if prev_rec.ptr.file_pos() != record.ptr.file_pos()
+                        || prev_rec.ptr.file_number() != record.ptr.file_number() {
+                        continue;
                     }
+
+                    if prev_rec.ptr.is_transaction() {
+                        tx_found = true;
+                        break;
+                    }
+
 
                     // We have this identical output already spent in the tree?
                     if prev_rec.ptr.is_output()
                         && prev_rec.ptr.output_index() == record.ptr.output_index() {
+                        println!("Already spent {:?}", record.ptr);
                         return Err(SpendingError::OutputAlreadySpent);
                     }
                 }
@@ -261,6 +262,33 @@ mod tests {
             [tx 6 => (2;0)]
         ));
 
+
+        // create a tree, both 2a and 2b attached to 1
+        st.connect_block(block1.end, block2a.start).unwrap();
+        st.connect_block(block1.end, block2b.start).unwrap();
+
+        // this one should only "fit" onto 2b
+        let block3b = st.store(block!(blk 7 =>
+            [tx 8 => (6;1)],
+            [tx 9 => (2;1)]
+        ));
+
+
+        assert_eq!(
+            st.connect_block(block2a.end, block3b.start).unwrap_err(),
+            SpendingError::OutputNotFound);
+
+        st.connect_block(block2b.end, block3b.start).unwrap();
+
+        // now this should only fir on 2a and not on 3b as at 3b it is already spent
+        let block4a = st.store(block!(blk 10 =>
+            [tx 11 => (2;1)],
+            [tx 12 => (2;2)]
+        ));
+        assert_eq!(
+            st.connect_block(block3b.end, block4a.start).unwrap_err(),
+            SpendingError::OutputAlreadySpent);
+        st.connect_block(block2b.end, block4a.start).unwrap();
 
     }
 
