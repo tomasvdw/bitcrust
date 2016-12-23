@@ -11,7 +11,6 @@ use buffer::*;
 use store::fileptr::FilePtr;
 use store::flatfileset::FlatFileSet;
 
-use transaction::Transaction;
 use block::BlockHeader;
 
 const MB:                 u32 = 1024 * 1024;

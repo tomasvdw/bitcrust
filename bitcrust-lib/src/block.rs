@@ -73,6 +73,8 @@ use buffer::*;
 use hash::*;
 use store::SpendingError;
 
+use merkle_tree::MerkleTree;
+
 use transaction::{Transaction, TransactionError};
 use store::Store;
 
@@ -85,6 +87,8 @@ pub enum BlockError {
     NoTransanctions,
     FirstNotCoinbase,
     DoubleCoinbase,
+
+    IncorrectMerkleRoot,
 
     UnexpectedEndOfBuffer,
 
@@ -257,13 +261,13 @@ impl<'a> Block<'a> {
         let block_ptr = store.spent_tree.store_block(blockheader_ptr, transactions);
 
         // we retrieve the pointer to the end of the previous block from the hash-index
-        let previous_end = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.start.ptr.as_guardblock());
+        let previous_end = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.start.ptr.to_guardblock());
 
 
 
         if let Some(previous_end) = previous_end {
 
-            connect_and_store_block(store, block_hash.as_ref(), RecordPtr::new(previous_end), block_ptr.start);
+            connect_and_store_block(store, block_hash.as_ref(), RecordPtr::new(previous_end), block_ptr.start)?;
 
 
 
@@ -272,6 +276,17 @@ impl<'a> Block<'a> {
 
 
         Ok(())
+    }
+
+    pub fn verify_merkle_root(&self, calculated_merkle_root: Hash32<'a>) -> BlockResult<()> {
+
+        if self.header.merkle_root != calculated_merkle_root {
+            Err(BlockError::IncorrectMerkleRoot)
+        }
+        else {
+            Ok(())
+        }
+
     }
 
 

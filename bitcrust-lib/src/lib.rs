@@ -39,6 +39,7 @@ mod util;
 pub use block::Block;
 
 mod hash;
+use hash::*;
 
 pub mod transaction;
 pub mod block;
@@ -68,10 +69,11 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
 
     let block = Block::new(buffer).unwrap();
-    let block_hash = hash::Hash32Buf::double_sha256(block.header.to_raw());
 
-    let mut total_amount = 0_u64;
+    let mut total_amount   = 0_u64;
     let mut stree_pointers = Vec::new();
+
+    let mut merkle = merkle_tree::MerkleTree::new();
 
     block.process_transactions(|tx| {
 
@@ -88,11 +90,17 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
         stree_pointers.push(ptr);
         stree_pointers.append(&mut tx.get_output_fileptrs(store));
 
+        merkle.add_hash(Hash32Buf::double_sha256(tx.to_raw()).as_ref());
+
         Ok(())
 
     }).unwrap();
 
-    block.verify_and_store(store, stree_pointers);
+    block.verify_and_store(store, stree_pointers).unwrap();
+
+    let calculated_merkle_root = merkle.get_merkle_root();
+
+    block.verify_merkle_root(calculated_merkle_root.as_ref()).unwrap();
 
     // TODO verify amounts
 }

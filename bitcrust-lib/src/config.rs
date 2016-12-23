@@ -24,7 +24,7 @@ impl Config {
     pub fn new_test() -> Config {
 
         let path = PathBuf::from("tmp");
-        fs::remove_dir_all(path.clone());
+        let _ =  fs::remove_dir_all(path.clone());
         Config { root: path }
 
     }

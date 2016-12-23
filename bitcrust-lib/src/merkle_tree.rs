@@ -1,11 +1,6 @@
 //! Merkle tree implementation
 //!
 
-
-
-use std::cell::RefCell;
-use itertools::fold;
-
 use hash::*;
 
 pub struct MerkleTree {
@@ -28,6 +23,9 @@ fn shrink_merkle_tree(hashes: Vec<Hash32Buf>) -> Vec<Hash32Buf> {
 
     for n in 0..count {
         let ref first = hashes[n*2];
+
+        // we double the first one if we have an odd number of hashes
+        // in this layer
         let ref second = hashes.get(n*2+1).unwrap_or(&first);
 
         result.push(Hash32Buf::double_sha256_from_pair(
@@ -53,7 +51,7 @@ impl MerkleTree {
     }
 
 
-    pub fn get_merkle_root(&mut self) -> Hash32Buf {
+    pub fn get_merkle_root(&self) -> Hash32Buf {
 
         assert!(!self.hashes.is_empty());
 

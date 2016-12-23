@@ -322,7 +322,6 @@ mod tests {
     use std::thread;
 
     use store::fileptr::FilePtr;
-    use store::flatfileset::FlatFileSet;
     use super::*;
     use self::rand::Rng;
     use config;
@@ -345,7 +344,7 @@ mod tests {
         let path = PathBuf::from(dir.path());
         let cfg = config::Config { root: path.clone() };
 
-        let _idx = HashIndex::new(&cfg);
+        let _idx = HashIndex::new(& cfg );
 
         // We create a little transaction world:
         // The "transactions" are file pointers 1 to DATA_SIZE
@@ -393,7 +392,7 @@ mod tests {
                             let output_tx1_ptr = FilePtr::new(0, tx.file_pos() as u32 -1);
                             let output_hash = hash(output_tx1_ptr.file_pos());
 
-                            let input_ptr = FilePtr::new(0, tx.file_pos() as u32).as_input(1);
+                            let input_ptr = FilePtr::new(0, tx.file_pos() as u32).to_input(1);
 
                             let output_tx1 = idx.get_or_set(output_hash.as_ref(), input_ptr);
 

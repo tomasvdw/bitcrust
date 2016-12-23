@@ -25,15 +25,12 @@
 use std::mem;
 
 
-#[macro_use]
 use config;
 
 use store::fileptr::FilePtr;
 use store::flatfileset::FlatFileSet;
 
 use store::block_content::BlockContent;
-
-use hash::*;
 
 pub mod record;
 pub use self::record::{Record,RecordPtr};
@@ -82,9 +79,9 @@ impl SpentTree {
 
         let mut result: Vec<Record> = Vec::with_capacity(file_ptrs.len()+2);
 
-        result.push(Record::new(blockheader.as_block()));
+        result.push(Record::new(blockheader.to_block()));
 
-        for (idx, ptr) in file_ptrs.iter().enumerate() {
+        for ptr in file_ptrs.iter() {
 
             let mut r = Record::new(*ptr);
             r.set_skip_previous();
@@ -92,7 +89,7 @@ impl SpentTree {
             result.push(r);
         };
 
-        let mut rec_end = Record::new(blockheader.as_block());
+        let mut rec_end = Record::new(blockheader.to_block());
         rec_end.set_skip_previous();
 
         result.push(rec_end);
@@ -205,7 +202,6 @@ mod tests {
 
     extern crate tempdir;
     use store::fileptr::FilePtr;
-    use std::path::PathBuf;
 
 
     use config;
@@ -231,7 +227,7 @@ mod tests {
         )
         =>
         (  ( FilePtr::new(0,$header), vec![
-               $( FilePtr::new(0,$tx)  $( ,  $( FilePtr::new(0,$tx_in).as_output($tx_in_idx) ),* ),* ),*
+               $( FilePtr::new(0,$tx)  $( ,  $( FilePtr::new(0,$tx_in).to_output($tx_in_idx) ),* ),* ),*
             ])
         )
 
@@ -302,12 +298,7 @@ mod tests {
         );
 
 
-        let dir = tempdir::TempDir::new("test1").unwrap();
-        //let path = PathBuf::from(dir.path());
-        let cfg = config::Config { root: PathBuf::from("tmp")  }; //dir.path())
-
-        let mut st  = SpentTree::new(&cfg);
-
+        let mut st  = SpentTree::new(& config::Config::new_test() );
 
         let block_ptr = st.store_block(block1.0, block1.1);
 
@@ -326,7 +317,7 @@ mod tests {
         macro_rules! resolve { ($pt:ident) => (st.fileset.read_fixed::<Record>($pt.ptr).ptr) };
 
         // we browse backwards and test all values
-        let mut p = block_ptr2.end;
+        let p = block_ptr2.end;
         assert!   (resolve!(p).is_blockheader());
         assert_eq!(resolve!(p).file_pos(), 4);
 

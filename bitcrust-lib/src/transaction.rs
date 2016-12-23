@@ -165,7 +165,7 @@ impl<'a> Transaction<'a> {
                     .get(input.prev_tx_out)
                     .iter()
                     .find(|ptr| ptr.is_transaction())
-                    .map_or(FilePtr::null(), |ptr| ptr.as_output(input.prev_tx_out_idx))
+                    .map_or(FilePtr::null(), |ptr| ptr.to_output(input.prev_tx_out_idx))
             })
             .collect()
     }
@@ -176,8 +176,6 @@ impl<'a> Transaction<'a> {
         self.verify_syntax()?;
 
         let hash_buf = Hash32Buf::double_sha256(self.to_raw());
-        let _        = hash_buf.as_ref();
-
 
         loop {
 
@@ -226,7 +224,7 @@ impl<'a> Transaction<'a> {
 
 
             let output = store.hash_index.get_or_set(input.prev_tx_out,
-                                                     tx_ptr.as_input(index as u32 ));
+                                                     tx_ptr.to_input(index as u32 ));
             let output = match output {
                 None => {
 

@@ -33,7 +33,6 @@ use std::sync::atomic;
 
 use std::fmt::{Debug,Formatter,Error};
 
-use std::ops::Add;
 
 // TODO: we should use set/get bits helpers instead of these masks
 
@@ -73,7 +72,7 @@ impl FilePtr {
 
     /// Creates a new fileptr from an existing one as input
     ///
-    pub fn as_input(self, index: u32) -> FilePtr {
+    pub fn to_input(self, index: u32) -> FilePtr {
 
         let index = index as u64;
 
@@ -87,7 +86,7 @@ impl FilePtr {
 
     /// Creates a new fileptr from an existing one as input
     ///
-    pub fn as_output(self, index: u32) -> FilePtr {
+    pub fn to_output(self, index: u32) -> FilePtr {
 
         let index = index as u64;
 
@@ -98,21 +97,21 @@ impl FilePtr {
         )
     }
 
-    pub fn as_guardblock(self) -> FilePtr {
+    pub fn to_guardblock(self) -> FilePtr {
 
         FilePtr(
             self.0 | TYPE_GUARD_BLOCK
         )
     }
 
-    pub fn as_block(self) -> FilePtr {
+    pub fn to_block(self) -> FilePtr {
 
         FilePtr(
             self.0 | TYPE_BLOCK
         )
     }
 
-    pub fn as_u64(self) -> u64 {
+    pub fn to_u64(self) -> u64 {
         self.0
     }
 
@@ -227,7 +226,6 @@ mod tests {
     use std::path::PathBuf;
 
     use std::thread;
-    use std::time;
 
     use store::flatfileset::FlatFileSet;
     use super::*;

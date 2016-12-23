@@ -48,7 +48,7 @@ impl RecordPtr {
 
         // different file -> we'll store a full pointer
         if self.ptr.file_number() != previous.ptr.file_number() {
-            rec.skips = previous.ptr.as_u64();
+            rec.skips = previous.ptr.to_u64();
             return;
         }
 
@@ -62,7 +62,7 @@ impl RecordPtr {
                 rec.set_bits(2, diff);
             },
             _ => {
-                rec.skips = previous.ptr.as_u64();
+                rec.skips = previous.ptr.to_u64();
                 return;
             }
         }
