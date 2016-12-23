@@ -25,6 +25,7 @@
 use std::mem;
 
 
+#[macro_use]
 use config;
 
 use store::fileptr::FilePtr;
@@ -174,6 +175,8 @@ impl SpentTree {
                             break;
                         }
                     }
+
+                    // We have this identical output already spent in the tree?
                     if prev_rec.ptr.is_output()
                         && prev_rec.ptr.output_index() == record.ptr.output_index() {
                         return Err(SpendingError::OutputAlreadySpent);
@@ -202,7 +205,9 @@ mod tests {
     extern crate tempdir;
     use store::fileptr::FilePtr;
     use std::path::PathBuf;
-    use  config;
+
+
+    use config;
 
     use super::*;
 
@@ -231,7 +236,35 @@ mod tests {
 
     }
 
+    impl SpentTree {
+        // wrapper around store_block that accepts a tuple instead of two params
+        // for easier testing with block! macros
+        fn store(&mut self, tuple: (FilePtr, Vec<FilePtr>)) -> BlockPtr {
+            self.store_block(tuple.0, tuple.1)
+        }
+    }
+
     #[test]
+    fn test_spent_tree_connect() {
+
+        let mut st  = SpentTree::new(&config::Config::new_test());
+
+        let block1 = st.store(block!(blk 1 =>
+            [tx 2]
+        ));
+
+        let block2a = st.store(block!(blk 3 =>
+            [tx 4 => (2;0)]
+        ));
+
+        let block2b = st.store(block!(blk 5 =>
+            [tx 6 => (2;0)]
+        ));
+
+
+    }
+
+        #[test]
     fn test_spent_tree() {
 
 
@@ -260,10 +293,8 @@ mod tests {
 
         st.connect_block(block_ptr.end, block_ptr2.start).unwrap();
 
-
-
         // this is a bit cumbersome, but we have no accessor function yet so we'll allow this for the
-        // test
+        // test; we want to test the full content of the spent-tree here.
         macro_rules! resolve { ($pt:ident) => (st.fileset.read_fixed::<Record>($pt.ptr).ptr) };
 
         // we browse backwards and test all values
@@ -298,10 +329,6 @@ mod tests {
         assert!   (resolve!(p).is_blockheader());
         assert_eq!(resolve!(p).file_pos(), 1);
 
-        // Now let's see if this also works with the iterator
-        //assert_eq!(block_ptr2.start.iter_forward(&mut st.fileset).count(), 5);
-
-        //assert_eq!(block_ptr2.end.iter_backwards(&mut st.fileset).count(), 10);
     }
 }
 

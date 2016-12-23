@@ -25,7 +25,6 @@ extern crate ring;
 pub extern crate slog ;
 extern crate slog_term ;
 
-use slog::DrainExt;
 
 
 
@@ -101,6 +100,9 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 pub fn add_transaction(_: &[u8]) {
 
 }
+
+
+
 
 #[cfg(test)]
 mod tests {

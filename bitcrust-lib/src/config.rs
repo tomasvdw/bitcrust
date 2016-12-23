@@ -1,7 +1,10 @@
 //! Stub configutation
 //! Meant to wrap toml-config files
 
+use std::fs;
 use std::path::PathBuf;
+
+
 
 
 pub struct Config {
@@ -19,8 +22,11 @@ impl Config {
 
 
     pub fn new_test() -> Config {
-        Config {
-            root: PathBuf::from("tmp")
-        }
+
+        let path = PathBuf::from("tmp");
+        fs::remove_dir_all(path.clone());
+        Config { root: path }
+
     }
 }
+
