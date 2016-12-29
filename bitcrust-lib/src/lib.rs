@@ -58,7 +58,11 @@ use store::Store;
 pub fn init() -> Store {
 
     let config = config::Config::new_test();
-    Store::new(&config)
+    let store = Store::new(&config);
+
+    info!(store.logger, "Store intitalized"; "dir" => config.root.to_str().unwrap());
+
+    store
 }
 
 /// Validates and stores a block;
@@ -67,6 +71,7 @@ pub fn init() -> Store {
 /// TODO: distibute over different mods
 pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
 
+    info!(store.logger, "Add block start");
 
     let block = Block::new(buffer).unwrap();
 
@@ -103,6 +108,7 @@ pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
     block.verify_merkle_root(calculated_merkle_root.as_ref()).unwrap();
 
     // TODO verify amounts
+    info!(store.logger, "Add block end");
 }
 
 pub fn add_transaction(_: &[u8]) {

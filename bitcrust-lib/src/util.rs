@@ -2,7 +2,6 @@
 
 
 
-#[cfg(test)]
 pub fn from_hex(str: &str) -> Vec<u8> {
 
     // This may be an overestimate if there is any whitespace
@@ -36,7 +35,7 @@ pub fn from_hex(str: &str) -> Vec<u8> {
     b.into_iter().collect()
 }
 
-#[cfg(test)]
+
 pub fn from_hex_rev(str: &str) -> Vec<u8> {
     let mut v = from_hex(str);
     v.reverse();

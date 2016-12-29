@@ -126,7 +126,20 @@ impl SpentTree {
         }
     }
 
-    /// Verifies of each output in the block at target_start
+    pub fn find_end(&mut self, target_start: RecordPtr) -> RecordPtr {
+        let mut this_ptr = target_start;
+        loop {
+            this_ptr = this_ptr.next_in_block();
+
+            let record = self.fileset.read_fixed::<Record>(this_ptr.ptr);
+            if record.ptr.is_blockheader() {
+                return this_ptr;
+            }
+        }
+    }
+
+
+        /// Verifies of each output in the block at target_start
     pub fn connect_block(&mut self, previous_end: RecordPtr, target_start: RecordPtr) -> Result<RecordPtr, SpendingError> {
 
 

@@ -71,6 +71,8 @@ use std::convert;
 
 use buffer::*;
 use hash::*;
+use util::*;
+
 use store::SpendingError;
 
 use merkle_tree::MerkleTree;
@@ -155,19 +157,33 @@ pub struct BlockHeader<'a> {
 }
 
 
+fn is_genesis_block(hash: Hash32) -> bool {
+    const HASH_GENESIS: &'static str = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+    let genesis = Hash32Buf::from_slice(&from_hex_rev(HASH_GENESIS));
+
+    genesis.as_ref() == hash
+}
+
 // Connects two blocks (A,B) in the spent-tree and then stores the hash of B in the hash-index
 // this may cause itself being called recursively for (B,C) if needed
 fn connect_and_store_block(
          store:                 &mut Store,
          this_block_hash:       Hash32,
-         previous_block_end:    RecordPtr,
+         previous_block_end:    Option<RecordPtr>,
          this_block_start:      RecordPtr)
 
         -> BlockResult<()>
 {
 
     // connect the blocks
-    let this_block_end = store.spent_tree.connect_block(previous_block_end, this_block_start)?;
+    let this_block_end = if let Some(p) = previous_block_end {
+        store.spent_tree.connect_block(p, this_block_start)?
+    }
+    else {
+        // .. unless this is a genesis block; we just find the end
+        store.spent_tree.find_end(this_block_start)
+    };
+
 
 
     // we can now store the reference in the hash-index unless there are guards that need to be solved
@@ -189,8 +205,8 @@ fn connect_and_store_block(
 
             let hash = store.get_block_hash(*ptr);
 
-            // call self recusrively; the guard block has this as previous
-            connect_and_store_block(store, hash.as_ref(), this_block_end, RecordPtr::new(*ptr))?;
+            // call self recursively; the guard block has this as previous
+            connect_and_store_block(store, hash.as_ref(), Some(this_block_end), RecordPtr::new(*ptr))?;
 
             solved_guards.push(*ptr);
         }
@@ -207,6 +223,7 @@ fn connect_and_store_block(
         }
 */
 }
+
 
 
 
@@ -237,9 +254,10 @@ impl<'a> Block<'a> {
     pub fn verify_and_store(&self, store: &mut Store, transactions: Vec<FilePtr>) -> BlockResult<()> {
 
         //let _m = store.metrics.start("block.spenttree.store");
-        trace!(store.logger, "starting"; "what" => "the_thing");
 
         let block_hash = Hash32Buf::double_sha256(self.header.to_raw());
+
+        info!(store.logger, "verify_and_store"; "status" => "start", "block" => format!("{:?}", block_hash));
 
         // see if it exists
         let ptr = store.hash_index.get(block_hash.as_ref());
@@ -260,18 +278,26 @@ impl<'a> Block<'a> {
         // now we store the block in the spent_tree
         let block_ptr = store.spent_tree.store_block(blockheader_ptr, transactions);
 
-        // we retrieve the pointer to the end of the previous block from the hash-index
-        let previous_end = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.start.ptr.to_guardblock());
+        if is_genesis_block(block_hash.as_ref()) {
 
+            info!(store.logger, "verify_and_store - storing genesis block");
 
+            connect_and_store_block(store, block_hash.as_ref(), None, block_ptr.start)?;
+        }
+        else {
 
-        if let Some(previous_end) = previous_end {
+            // we retrieve the pointer to the end of the previous block from the hash-index
+            let previous_end = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.start.ptr.to_guardblock());
 
-            connect_and_store_block(store, block_hash.as_ref(), RecordPtr::new(previous_end), block_ptr.start)?;
+            if let Some(previous_end) = previous_end {
 
-
+                info!(store.logger, "verify_and_store - storing block");
+                connect_and_store_block(store, block_hash.as_ref(), Some(RecordPtr::new(previous_end)), block_ptr.start)?;
+            }
 
         }
+
+
 
 
 

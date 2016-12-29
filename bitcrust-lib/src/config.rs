@@ -15,7 +15,7 @@ pub struct Config {
 impl Config {
 
     pub fn root() -> PathBuf {
-        unimplemented!();
+        unimplemented!()
     }
 }
 impl Config {
