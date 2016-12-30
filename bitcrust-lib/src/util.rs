@@ -9,7 +9,7 @@ pub fn from_hex(str: &str) -> Vec<u8> {
     let mut modulus = 0;
     let mut buf = 08;
 
-    for (idx, byte) in str.bytes().enumerate() {
+    for byte in str.bytes() {
         buf <<= 4;
 
         match byte {

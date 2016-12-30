@@ -3,67 +3,6 @@
 //!
 //! Handles block-level validation and storage
 
-/*
-
-Block storing is a tricky part; blocks are stored in the spent-tree and referenced in the
- hash-index
-
- This can go out of order:  For instance consider 5 blocks added in the order A, B, D, E, C
- Each block has the previous letter as prev_block_hash
-
- We show the some pseudocode for actions on hashindex (hi) and spent-tree (st)
-
- A:
-    st.store_block(A)
-    fn do_connect(null,A) =
-      (prev = null, no get_or_set)
-      hi.set(A)
-
- B:
-    st.store_block(B)
-    hi.get_or_set(A, guard[B]) returns A
-    fn do_connect(A,B) =
-      st.connect_block(A,B)
-      hi.set(B)
-
-
- D:
-    st.store_block(D)
-    hi.get_or_set(C, guard[D]) return none & adds guard[D] at hash C
-
- E:
-   st.store_block(E)
-   hi.get_or_set(D, guard[E]) return none & adds guard[E] at hash D
-
- C:
-   st.store_block(C)
-   hi.get_or_set(B, guard[C]) returns B
-   fn do_connect(B,C) =
-      st.connect_block(B,C)
-      hi.set(C) -> fail due to guard([D])
-
-        loop {
-            hi.get(C) -> return guard[D]
-            do_connect(C,D)
-            hi.set(C, guard([D]) -> fail or break
-        }
-
-  Now let us consider what happens when C' is inserted *during* processing of B. Copyied from B above:
-  B:
-    st.store_block(B)
-    hi.get_or_set(A, guard[B]) returns A
-    fn do_connect(A,B) =
-      st.connect_block(A,B)
-        < here C' is inserted as B -> guard[C']
-      hi.set(B) -> fail due to guard[C']
-      loop {
-            hi.get(B) -> return guard[C']
-            do_connect(B,C')
-            hi.set(B, guard([C']) -> success!
-        }
-
-
-*/
 
 
 
@@ -71,17 +10,12 @@ use std::convert;
 
 use buffer::*;
 use hash::*;
-use util::*;
 
 use store::SpendingError;
 
-use merkle_tree::MerkleTree;
 
 use transaction::{Transaction, TransactionError};
-use store::Store;
 
-use store::RecordPtr;
-use store::fileptr::FilePtr;
 
 
 #[derive(Debug)]
@@ -147,7 +81,7 @@ pub struct Block<'a> {
 pub struct BlockHeader<'a> {
 
     version:     u32,
-    prev_hash:   Hash32<'a>,
+    pub prev_hash:   Hash32<'a>,    // TODO should not be pub
     merkle_root: Hash32<'a>,
     time:        u32,
     bits:        u32,
@@ -155,75 +89,6 @@ pub struct BlockHeader<'a> {
 
     raw:         &'a[u8],
 }
-
-
-fn is_genesis_block(hash: Hash32) -> bool {
-    const HASH_GENESIS: &'static str = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
-    let genesis = Hash32Buf::from_slice(&from_hex_rev(HASH_GENESIS));
-
-    genesis.as_ref() == hash
-}
-
-// Connects two blocks (A,B) in the spent-tree and then stores the hash of B in the hash-index
-// this may cause itself being called recursively for (B,C) if needed
-fn connect_and_store_block(
-         store:                 &mut Store,
-         this_block_hash:       Hash32,
-         previous_block_end:    Option<RecordPtr>,
-         this_block_start:      RecordPtr)
-
-        -> BlockResult<()>
-{
-
-    // connect the blocks
-    let this_block_end = if let Some(p) = previous_block_end {
-        store.spent_tree.connect_block(p, this_block_start)?
-    }
-    else {
-        // .. unless this is a genesis block; we just find the end
-        store.spent_tree.find_end(this_block_start)
-    };
-
-
-
-    // we can now store the reference in the hash-index unless there are guards that need to be solved
-    let mut solved_guards: Vec<FilePtr> = vec![];
-    while !store.hash_index.set(this_block_hash, this_block_end.ptr, &solved_guards) {
-
-        let guards = store.hash_index.get(this_block_hash);
-
-        if guards.iter().any(|ptr| ptr.is_blockheader()) {
-            // this is not a guard, this is _this_ block. It seems the block
-            // was added by a concurrent user; will do fine.
-            return Ok(());
-        }
-
-        for ptr in guards.iter() {
-            if solved_guards.contains(ptr) {
-                continue;
-            }
-
-            let hash = store.get_block_hash(*ptr);
-
-            // call self recursively; the guard block has this as previous
-            connect_and_store_block(store, hash.as_ref(), Some(this_block_end), RecordPtr::new(*ptr))?;
-
-            solved_guards.push(*ptr);
-        }
-    }
-
-    Ok(())
-
-    /*    st.connect_block(A,B)
-        hi.set(B) -> fail due to guard[C']
-        loop {
-        hi.get(B) -> return guard[C']
-        do_connect(B,C')
-        hi.set(B, guard([C']) -> success!
-        }
-*/
-}
-
 
 
 
@@ -247,63 +112,7 @@ impl<'a> Block<'a> {
     }
 
 
-
-    /// Verifies the spending order and stores the block
-    ///
-    /// This assumes all transactions have already been (script) verified
-    pub fn verify_and_store(&self, store: &mut Store, transactions: Vec<FilePtr>) -> BlockResult<()> {
-
-        //let _m = store.metrics.start("block.spenttree.store");
-
-        let block_hash = Hash32Buf::double_sha256(self.header.to_raw());
-
-        info!(store.logger, "verify_and_store"; "status" => "start", "block" => format!("{:?}", block_hash));
-
-        // see if it exists
-        let ptr = store.hash_index.get(block_hash.as_ref());
-
-        if ptr.iter().any(|ptr| ptr.is_blockheader()) {
-
-            // this block is already in
-            // TODO; distinct ok-result
-            println!("Already exists");
-            return Ok(())
-        }
-
-
-        // let's store the blockheader in block_content
-        let blockheader_ptr = store.block_content.write_blockheader(&self.header);
-
-
-        // now we store the block in the spent_tree
-        let block_ptr = store.spent_tree.store_block(blockheader_ptr, transactions);
-
-        if is_genesis_block(block_hash.as_ref()) {
-
-            info!(store.logger, "verify_and_store - storing genesis block");
-
-            connect_and_store_block(store, block_hash.as_ref(), None, block_ptr.start)?;
-        }
-        else {
-
-            // we retrieve the pointer to the end of the previous block from the hash-index
-            let previous_end = store.hash_index.get_or_set(self.header.prev_hash, block_ptr.start.ptr.to_guardblock());
-
-            if let Some(previous_end) = previous_end {
-
-                info!(store.logger, "verify_and_store - storing block");
-                connect_and_store_block(store, block_hash.as_ref(), Some(RecordPtr::new(previous_end)), block_ptr.start)?;
-            }
-
-        }
-
-
-
-
-
-        Ok(())
-    }
-
+    /// Compares the given merkle root against the headers merkle root
     pub fn verify_merkle_root(&self, calculated_merkle_root: Hash32<'a>) -> BlockResult<()> {
 
         if self.header.merkle_root != calculated_merkle_root {

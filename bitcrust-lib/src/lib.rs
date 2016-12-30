@@ -32,14 +32,12 @@ mod ffi;
 pub mod metrics;
 
 mod buffer;
-use buffer::*;
 
 mod util;
 
 pub use block::Block;
 
 mod hash;
-use hash::*;
 
 pub mod transaction;
 pub mod block;
@@ -52,7 +50,7 @@ mod config;
 mod merkle_tree;
 use store::Store;
 
-
+mod block_add;
 
 
 pub fn init() -> Store {
@@ -65,50 +63,8 @@ pub fn init() -> Store {
     store
 }
 
-/// Validates and stores a block;
-///
-/// Currently the fn here is used to collect what needs to be done;
-/// TODO: distibute over different mods
 pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
-
-    info!(store.logger, "Add block start");
-
-    let block = Block::new(buffer).unwrap();
-
-    let mut total_amount   = 0_u64;
-    let mut stree_pointers = Vec::new();
-
-    let mut merkle = merkle_tree::MerkleTree::new();
-
-    block.process_transactions(|tx| {
-
-        total_amount += 1;
-
-
-        let res = tx.verify_and_store(store).unwrap();
-
-        let ptr = match res {
-            transaction::TransactionOk::AlreadyExists(ptr) => ptr,
-            transaction::TransactionOk::VerifiedAndStored(ptr) => ptr
-        };
-
-        stree_pointers.push(ptr);
-        stree_pointers.append(&mut tx.get_output_fileptrs(store));
-
-        merkle.add_hash(Hash32Buf::double_sha256(tx.to_raw()).as_ref());
-
-        Ok(())
-
-    }).unwrap();
-
-    block.verify_and_store(store, stree_pointers).unwrap();
-
-    let calculated_merkle_root = merkle.get_merkle_root();
-
-    block.verify_merkle_root(calculated_merkle_root.as_ref()).unwrap();
-
-    // TODO verify amounts
-    info!(store.logger, "Add block end");
+    block_add::add_block(store, buffer)
 }
 
 pub fn add_transaction(_: &[u8]) {

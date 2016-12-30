@@ -43,11 +43,12 @@ impl RecordPtr {
         }
         let previous = previous.unwrap();
 
-        // we can only go backwards
-        assert!(self.ptr.file_pos() > previous.ptr.file_pos());
+        assert!(self.ptr.file_pos() != previous.ptr.file_pos());
 
-        // different file -> we'll store a full pointer
-        if self.ptr.file_number() != previous.ptr.file_number() {
+        // different file or wrong direction -> we'll store a full pointer
+        if self.ptr.file_pos() < previous.ptr.file_pos() ||
+            self.ptr.file_number() != previous.ptr.file_number()
+        {
             rec.skips = previous.ptr.to_u64();
             return;
         }

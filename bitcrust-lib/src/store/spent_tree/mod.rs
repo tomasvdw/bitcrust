@@ -165,14 +165,14 @@ impl SpentTree {
 
             debug_assert!(record.ptr.is_output());
 
-            println!("Testing {:?}", record.ptr);
+            //println!("Testing {:?}", record.ptr);
             // now we scan backwards to see if we find this one
             // both in the current block from this_ptr as in the previous block
             let mut tx_found = false;
             for chain in [this_ptr, previous_end].iter() {
 
                 for prev_rec in chain.iter(&mut self.fileset) {
-                    println!("Seek {:?}", prev_rec.ptr);
+                    //println!("Seek {:?}", prev_rec.ptr);
 
                     // not the same tx
                     if prev_rec.ptr.file_pos() != record.ptr.file_pos()

@@ -76,7 +76,7 @@ impl Store {
             spent_tree:    spent_tree::SpentTree::new(&cfg),
 
             metrics:       Metrics::new(),
-            logger:        slog::Logger::root(slog_term::streamer().build().fuse(), o!()),
+            logger:        slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!()),
         }
     }
 

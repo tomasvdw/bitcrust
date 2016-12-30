@@ -13,7 +13,7 @@ use std::thread;
 use std::time;
 use std::sync::atomic;
 use std::io::Write;
-
+use std::fmt::{Debug,Formatter,Error};
 
 use std::path::{Path};
 use memmap;
@@ -174,7 +174,12 @@ impl FlatFile {
 
 }
 
+impl Debug for FlatFile {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
+        write!(fmt, "{:?}, {:?}", self.file, self.map)
 
+    }
+}
 
 
 #[cfg(test)]
