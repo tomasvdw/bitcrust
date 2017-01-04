@@ -18,14 +18,14 @@ mod blk_file;
 
 fn main() {
 
+    let mut store = bitcrust_lib::init();
 
     let mut block = 0;
-    for fileno in 0..1 {
+    for fileno in 22..401 {
         let name = format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", fileno);
         println!("Processing {}", name);
         let f = File::open(name).unwrap();
         let mut rdr = BufReader::new(f);
-        let mut store = bitcrust_lib::init();
 
 
         loop {
@@ -42,9 +42,9 @@ fn main() {
                 println!("Processed block {}", block);
             }
 
-            if block == 2 {
+            /*if block == 2 {
                 break;
-            }
+            }*/
 
         }
 

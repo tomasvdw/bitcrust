@@ -27,6 +27,9 @@ use std::mem;
 
 use config;
 
+#[macro_use]
+use slog;
+
 use store::fileptr::FilePtr;
 use store::flatfileset::FlatFileSet;
 
@@ -140,8 +143,13 @@ impl SpentTree {
 
 
         /// Verifies of each output in the block at target_start
-    pub fn connect_block(&mut self, previous_end: RecordPtr, target_start: RecordPtr) -> Result<RecordPtr, SpendingError> {
+    pub fn connect_block(&mut self,
+                         logger: &slog::Logger,
+                         previous_end: RecordPtr,
+                         target_start: RecordPtr) -> Result<RecordPtr, SpendingError> {
 
+        let mut input_count = 0;
+        let mut scan_count = 0;
 
         let mut this_ptr = target_start;
         loop {
@@ -156,12 +164,16 @@ impl SpentTree {
                 // we can now make the actual connection
                 target_start.set_previous(&mut self.fileset, Some(previous_end));
 
+                info!(logger, "scan complete"; "inputs" => input_count, "scans" => scan_count);
+
                 return Ok(this_ptr);
             }
 
             if record.ptr.is_transaction() {
                 continue;
             }
+
+            input_count += 1;
 
             debug_assert!(record.ptr.is_output());
 
@@ -173,6 +185,8 @@ impl SpentTree {
 
                 for prev_rec in chain.iter(&mut self.fileset) {
                     //println!("Seek {:?}", prev_rec.ptr);
+
+                    scan_count += 1;
 
                     // not the same tx
                     if prev_rec.ptr.file_pos() != record.ptr.file_pos()

@@ -28,5 +28,12 @@ impl Config {
         Config { root: path }
 
     }
+
+    pub fn new_persist() -> Config {
+
+        let path = PathBuf::from("prs");
+        Config { root: path }
+
+    }
 }
 

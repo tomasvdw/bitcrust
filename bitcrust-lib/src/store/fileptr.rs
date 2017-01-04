@@ -187,6 +187,10 @@ impl FilePtr {
         (self.0 & MASK_TYPE) == TYPE_BLOCK
     }
 
+    pub fn is_guard_blockheader(&self) -> bool {
+        (self.0 & MASK_TYPE) == TYPE_GUARD_BLOCK
+    }
+
     pub fn is_output(&self) -> bool {
         (self.0 & TYPE_OUTPUT_MIN) == TYPE_OUTPUT_MIN
     }
@@ -202,6 +206,8 @@ impl Debug for FilePtr {
             write!(fmt, "TX  {:x}.{:x} T={:x}", self.file_number(), self.file_pos(), self.0)
         } else if self.is_blockheader() {
             write!(fmt, "BLK {:x}.{:x} T={:x}", self.file_number(), self.file_pos(), self.0)
+        } else if self.is_guard_blockheader() {
+            write!(fmt, "BLG {:x}.{:x} T={:x}", self.file_number(), self.file_pos(), self.0)
         }
         else if self.is_input() {
             write!(fmt, "INP {:x}.{:x} idx={:x} T={:x}", self.file_number(), self.file_pos(), self.input_index(), self.0)

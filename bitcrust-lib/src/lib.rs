@@ -55,7 +55,7 @@ mod block_add;
 
 pub fn init() -> Store {
 
-    let config = config::Config::new_test();
+    let config = config::Config::new_persist();
     let store = Store::new(&config);
 
     info!(store.logger, "Store intitalized"; "dir" => config.root.to_str().unwrap());

@@ -76,6 +76,10 @@ impl<'a> Hash32<'a> {
     pub fn is_null(&self) -> bool {
         self.0.iter().all(|x| *x == 0)
     }
+
+    pub fn as_buf(&self) -> Hash32Buf {
+        Hash32Buf(*self.0)
+    }
 }
 
 
@@ -109,7 +113,7 @@ impl Debug for Hash32Buf {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use util::*;
     use super::{Hash32Buf,Hash32};
 

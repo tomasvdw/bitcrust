@@ -67,11 +67,16 @@ Block storing is a tricky part; blocks are stored in the spent-tree and referenc
 use hash::*;
 use util::*;
 use buffer::*;
+
+#[macro_use]
+use slog ;
+
 use store::Store;
 use transaction;
 use merkle_tree;
 use block::*;
 
+use store::SpendingError;
 use store::RecordPtr;
 use store::fileptr::FilePtr;
 
@@ -92,7 +97,11 @@ fn is_genesis_block(hash: Hash32) -> bool {
 // Connects two blocks (A,B) in the spent-tree and then stores the hash of B in the hash-index
 // Connecting the blocks will verify double-spents
 //
-// This may cause itself being called recursively for (B,C) if needed
+// It can be that another block C is also waiting for B; this will trigger their connection (B,C) too
+// and maybe (C,D)... etcetera
+//
+// This would be neat to do recursively, but this could exhaust the stack , we use a loop with
+// a to do for connections.
 fn connect_block(
     store: &mut Store,
     this_block_hash: Hash32,
@@ -101,79 +110,99 @@ fn connect_block(
 
     -> BlockResult<()>
 {
-    // connect the blocks
-    let this_block_end = if let Some(p) = previous_block_end {
-        store.spent_tree.connect_block(p, this_block_start)?
+    info!(store.logger, "Connect block";
+        "this_hash"  => format!("{:?}",   this_block_hash),
+        "prev_end"   =>  format!("{:?}", previous_block_end),
+        "this_start" =>  format!("{:?}", this_block_start)
+    );
+
+    // we lay connections between the end of one block and the start of this_block
+    // prev_end is None only for genesis
+    #[derive(Debug)]
+    struct Connection {
+        this_end:      RecordPtr,
+        this_hash:     Hash32Buf,
+        solved_guards: Vec<FilePtr>
+    }
+
+    // connect first block ...
+    let this_end = if let Some(prev_end) = previous_block_end {
+
+        store.spent_tree.connect_block(&store.logger, prev_end, this_block_start)?
     } else {
+
         // .. unless this is a genesis block; we just find the end
         store.spent_tree.find_end(this_block_start)
     };
 
 
-    // we can now store the reference in the hash-index unless there are guards that need to be solved
-    let mut solved_guards: Vec<FilePtr> = vec![];
-    while !store.hash_index.set(this_block_hash, this_block_end.ptr, &solved_guards) {
-        let guards = store.hash_index.get(this_block_hash);
+    let mut todo = vec![Connection {
+        this_end:      this_end,
+        this_hash:     this_block_hash.as_buf(),
+        solved_guards: vec![]
+    }];
 
-        if guards.iter().any(|ptr| ptr.is_blockheader()) {
-            // this is not a guard, this is _this_ block. It seems the block
-            // was added by a concurrent user; will do fine.
-            return Ok(());
+
+    while let Some(conn) = todo.pop() {
+
+        info!(store.logger, "Connect block - set-hash-loop";
+            "conn"  => format!("{:?}",   conn));
+
+        // if we can store this hash we can move to the next one
+        if store.hash_index.set(conn.this_hash.as_ref(), conn.this_end.ptr.to_block(), &conn.solved_guards) {
+            info!(store.logger, "Connect block - set-hash-loop - ok");
+            continue;
         }
 
+
+        let guards = store.hash_index.get(conn.this_hash.as_ref());
+
+        if guards.clone().iter().any(|ptr| ptr.is_blockheader()) {
+            // this is not a guard, this is _this_ block. It seems the block
+            // was added by a concurrent user; will do fine.
+            info!(store.logger, "Connect block - set-hash-loop - concurrent add");
+            continue;
+        }
+
+        //let guards = store.hash_index.get(conn.this_hash);
+        todo.push(Connection {
+            this_end: conn.this_end,
+            this_hash: conn.this_hash,
+            solved_guards: guards.clone()
+        });
+
+        //let guards = store.hash_index.get(conn.this_hash.as_buf());
+
         for ptr in guards.iter() {
-            if solved_guards.contains(ptr) {
+            if conn.solved_guards.contains(ptr) {
                 continue;
             }
 
             let hash = store.get_block_hash(*ptr);
 
-            // call self recursively; the guard block has this as previous
-            connect_block(store, hash.as_ref(), Some(this_block_end), RecordPtr::new(*ptr))?;
+            info!(store.logger, "Connect block - set-hash-loop";
+                "guard" => format!("{:?}", ptr),
+                "hash" => format!("{:?}",   hash),
+                "conn"  => format!("{:?}",   conn));
 
-            solved_guards.push(*ptr);
+            let guard_end = store.spent_tree.connect_block(&store.logger, conn.this_end, RecordPtr::new(*ptr))?;
+
+
+            todo.push(Connection {
+                this_end: guard_end,
+                this_hash: hash,
+                solved_guards: vec![]
+
+            });
+
         }
-    }
-
-    Ok(())
-}
-
-/// Verifies the spending order and stores the block
-///
-/// This assumes all transactions have already been (script) verified
-fn verify_and_store( block: &Block, store: & mut Store, transactions: Vec <FilePtr > ) -> BlockResult < () > {
-
-    let block_hash = Hash32Buf::double_sha256( block.header.to_raw());
-
-    // let's store the blockheader in block_content
-    let blockheader_ptr = store.block_content.write_blockheader( &block.header);
-
-
-    // now we store the block in the spent_tree
-    let block_ptr = store.spent_tree.store_block(blockheader_ptr, transactions);
-
-    if is_genesis_block(block_hash.as_ref()) {
-        info ! (store.logger, "verify_and_store - storing genesis block");
-
-        connect_block(store, block_hash.as_ref(), None, block_ptr.start) ?;
-    }
-    else {
-
-        // we retrieve the pointer to the end of the previous block from the hash-index
-        // if it is not yet in, this hash will be inserted as a guard-block
-        let previous_end = store.hash_index.get_or_set( block.header.prev_hash, block_ptr.start.ptr.to_guardblock());
-
-        if let Some(previous_end) = previous_end {
-
-            info ! (store.logger, "verify_and_store - storing block");
-            connect_block(store, block_hash.as_ref(), Some(RecordPtr::new(previous_end)), block_ptr.start) ?;
-        }
-
     }
 
 
     Ok(())
 }
+
+
 
 /// Returns true if the block is already stored
 fn block_exists(store: & mut Store, block_hash: Hash32) -> bool {
@@ -227,10 +256,14 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
 ///
 pub fn add_block(store: &mut Store, buffer: &[u8]) {
 
-    info!(store.logger, "Add block start");
 
-    let block = Block::new(buffer).unwrap();
+
+    // parse
+    let block      = Block::new(buffer).unwrap();
     let block_hash = Hash32Buf::double_sha256( block.header.to_raw());
+
+    let block_logger = slog::Logger::new(&store.logger, o!("hash" => format!("{:?}", block_hash)));
+    info!(block_logger, "start");
 
     // already done?
     if block_exists(store, block_hash.as_ref()) {
@@ -238,14 +271,57 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
         return;
     }
 
+    // check and store the transactions in block_content and check the merkle_root
     let spent_tree_ptrs = verify_and_store_transactions(store, &block).unwrap();
 
-    verify_and_store(&block, store, spent_tree_ptrs).unwrap();
+    info!(block_logger, "transactions done");
+
+    // store the blockheader in block_content
+    let blockheader_ptr = store.block_content.write_blockheader( &block.header);
+
+    // store the block in the spent_tree
+    let block_ptr       = store.spent_tree.store_block(blockheader_ptr, spent_tree_ptrs);
+
+
+    if is_genesis_block(block_hash.as_ref()) {
+
+        info ! (block_logger, "verify_and_store - storing genesis block");
+
+        // there is None previous block, but we call connect_block anyway as this will also
+        // connect to next blocks if they are already in
+        connect_block(store, block_hash.as_ref(), None, block_ptr.start).unwrap();
+    }
+    else {
+
+        // we retrieve the pointer to the end of the previous block from the hash-index
+        // if it is not yet in, this hash will be inserted as a guard-block
+        let previous_end = store.hash_index.get_or_set( block.header.prev_hash, block_ptr.start.ptr.to_guardblock());
+
+        info ! (block_logger, "verify_and_store";
+            "previous" => format!("{:?}", block.header.prev_hash),
+            "ptr" => format!("{:?}", previous_end));
+
+        // if it is in, we will connect
+        if let Some(previous_end) = previous_end {
+
+            connect_block(store, block_hash.as_ref(), Some(RecordPtr::new(previous_end)), block_ptr.start).unwrap();
+        }
+
+    }
 
     // TODO verify amounts
     // TODO verify PoW
     // TODO verify header-syntax
 
-    info!(store.logger, "Add block end");
+    info!(block_logger, "done");
+}
+
+
+
+#[cfg(test)]
+mod tests {
+
+
+
 }
 
