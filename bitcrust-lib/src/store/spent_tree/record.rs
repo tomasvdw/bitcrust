@@ -105,6 +105,11 @@ impl RecordPtr {
         fileset.read_fixed::<Record>(self.ptr).ptr
     }
 
+    pub fn set_content_ptr(self, fileset: &mut FlatFileSet, new_ptr: FilePtr) {
+        let p: &mut FilePtr = &mut fileset.read_fixed::<Record>(self.ptr).ptr;
+        let _ = p.atomic_replace(FilePtr::null(), new_ptr);
+    }
+
 
     pub fn iter(self, fileset: &mut FlatFileSet) -> RecordBackwardsIterator {
 

@@ -185,6 +185,13 @@ fn connect_block(
                 "hash" => format!("{:?}",   hash),
                 "conn"  => format!("{:?}",   conn));
 
+
+
+            store.spent_tree.revolve_orphan_pointers(
+                &mut store.block_content,
+                &mut store.hash_index,
+              RecordPtr::new(*ptr));
+
             let guard_end = store.spent_tree.connect_block(&store.logger, conn.this_end, RecordPtr::new(*ptr))?;
 
 

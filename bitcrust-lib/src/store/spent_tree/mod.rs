@@ -35,6 +35,7 @@ use store::fileptr::FilePtr;
 use store::flatfileset::FlatFileSet;
 
 use store::block_content::BlockContent;
+use store::hash_index::HashIndex;
 
 use transaction::Transaction;
 
@@ -152,7 +153,8 @@ impl SpentTree {
     /// This looks up the corresponding outputs; needs to be called before connect_block
     pub fn revolve_orphan_pointers(&mut self,
                                    block_content: &mut BlockContent,
-                                   target_start: RecordPtr) {
+                                   hash_index:    &mut HashIndex,
+                                   target_start:  RecordPtr) {
 
         let mut tx_ptr = FilePtr::null();
         let mut input_idx = 0;
@@ -164,24 +166,37 @@ impl SpentTree {
 
             let ptr = this_ptr.get_content_ptr(&mut self.fileset);
 
-            if ptr.is_transaction() {
-                tx_ptr = ptr;
-                input_idx = 0;
-            }
-            else if ptr.is_null() {
+            if ptr.is_null() {
+
                 let bytes =  block_content.read(tx_ptr);
                 let mut buf = Buffer::new(bytes);
                 let tx = Transaction::parse(&mut buf).unwrap();
 
-                let inp = &tx.txs_in[input_idx];
+                let input = &tx.txs_in[input_idx];
+
+                let input_ptr = hash_index
+                    .get(input.prev_tx_out)
+                    .iter()
+                    .find(|ptr| ptr.is_transaction())
+                    .unwrap()
+                    .to_output(input.prev_tx_out_idx);
+
+                this_ptr.set_content_ptr(&mut self.fileset, input_ptr);
 
                 input_idx += 1;
+            } else if ptr.is_transaction() {
+                tx_ptr = ptr;
+                input_idx = 0;
+            }
+            else if ptr.is_blockheader() {
+
+                return;
             }
             else {
                 input_idx += 1;
             }
 
-
+            let ptr = this_ptr.get_content_ptr(&mut self.fileset);
 
         }
 
@@ -215,6 +230,8 @@ impl SpentTree {
 
                 return Ok(this_ptr);
             }
+
+            assert!(!record.ptr.is_null());
 
             if record.ptr.is_transaction() {
                 continue;

@@ -262,8 +262,8 @@ impl<'a> Transaction<'a> {
 
 /// Transaction input
 pub struct TxInput<'a> {
-    prev_tx_out:     Hash32<'a>,
-    prev_tx_out_idx: u32,
+    pub prev_tx_out:     Hash32<'a>,
+    pub prev_tx_out_idx: u32,
     script:          &'a[u8],
     sequence:        u32,
 }
