@@ -101,6 +101,10 @@ impl RecordPtr {
         RecordPtr::new(self.ptr.offset(16))
     }
 
+    pub fn get_content_ptr(self, fileset: &mut FlatFileSet) -> FilePtr {
+        fileset.read_fixed::<Record>(self.ptr).ptr
+    }
+
 
     pub fn iter(self, fileset: &mut FlatFileSet) -> RecordBackwardsIterator {
 

@@ -21,7 +21,7 @@ fn main() {
     let mut store = bitcrust_lib::init();
 
     let mut block = 0;
-    for fileno in 22..401 {
+    for fileno in 0..401 {
         let name = format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", fileno);
         println!("Processing {}", name);
         let f = File::open(name).unwrap();

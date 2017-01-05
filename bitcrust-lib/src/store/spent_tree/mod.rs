@@ -24,6 +24,7 @@
 ///
 use std::mem;
 
+use buffer::*;
 
 use config;
 
@@ -34,6 +35,8 @@ use store::fileptr::FilePtr;
 use store::flatfileset::FlatFileSet;
 
 use store::block_content::BlockContent;
+
+use transaction::Transaction;
 
 pub mod record;
 pub use self::record::{Record,RecordPtr};
@@ -129,6 +132,8 @@ impl SpentTree {
         }
     }
 
+
+
     pub fn find_end(&mut self, target_start: RecordPtr) -> RecordPtr {
         let mut this_ptr = target_start;
         loop {
@@ -141,8 +146,50 @@ impl SpentTree {
         }
     }
 
+    /// If an orphan block is stored in the spent-tree, some transaction-inputs might not be resolved
+    /// to their outputs. These will still be null-pointers instead of output-pointers
+    ///
+    /// This looks up the corresponding outputs; needs to be called before connect_block
+    pub fn revolve_orphan_pointers(&mut self,
+                                   block_content: &mut BlockContent,
+                                   target_start: RecordPtr) {
 
-        /// Verifies of each output in the block at target_start
+        let mut tx_ptr = FilePtr::null();
+        let mut input_idx = 0;
+
+        let mut this_ptr = target_start;
+        loop {
+
+            this_ptr = this_ptr.next_in_block();
+
+            let ptr = this_ptr.get_content_ptr(&mut self.fileset);
+
+            if ptr.is_transaction() {
+                tx_ptr = ptr;
+                input_idx = 0;
+            }
+            else if ptr.is_null() {
+                let bytes =  block_content.read(tx_ptr);
+                let mut buf = Buffer::new(bytes);
+                let tx = Transaction::parse(&mut buf).unwrap();
+
+                let inp = &tx.txs_in[input_idx];
+
+                input_idx += 1;
+            }
+            else {
+                input_idx += 1;
+            }
+
+
+
+        }
+
+    }
+
+
+
+    /// Verifies of each output in the block at target_start
     pub fn connect_block(&mut self,
                          logger: &slog::Logger,
                          previous_end: RecordPtr,
@@ -232,6 +279,9 @@ mod tests {
 
 
     use config;
+    use slog_term;
+    use slog;
+    use slog::DrainExt;
 
     use super::*;
 
@@ -270,6 +320,7 @@ mod tests {
 
     #[test]
     fn test_spent_tree_connect() {
+        let mut log = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
 
         let mut st  = SpentTree::new(&config::Config::new_test());
 
@@ -287,8 +338,8 @@ mod tests {
 
 
         // create a tree, both 2a and 2b attached to 1
-        st.connect_block(block1.end, block2a.start).unwrap();
-        st.connect_block(block1.end, block2b.start).unwrap();
+        st.connect_block(&log, block1.end, block2a.start).unwrap();
+        st.connect_block(&log, block1.end, block2b.start).unwrap();
 
         // this one should only "fit" onto 2b
         let block3b = st.store(block!(blk 7 =>
@@ -298,10 +349,10 @@ mod tests {
 
 
         assert_eq!(
-            st.connect_block(block2a.end, block3b.start).unwrap_err(),
+            st.connect_block(&log, block2a.end, block3b.start).unwrap_err(),
             SpendingError::OutputNotFound);
 
-        st.connect_block(block2b.end, block3b.start).unwrap();
+        st.connect_block(&log, block2b.end, block3b.start).unwrap();
 
         // now this should only fir on 2a and not on 3b as at 3b it is already spent
         let block4a = st.store(block!(blk 10 =>
@@ -309,14 +360,15 @@ mod tests {
             [tx 12 => (2;2)]
         ));
         assert_eq!(
-            st.connect_block(block3b.end, block4a.start).unwrap_err(),
+            st.connect_block(&log, block3b.end, block4a.start).unwrap_err(),
             SpendingError::OutputAlreadySpent);
-        st.connect_block(block2b.end, block4a.start).unwrap();
+        st.connect_block(&log, block2b.end, block4a.start).unwrap();
 
     }
 
-        #[test]
+    #[test]
     fn test_spent_tree() {
+        let mut log = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
 
 
         let block1 = block!(blk 1 =>
@@ -337,7 +389,7 @@ mod tests {
         let block_ptr2 = st.store_block(block2.0, block2.1);
 
 
-        st.connect_block(block_ptr.end, block_ptr2.start).unwrap();
+        st.connect_block(&log, block_ptr.end, block_ptr2.start).unwrap();
 
         // this is a bit cumbersome, but we have no accessor function yet so we'll allow this for the
         // test; we want to test the full content of the spent-tree here.

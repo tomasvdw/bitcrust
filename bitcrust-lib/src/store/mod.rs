@@ -35,13 +35,14 @@ mod hash_index;
 mod spent_tree;
 
 pub use self::spent_tree::SpendingError;
-pub use self::spent_tree::record::RecordPtr;
+pub use self::spent_tree::record::{RecordPtr,Record};
 
 use config;
 use hash::*;
+use buffer::*;
 
 use metrics::Metrics;
-
+use transaction::Transaction;
 use self::fileptr::FilePtr;
 
 
@@ -91,6 +92,7 @@ impl Store {
         Hash32Buf::double_sha256(block_hdr)
 
     }
+
 
 
 }
