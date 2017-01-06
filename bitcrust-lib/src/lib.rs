@@ -25,7 +25,10 @@ extern crate ring;
 pub extern crate slog ;
 extern crate slog_term ;
 
+mod hash;
 
+#[macro_use]
+mod builders;
 
 
 mod ffi;
@@ -37,7 +40,7 @@ mod util;
 
 pub use block::Block;
 
-mod hash;
+
 
 pub mod transaction;
 pub mod block;
@@ -51,6 +54,7 @@ mod merkle_tree;
 use store::Store;
 
 mod block_add;
+
 
 
 pub fn init() -> Store {

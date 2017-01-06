@@ -138,4 +138,21 @@ mod tests {
     fn test_store_new() {
         let _ = Store::new(&config::Config::new_test());
     }
+
+    // this takes a fake spent tree (created with block! macro's) and use it to construct
+    // valid transactions and blocks
+    /*fn test_create_store_from_spent_tree(spent_tree: RecordPtr) -> Store {
+
+
+
+
+
+
+    }*/
+
+    #[test]
+    fn test_create_store() {
+     //   tx_builder!();
+
+    }
 }

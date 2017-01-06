@@ -205,6 +205,7 @@ impl SpentTree {
 
 
     /// Verifies of each output in the block at target_start
+    /// Then lays the connection between previous_end and target_start
     pub fn connect_block(&mut self,
                          logger: &slog::Logger,
                          previous_end: RecordPtr,
@@ -408,41 +409,50 @@ mod tests {
 
         st.connect_block(&log, block_ptr.end, block_ptr2.start).unwrap();
 
-        // this is a bit cumbersome, but we have no accessor function yet so we'll allow this for the
-        // test; we want to test the full content of the spent-tree here.
-        macro_rules! resolve { ($pt:ident) => (st.fileset.read_fixed::<Record>($pt.ptr).ptr) };
-
         // we browse backwards and test all values
         let p = block_ptr2.end;
-        assert!   (resolve!(p).is_blockheader());
-        assert_eq!(resolve!(p).file_pos(), 4);
+        assert!   (p.get_content_ptr(&mut st.fileset).is_blockheader());
+        assert_eq!(p.get_content_ptr(&mut st.fileset).file_pos(), 4);
 
         let p = { p.prev(&mut st.fileset) };
-        assert!(resolve!(p).is_transaction());
-        assert_eq!(resolve!(p).file_pos(), 6);
+        assert!(   p.get_content_ptr(&mut st.fileset).is_transaction());
+        assert_eq!(p.get_content_ptr(&mut st.fileset).file_pos(), 6);
 
         let p = { p.prev(&mut st.fileset) };
-        assert!(resolve!(p).is_output());
-        assert_eq!(resolve!(p).file_pos(), 2);
-        assert_eq!(resolve!(p).output_index(), 3);
+        assert!   (p.get_content_ptr(&mut st.fileset).is_output());
+        assert_eq!(p.get_content_ptr(&mut st.fileset).file_pos(), 2);
+        assert_eq!(p.get_content_ptr(&mut st.fileset).output_index(), 3);
 
         let p = { p.prev(&mut st.fileset) };
-        assert!(resolve!(p).is_output());
-        assert_eq!(resolve!(p).file_pos(), 2);
-        assert_eq!(resolve!(p).output_index(), 2);
+        assert!(   p.get_content_ptr(&mut st.fileset).is_output());
+        assert_eq!(p.get_content_ptr(&mut st.fileset).file_pos(), 2);
+        assert_eq!(p.get_content_ptr(&mut st.fileset).output_index(), 2);
 
         let p = { p.prev(&mut st.fileset) };
-        assert!(resolve!(p).is_transaction());
-        assert_eq!(resolve!(p).file_pos(), 5);
+        assert!(   p.get_content_ptr(&mut st.fileset).is_transaction());
+        assert_eq!(p.get_content_ptr(&mut st.fileset).file_pos(), 5);
 
         let p = { p.prev(&mut st.fileset) };
-        assert!   (resolve!(p).is_blockheader());
-        assert_eq!(resolve!(p).file_pos(), 4);
+        assert!   (p.get_content_ptr(&mut st.fileset).is_blockheader());
+        assert_eq!(p.get_content_ptr(&mut st.fileset).file_pos(), 4);
 
 
         let p = { p.prev(&mut st.fileset) };
-        assert!   (resolve!(p).is_blockheader());
-        assert_eq!(resolve!(p).file_pos(), 1);
+        assert!   (p.get_content_ptr(&mut st.fileset).is_blockheader());
+        assert_eq!(p.get_content_ptr(&mut st.fileset).file_pos(), 1);
+
+    }
+
+
+    #[test]
+    fn test_orphan_block() {
+        // care must be taken that when a block is added to the spent-tree before one of its
+        // predecessors, it may not be complete.
+        // This because in the spent tree, the inputs are stored as the outputs they reference,
+        // but these inputs may not have been available.
+
+        // The resolve orphan block checks and fixes these "left-out" references.
+
 
     }
 }
