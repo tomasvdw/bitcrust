@@ -10,7 +10,6 @@
 //! ```
 //! #[macro_use]
 //! extern crate bitcrust_lib;
-//! use hash;
 //!
 //! fn main() {
 //!
@@ -151,7 +150,18 @@ macro_rules! tx {
 
 }
 
+#[macro_export]
+macro_rules! blk {
+    ( $($txvec:ident),* )
+=>
+    (
+    {
 
+    }
+
+
+    )
+}
 
 #[cfg(test)]
 mod tests {
@@ -189,3 +199,4 @@ mod tests {
     fn test_blk_builders() {
 
     }
+}
