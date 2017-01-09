@@ -246,6 +246,7 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
         result_ptrs.push(ptr);
         result_ptrs.append(&mut tx.get_output_fileptrs(store));
 
+        println!("tx {:?}", tx);
         merkle.add_hash(Hash32Buf::double_sha256(tx.to_raw()).as_ref());
 
         Ok(())
@@ -266,7 +267,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
 
 
     // parse
-    let block      = Block::new(buffer).unwrap();
+    let block      = Block::new(buffer) .unwrap();
     let block_hash = Hash32Buf::double_sha256( block.header.to_raw());
 
     let block_logger = slog::Logger::new(&store.logger, o!("hash" => format!("{:?}", block_hash)));
@@ -278,6 +279,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
         return;
     }
 
+    println!("block = {:?}", block);
     // check and store the transactions in block_content and check the merkle_root
     let spent_tree_ptrs = verify_and_store_transactions(store, &block).unwrap();
 
@@ -328,7 +330,35 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
 #[cfg(test)]
 mod tests {
 
+    use builders;
+    use store;
+    use config;
+    use buffer::*;
+    use super::*;
 
+    #[test]
+    fn test_block_ordering() {
+
+        let mut store = store::Store::new(& config::Config::new_test());
+
+        tx_builder!(bld);
+        let tx1 = tx!(bld; coinbase => b );
+        let tx2 = tx!(bld; b => c, f );
+        //println!("Input {:?}", ::transaction::Transaction::parse(&mut Buffer::new(&tx1)));
+        let block0 = genesis!();
+        let block1 = blk!(prev = block0;
+            tx!(bld; coinbase => b ),
+            tx!(bld; b => c,e )
+
+        );
+
+//        add_block(&mut store, &block0);
+
+        println!("block1 = {:?}", block1);
+        //println!("tx1 = {:?}", ::hash::Hash32Buf::double_sha256(&tx1));
+        add_block(&mut store, &block1);
+
+    }
 
 }
 
