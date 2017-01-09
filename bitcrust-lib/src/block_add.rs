@@ -330,32 +330,60 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
 #[cfg(test)]
 mod tests {
 
-    use builders;
     use store;
     use config;
     use buffer::*;
     use super::*;
 
     #[test]
-    fn test_block_ordering() {
+    fn test_block_simple() {
 
         let mut store = store::Store::new(& config::Config::new_test());
 
         tx_builder!(bld);
-        let tx1 = tx!(bld; coinbase => b );
-        let tx2 = tx!(bld; b => c, f );
-        //println!("Input {:?}", ::transaction::Transaction::parse(&mut Buffer::new(&tx1)));
-        let block0 = genesis!();
-        let block1 = blk!(prev = block0;
-            tx!(bld; coinbase => b ),
-            tx!(bld; b => c,e )
 
+        let block0 = genesis!();
+
+        let block1 = blk!(prev = block0;
+            tx!(bld; coinbase => b;11 ),
+            tx!(bld; b => c,e )
         );
 
-//        add_block(&mut store, &block0);
+        let block2 = blk!(prev = block1;
+            tx!(bld; coinbase => f;12 ),
+            tx!(bld; c => g )
+        );
+
+        add_block(&mut store, &block0);
+        add_block(&mut store, &block1);
+        add_block(&mut store, &block2);
+
+    }
+
+    #[test]
+    fn test_blocks_reorder() {
+
+        let mut store = store::Store::new(& config::Config::new_test());
+
+        tx_builder!(bld);
+
+        let block0 = genesis!();
+        let block1 = blk!(prev = block0;
+            tx!(bld; coinbase => b;11 ),
+            tx!(bld; b => c,e )
+        );
+
+        let block2 = blk!(prev = block1;
+            tx!(bld; coinbase => f;12 ),
+            tx!(bld; c => g )
+        );
+
+        //        add_block(&mut store, &block0);
 
         println!("block1 = {:?}", block1);
         //println!("tx1 = {:?}", ::hash::Hash32Buf::double_sha256(&tx1));
+        add_block(&mut store, &block0);
+        add_block(&mut store, &block2);
         add_block(&mut store, &block1);
 
     }

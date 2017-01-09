@@ -115,19 +115,19 @@ macro_rules! tx {
 
         // now we have the tx we can create the input that references this
         let hash = ::hash::Hash32Buf::double_sha256(&tx);
-        let mut idx = 0_u8;
+        let mut _idx = 0_u8;
         $(
             {
 
                 let mut txin: Vec<u8> = Vec::new();
                 txin.extend(hash.as_ref().0.iter());
-                txin.extend([idx, 0u8, 0u8, 0u8].iter()); // index
+                txin.extend([_idx, 0u8, 0u8, 0u8].iter()); // index
                 txin.extend([0u8;1].iter()); // script is empty
                 txin.extend([0u8;4].iter()); // sequence = 0
                 let _ = stringify!($output);
                 $bld.insert(stringify!($output), txin);
             }
-            idx += 1;
+            _idx += 1;
         )*
 
         tx

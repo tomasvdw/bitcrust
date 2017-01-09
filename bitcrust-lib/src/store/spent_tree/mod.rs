@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn test_spent_tree() {
-        let mut log = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
+        let log = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
 
 
         let block1 = block!(blk 1 =>
