@@ -111,6 +111,11 @@ impl FilePtr {
         )
     }
 
+    pub fn filenumber_and_pos(self) -> i64 {
+        (self.0 & (MASK_FILENO | MASK_FILEPOS)) as i64
+    }
+
+
     pub fn to_u64(self) -> u64 {
         self.0
     }
@@ -120,10 +125,15 @@ impl FilePtr {
     }
 
     pub fn input_index(self) -> u32 {
+        debug_assert!(self.is_input());
+
         ((self.0 & MASK_INDEX1) >> 46) as u32
     }
 
     pub fn output_index(self) -> u32 {
+
+        debug_assert!(self.is_output());
+
         ((self.0 & MASK_INDEX2) >> 46) as u32
     }
 

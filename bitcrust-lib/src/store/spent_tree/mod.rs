@@ -86,22 +86,16 @@ impl SpentTree {
 
         let mut result: Vec<Record> = Vec::with_capacity(file_ptrs.len()+2);
 
-        result.push(Record::new(blockheader.to_block()));
+        result.push(Record::new(blockheader.to_guardblock()));
 
         for ptr in file_ptrs.iter() {
 
             let mut r = Record::new(*ptr);
-            r.set_skip_previous();
-
             result.push(r);
         };
 
         let mut rec_end = Record::new(blockheader.to_block());
-        rec_end.set_skip_previous();
-
         result.push(rec_end);
-
-
         result
     }
 
@@ -137,12 +131,19 @@ impl SpentTree {
 
     pub fn find_end(&mut self, target_start: RecordPtr) -> RecordPtr {
         let mut this_ptr = target_start;
+
+
         loop {
             this_ptr = this_ptr.next_in_block();
 
             let record = self.fileset.read_fixed::<Record>(this_ptr.ptr);
+
             if record.ptr.is_blockheader() {
+                this_ptr.set_previous(&mut self.fileset, Some(this_ptr.prev_in_block()));
                 return this_ptr;
+            }
+            else {
+                record.skips = [-1;4];
             }
         }
     }
@@ -160,6 +161,8 @@ impl SpentTree {
         let mut input_idx = 0;
 
         let mut this_ptr = target_start;
+        debug_assert!(target_start.ptr.is_guard_blockheader());
+
         loop {
 
             this_ptr = this_ptr.next_in_block();
@@ -178,7 +181,7 @@ impl SpentTree {
                     .get(input.prev_tx_out)
                     .iter()
                     .find(|ptr| ptr.is_transaction())
-                    .unwrap()
+                    .expect("Could not find input; this must have been resolved before connecting the block")
                     .to_output(input.prev_tx_out_idx);
 
                 this_ptr.set_content_ptr(&mut self.fileset, input_ptr);
@@ -196,8 +199,6 @@ impl SpentTree {
                 input_idx += 1;
             }
 
-            let ptr = this_ptr.get_content_ptr(&mut self.fileset);
-
         }
 
     }
@@ -211,45 +212,61 @@ impl SpentTree {
                          previous_end: RecordPtr,
                          target_start: RecordPtr) -> Result<RecordPtr, SpendingError> {
 
+        info!(logger, "start scan");
+
         let mut input_count = 0;
-        let mut scan_count = 0;
+        let mut total_scan = 0;
+        let mut largest_scan = 0;
+
+        // we can now make the actual connection
+        target_start.set_previous(&mut self.fileset, Some(previous_end));
 
         let mut this_ptr = target_start;
+
+
+
         loop {
 
             this_ptr = this_ptr.next_in_block();
+
 
             let record = self.fileset.read_fixed::<Record>(this_ptr.ptr);
 
             // done?
             if record.ptr.is_blockheader() {
 
+                // the blockheader at the end just points to the record before itself:
+                this_ptr.set_previous(&mut self.fileset, Some(this_ptr.prev_in_block()));
+
                 // we can now make the actual connection
                 target_start.set_previous(&mut self.fileset, Some(previous_end));
 
-                info!(logger, "scan complete"; "inputs" => input_count, "scans" => scan_count);
+                info!(logger, "scan complete"; "inputs" => input_count,
+                    "scans" => total_scan, "largest" => largest_scan);
 
                 return Ok(this_ptr);
             }
 
+            let stats = this_ptr.seek_and_set(&mut self.fileset)?;
+
+
+/*
             assert!(!record.ptr.is_null());
 
-            if record.ptr.is_transaction() {
-                continue;
-            }
 
             input_count += 1;
+            let mut scan_count = 0;
 
             debug_assert!(record.ptr.is_output());
 
-            //println!("Testing {:?}", record.ptr);
+            println!("Testing {:?}", record.ptr);
             // now we scan backwards to see if we find this one
             // both in the current block from this_ptr as in the previous block
             let mut tx_found = false;
             for chain in [this_ptr, previous_end].iter() {
 
                 for prev_rec in chain.iter(&mut self.fileset) {
-                    //println!("Seek {:?}", prev_rec.ptr);
+                    println!("Seek {:?}", prev_rec.ptr);
 
                     scan_count += 1;
 
@@ -280,6 +297,11 @@ impl SpentTree {
                 println!("Not found {:?}", record.ptr);
                 return Err(SpendingError::OutputNotFound);
             }
+            if scan_count > largest_scan {
+                largest_scan = scan_count;
+            }
+            total_scan += scan_count;
+            */
 
         }
 
@@ -356,6 +378,7 @@ mod tests {
 
 
         // create a tree, both 2a and 2b attached to 1
+        st.find_end(block1.start);
         st.connect_block(&log, block1.end, block2a.start).unwrap();
         st.connect_block(&log, block1.end, block2b.start).unwrap();
 
@@ -385,7 +408,7 @@ mod tests {
     }
 
     #[test]
-    fn test_spent_tree() {
+    fn test_spent_tree1() {
         let log = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
 
 
@@ -406,6 +429,8 @@ mod tests {
 
         let block_ptr2 = st.store_block(block2.0, block2.1);
 
+        println!("{:?}", block_ptr.start);
+        st.find_end(block_ptr.start);
 
         st.connect_block(&log, block_ptr.end, block_ptr2.start).unwrap();
 
@@ -433,7 +458,7 @@ mod tests {
         assert_eq!(p.get_content_ptr(&mut st.fileset).file_pos(), 5);
 
         let p = { p.prev(&mut st.fileset) };
-        assert!   (p.get_content_ptr(&mut st.fileset).is_blockheader());
+        assert!   (p.get_content_ptr(&mut st.fileset).is_guard_blockheader());
         assert_eq!(p.get_content_ptr(&mut st.fileset).file_pos(), 4);
 
 

@@ -40,14 +40,12 @@ fn shrink_merkle_tree(hashes: Vec<Hash32Buf>) -> Vec<Hash32Buf> {
 impl MerkleTree {
     pub fn new() -> MerkleTree {
 
-        println!("MERKLE NEW");
         MerkleTree {
             hashes: vec![]
         }
     }
 
     pub fn add_hash(&mut self, hash: Hash32) {
-        println!("MERKLE ADD {:?}", hash);
 
         self.hashes.push(Hash32Buf::from_slice(hash.0));
     }
@@ -57,9 +55,7 @@ impl MerkleTree {
 
         assert!(!self.hashes.is_empty());
 
-        let res = shrink_merkle_tree(self.hashes.clone())[0];
-        println!("MERKLE RES {:?}", res);
-        res
+        shrink_merkle_tree(self.hashes.clone())[0]
 
     }
 }

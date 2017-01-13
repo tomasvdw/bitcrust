@@ -246,7 +246,6 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
         result_ptrs.push(ptr);
         result_ptrs.append(&mut tx.get_output_fileptrs(store));
 
-        println!("tx {:?}", tx);
         merkle.add_hash(Hash32Buf::double_sha256(tx.to_raw()).as_ref());
 
         Ok(())
@@ -279,7 +278,6 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
         return;
     }
 
-    println!("block = {:?}", block);
     // check and store the transactions in block_content and check the merkle_root
     let spent_tree_ptrs = verify_and_store_transactions(store, &block).unwrap();
 
