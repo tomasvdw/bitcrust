@@ -217,6 +217,8 @@ impl SpentTree {
         let mut input_count = 0;
         let mut total_scan = 0;
         let mut largest_scan = 0;
+        let mut total_seek = 0;
+        let mut largest_seek = 0;
 
         // we can now make the actual connection
         target_start.set_previous(&mut self.fileset, Some(previous_end));
@@ -226,7 +228,6 @@ impl SpentTree {
 
 
         loop {
-
             this_ptr = this_ptr.next_in_block();
 
 
@@ -234,81 +235,49 @@ impl SpentTree {
 
             // done?
             if record.ptr.is_blockheader() {
-
                 // the blockheader at the end just points to the record before itself:
                 this_ptr.set_previous(&mut self.fileset, Some(this_ptr.prev_in_block()));
 
                 // we can now make the actual connection
                 target_start.set_previous(&mut self.fileset, Some(previous_end));
 
-                info!(logger, "scan complete"; "inputs" => input_count,
-                    "scans" => total_scan, "largest" => largest_scan);
+                info!(logger, "scan complete";
+                    "inputs" => input_count,
+                    "scans" => total_scan,
+                    "avg" => total_scan / input_count,
+                    "largest" => largest_scan,
+                    "seeks" => total_seek,
+                    "seek_avg" => total_seek / input_count,
+                    "seek_largest" => largest_seek
+                );
 
                 return Ok(this_ptr);
             }
 
-            let stats = this_ptr.seek_and_set(&mut self.fileset)?;
-
-
-/*
-            assert!(!record.ptr.is_null());
-
-
             input_count += 1;
-            let mut scan_count = 0;
 
-            debug_assert!(record.ptr.is_output());
+            let scan_count = 1;//this_ptr.seek_and_set_seqscan(&mut self.fileset)?;
+            let seek_count = this_ptr.seek_and_set(&mut self.fileset)?;
 
-            println!("Testing {:?}", record.ptr);
-            // now we scan backwards to see if we find this one
-            // both in the current block from this_ptr as in the previous block
-            let mut tx_found = false;
-            for chain in [this_ptr, previous_end].iter() {
-
-                for prev_rec in chain.iter(&mut self.fileset) {
-                    println!("Seek {:?}", prev_rec.ptr);
-
-                    scan_count += 1;
-
-                    // not the same tx
-                    if prev_rec.ptr.file_pos() != record.ptr.file_pos()
-                        || prev_rec.ptr.file_number() != record.ptr.file_number() {
-                        continue;
-                    }
-
-                    if prev_rec.ptr.is_transaction() {
-                        tx_found = true;
-                        break;
-                    }
-
-
-                    // We have this identical output already spent in the tree?
-                    if prev_rec.ptr.is_output()
-                        && prev_rec.ptr.output_index() == record.ptr.output_index() {
-                        println!("Already spent {:?}", record.ptr);
-                        return Err(SpendingError::OutputAlreadySpent);
-                    }
-                }
-                if tx_found {
-                    break;
-                }
-            }
-            if !tx_found {
-                println!("Not found {:?}", record.ptr);
-                return Err(SpendingError::OutputNotFound);
-            }
             if scan_count > largest_scan {
                 largest_scan = scan_count;
             }
             total_scan += scan_count;
-            */
+
+            if seek_count > largest_seek {
+                largest_seek = seek_count;
+            }
+            total_seek += seek_count;
 
         }
 
+
     }
 
-
 }
+
+
+
 
 
 #[cfg(test)]

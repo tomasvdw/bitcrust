@@ -74,11 +74,12 @@ impl RecordPtr {
 
 
 
+
     pub fn seek_and_set(self, fileset: &mut FlatFileSet) -> Result<isize, SpendingError> {
 
         let mut count = 0;
 
-        const LARGE_DIFF: i64 = 10000;
+        const DELTA: [i64; 4] = [0, 256, 256 * 256, 16 * 256 * 256];
 
         // seek_rec is the one we seek (self)
         let seek_rec: &mut Record = fileset.read_fixed(self.ptr);
@@ -86,28 +87,127 @@ impl RecordPtr {
 
         // this is the transaction position we seek (the filepos stripped of the output-index metadata)
         let seek_filenr_pos = seek_rec.ptr.filenumber_and_pos();
-        let seek_plus = seek_filenr_pos + LARGE_DIFF;
 
         // these are the pointers that will be stored in rec. By default, they just point to the
         // previous
         seek_rec.skips = [-1; 4];
 
+        let mut skip_r = 0;
+
+        let seek_plus = [
+            seek_filenr_pos + DELTA[0],
+            seek_filenr_pos + DELTA[1],
+            seek_filenr_pos + DELTA[2],
+            seek_filenr_pos + DELTA[3],
+        ];
+
+        let mut seek_minus = [
+            seek_filenr_pos - DELTA[0],
+            seek_filenr_pos - DELTA[1],
+            seek_filenr_pos - DELTA[2],
+            seek_filenr_pos - DELTA[3],
+        ];
+
+        //
+
         let mut cur = self.prev_in_block();
 
         if seek_rec.ptr.is_transaction() {
-            return Ok(0);
+            return Ok(count);
+        }
+
+        debug_assert!(seek_rec.ptr.is_output()); // these are the only ones to search for
+
+        loop {
+
+            count += 1;
+
+            // cur_rec is the one we are comparing
+            let cur_rec: &Record = fileset.read_fixed(cur.ptr);
+
+            let cur_filenr_pos = cur_rec.ptr.filenumber_and_pos();
+
+            //println!("Seeking {:?} @ {:?} = {:?}", seek_rec, cur, cur_rec);
+
+            if cur_rec.skips == [0; 4] {
+                return Err(SpendingError::OutputNotFound);
+            } else if cur_rec.ptr.is_blockheader() || cur_rec.ptr.is_guard_blockheader() {
+
+
+                cur = cur.prev(fileset);
+                continue;
+            }
+
+            if seek_filenr_pos == cur_filenr_pos {
+                if cur_rec.ptr.is_transaction() {
+                    // we've found the transaction of the output before we
+                    // found the output. So we're all good
+                    return Ok(count)
+
+                } else if cur_rec.ptr.output_index() == seek_rec.ptr.output_index() {
+                    return Err(SpendingError::OutputAlreadySpent);
+                }
+            }
+
+            if cur.ptr.file_number() == self.ptr.file_number() {
+
+                let diff: i64 = (cur.ptr.file_pos() as i64 - self.ptr.file_pos() as i64) / 16;
+                if diff > i16::min_value() as i64 && diff < i16::max_value() as i64 {
+                    for n in skip_r..4 {
+                        seek_rec.skips[n] = diff as i16;
+                    }
+                }
+            }
+
+
+            while skip_r < 4 && seek_minus[skip_r] >= cur_filenr_pos {
+                skip_r += 1;
+            }
+
+            let mut skip = -1;
+            for n in (0..1).rev() {
+                if seek_plus[n] < cur_filenr_pos {
+
+                    skip = cur_rec.skips[n];
+                    break;
+                }
+            }
+
+            cur = cur.offset(skip);
+
+        }
+
+    }
+
+    pub fn seek_and_set_seqscan(self, fileset: &mut FlatFileSet) -> Result<isize, SpendingError> {
+
+        let mut count = 0;
+
+        // seek_rec is the one we seek (self)
+        let seek_rec: &mut Record = fileset.read_fixed(self.ptr);
+        seek_rec.skips = [-1; 4];
+
+        // this is the transaction position we seek (the fileptr minus the output-index metadata)
+        let seek_filenr_pos = seek_rec.ptr.filenumber_and_pos();
+
+        let mut cur = self.prev_in_block();
+
+        if seek_rec.ptr.is_transaction() {
+            return Ok(count);
         }
 
         debug_assert!(seek_rec.ptr.is_output()); // these are the only ones to search for
 
         loop
         {
+            count += 1;
+
             // cur_rec is the one we are comparing
             let cur_rec: &Record = fileset.read_fixed(cur.ptr);
 
             let cur_filenr_pos = cur_rec.ptr.filenumber_and_pos();
 
-            println!("Seeking {:?} @ {:?} = {:?}", seek_rec, cur, cur_rec);
+            //println!("Seeking {:?} @ {:?} = {:?}", seek_rec, cur, cur_rec);
 
 
 
@@ -121,7 +221,7 @@ impl RecordPtr {
                 continue;
             }
 
-            let skipper = if cur_filenr_pos == seek_filenr_pos {
+            if cur_filenr_pos == seek_filenr_pos {
 
                 if cur_rec.ptr.is_transaction() {
 
@@ -133,23 +233,9 @@ impl RecordPtr {
                     return Err(SpendingError::OutputAlreadySpent);
                 }
 
-                // the first skip skips over everything that is from the same tx
-                0
-
-
-            } else if  seek_plus < cur_filenr_pos {
-
-                1
-
-            } else if seek_filenr_pos < cur_filenr_pos {
-
-                2
-            } else {
-
-                3
             };
 
-            cur = cur.offset(cur_rec.skips[skipper]);
+            cur = cur.offset(-1);
 
         }
 
@@ -270,7 +356,7 @@ impl Record {
 mod tests {
 
 
-
+    
 
 
 }
