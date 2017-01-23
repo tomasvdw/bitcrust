@@ -12,6 +12,7 @@ mod blk_file;
 
 
 #[test]
+#[ignore]
 fn load_file1() {
 
     let mut store = bitcrust_lib::init();
