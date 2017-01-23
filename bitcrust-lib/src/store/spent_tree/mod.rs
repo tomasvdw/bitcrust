@@ -65,6 +65,17 @@ pub struct SpentTree {
 
     fileset:    FlatFileSet,
 
+    stats: SpentTreeStats
+}
+
+#[derive(Debug, Default)]
+pub struct SpentTreeStats {
+    pub blocks: i64,
+    pub inputs: i64,
+    pub seeks: i64,
+    pub total_move: i64,
+    pub jumps: i64,
+    pub use_diff: [i64; 4]
 }
 
 impl SpentTree {
@@ -72,9 +83,13 @@ impl SpentTree {
 
         let dir = &cfg.root.clone().join(SUBPATH);
 
+        let stats: SpentTreeStats = Default::default();
+
         SpentTree {
             fileset: FlatFileSet::new(
-                dir, PREFIX, FILE_SIZE, MAX_CONTENT_SIZE)
+                dir, PREFIX, FILE_SIZE, MAX_CONTENT_SIZE),
+
+            stats: stats
         }
     }
 
@@ -241,7 +256,9 @@ impl SpentTree {
                 // we can now make the actual connection
                 target_start.set_previous(&mut self.fileset, Some(previous_end));
 
-                info!(logger, "scan complete";
+                self.stats.blocks += 1;
+
+                info!(logger, if input_count>100 { "big_scan_complete" } else { "small_scan_complete" };
                     "inputs" => input_count,
                     "scans" => total_scan,
                     "avg" => total_scan / input_count,
@@ -251,13 +268,17 @@ impl SpentTree {
                     "seek_largest" => largest_seek
                 );
 
+                info!(logger, "scan stats";
+                    "stats" => format!("{:?}", self.stats)
+                );
+
                 return Ok(this_ptr);
             }
 
             input_count += 1;
 
             let scan_count = 1;//this_ptr.seek_and_set_seqscan(&mut self.fileset)?;
-            let seek_count = this_ptr.seek_and_set(&mut self.fileset)?;
+            let seek_count = this_ptr.seek_and_set(&mut self.stats, &mut self.fileset)?;
 
             if scan_count > largest_scan {
                 largest_scan = scan_count;

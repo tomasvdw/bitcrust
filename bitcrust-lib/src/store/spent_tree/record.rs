@@ -6,6 +6,8 @@ use store::flatfileset::FlatFileSet;
 
 use store::spent_tree::SpendingError;
 
+use super::SpentTreeStats;
+
 /// A record is a 16 byte structure that points to either a
 /// * blockheader
 /// * transaction
@@ -75,11 +77,16 @@ impl RecordPtr {
 
 
 
-    pub fn seek_and_set(self, fileset: &mut FlatFileSet) -> Result<isize, SpendingError> {
+    pub fn seek_and_set(self, stats: &mut SpentTreeStats, fileset: &mut FlatFileSet) -> Result<isize, SpendingError> {
+
+        stats.inputs += 1;
 
         let mut count = 0;
 
-        const DELTA: [i64; 4] = [0, 256, 256 * 256, 16 * 256 * 256];
+        const DELTA: [i64; 4] = [0,
+            256 * 16,
+            256 * 256 * 16,
+            256 * 256 * 256 * 16];
 
         // seek_rec is the one we seek (self)
         let seek_rec: &mut Record = fileset.read_fixed(self.ptr);
@@ -112,34 +119,41 @@ impl RecordPtr {
 
         let mut cur = self.prev_in_block();
 
-        if seek_rec.ptr.is_transaction() {
-            return Ok(count);
-        }
+        let is_tx =  seek_rec.ptr.is_transaction();
 
         debug_assert!(seek_rec.ptr.is_output()); // these are the only ones to search for
 
+        let mut cur_rec: &Record = fileset.read_fixed(cur.ptr);
+
         loop {
+
+            stats.seeks += 1;
 
             count += 1;
 
-            // cur_rec is the one we are comparing
-            let cur_rec: &Record = fileset.read_fixed(cur.ptr);
 
             let cur_filenr_pos = cur_rec.ptr.filenumber_and_pos();
 
             //println!("Seeking {:?} @ {:?} = {:?}", seek_rec, cur, cur_rec);
 
             if cur_rec.skips == [0; 4] {
-                return Err(SpendingError::OutputNotFound);
+                if is_tx {
+                    return Ok(count);
+                }
+                else {
+                    return Err(SpendingError::OutputNotFound);
+                }
+
             } else if cur_rec.ptr.is_blockheader() || cur_rec.ptr.is_guard_blockheader() {
 
-
+                stats.jumps += 1;
                 cur = cur.prev(fileset);
+                cur_rec = fileset.read_fixed(cur.ptr);
                 continue;
             }
 
             if seek_filenr_pos == cur_filenr_pos {
-                if cur_rec.ptr.is_transaction() {
+                if is_tx || cur_rec.ptr.is_transaction() {
                     // we've found the transaction of the output before we
                     // found the output. So we're all good
                     return Ok(count)
@@ -162,18 +176,28 @@ impl RecordPtr {
 
             while skip_r < 4 && seek_minus[skip_r] >= cur_filenr_pos {
                 skip_r += 1;
+                if is_tx {
+                    return Ok(count);
+                }
             }
 
             let mut skip = -1;
-            for n in (0..1).rev() {
+            for n in (0..4).rev() {
                 if seek_plus[n] < cur_filenr_pos {
 
+                    stats.total_move += cur_rec.skips[n] as i64;
+                    stats.use_diff[n] += 1;
                     skip = cur_rec.skips[n];
                     break;
                 }
             }
 
             cur = cur.offset(skip);
+            /*let cur_ptr = cur_rec as *const Record;
+            let nxt_ptr = unsafe { cur_ptr.offset(skip as isize * 16) };
+            cur_rec = unsafe { nxt_ptr.as_ref().unwrap() };
+            */
+            cur_rec = fileset.read_fixed(cur.ptr);
 
         }
 
@@ -356,7 +380,10 @@ impl Record {
 mod tests {
 
 
-    
+
+    fn test_spenttree_large() {
+
+    }
 
 
 }
