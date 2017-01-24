@@ -9,6 +9,8 @@ use std::fs::File;
 
 mod blk_file;
 
+use std::time::{Instant,Duration};
+
 
 
 #[test]
@@ -36,6 +38,7 @@ fn load_file1() {
         blocks += 1;
 
 
+
         if blocks == 2 {
             break;
         }
@@ -56,6 +59,7 @@ fn load_file_large() {
 
     let mut store = bitcrust_lib::init();
     let mut blocks = 0;
+    let start = Instant::now();
 
     for fileno in 0..99 {
         let name = format!("./data/blk{:05}.dat", fileno);
@@ -72,8 +76,16 @@ fn load_file_large() {
 
             bitcrust_lib::add_block(&mut store, &blk.unwrap());
 
+
             blocks += 1;
 
+            if blocks % 100 == 0 {
+
+
+                println!("Processed {} blocks in {} sec at {}/s", blocks, start.elapsed().as_secs(),
+                         blocks / (start.elapsed().as_secs()+1));
+
+            }
 
             if blocks == 300000 {
                 break;

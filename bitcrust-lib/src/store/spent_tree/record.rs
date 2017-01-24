@@ -83,10 +83,11 @@ impl RecordPtr {
 
         let mut count = 0;
 
-        const DELTA: [i64; 4] = [0,
-            256 * 16,
-            256 * 256 * 16,
-            256 * 256 * 256 * 16];
+        const DELTA: [i64; 4] = [
+            -256 * 256,
+            0,
+            256 * 256 ,
+            256 * 256 * 256 ];
 
         // seek_rec is the one we seek (self)
         let seek_rec: &mut Record = fileset.read_fixed(self.ptr);
@@ -95,10 +96,16 @@ impl RecordPtr {
         // this is the transaction position we seek (the filepos stripped of the output-index metadata)
         let seek_filenr_pos = seek_rec.ptr.filenumber_and_pos();
 
+        // all filenr_pos we've passed are at least this high
+        let mut minimal_filenr_pos = seek_filenr_pos;
+
         // these are the pointers that will be stored in rec. By default, they just point to the
         // previous
         seek_rec.skips = [-1; 4];
 
+        // for lack of a better name, `skip_r` traces which of the four skips of seek_rec are still
+        // "following" the jumps. Initially all are (which will cause seek_rec.skips to be all set
+        // to -1 again), and once seek_plus[0] is cur_filenr_pos is less then
         let mut skip_r = 0;
 
         let seek_plus = [
@@ -121,7 +128,9 @@ impl RecordPtr {
 
         let is_tx =  seek_rec.ptr.is_transaction();
 
-        debug_assert!(seek_rec.ptr.is_output()); // these are the only ones to search for
+        //if is_tx {
+        //    return Ok(0);
+        //}
 
         let mut cur_rec: &Record = fileset.read_fixed(cur.ptr);
 
@@ -130,7 +139,6 @@ impl RecordPtr {
             stats.seeks += 1;
 
             count += 1;
-
 
             let cur_filenr_pos = cur_rec.ptr.filenumber_and_pos();
 
@@ -141,6 +149,8 @@ impl RecordPtr {
                     return Ok(count);
                 }
                 else {
+                    // for now panic is easier for traces
+                    panic!(format!("Output {:?} not found at {:?}", seek_rec, cur.ptr));
                     return Err(SpendingError::OutputNotFound);
                 }
 
@@ -155,10 +165,12 @@ impl RecordPtr {
             if seek_filenr_pos == cur_filenr_pos {
                 if is_tx || cur_rec.ptr.is_transaction() {
                     // we've found the transaction of the output before we
-                    // found the output. So we're all good
+                    // found the same output. So we're all good
                     return Ok(count)
 
                 } else if cur_rec.ptr.output_index() == seek_rec.ptr.output_index() {
+
+                    panic!(format!("Output {:?} double spent {:?}", seek_rec, cur.ptr));
                     return Err(SpendingError::OutputAlreadySpent);
                 }
             }
@@ -172,14 +184,15 @@ impl RecordPtr {
                     }
                 }
             }
-
-
-            while skip_r < 4 && seek_minus[skip_r] >= cur_filenr_pos {
-                skip_r += 1;
-                if is_tx {
-                    return Ok(count);
-                }
+            else {
+                panic!("Multiple files still untested");
             }
+
+
+            if minimal_filenr_pos > cur_filenr_pos {
+                minimal_filenr_pos = cur_filenr_pos;
+            }
+
 
             let mut skip = -1;
             for n in (0..4).rev() {
@@ -188,7 +201,18 @@ impl RecordPtr {
                     stats.total_move += cur_rec.skips[n] as i64;
                     stats.use_diff[n] += 1;
                     skip = cur_rec.skips[n];
+
+                    if minimal_filenr_pos > cur_filenr_pos - DELTA[n] {
+                        minimal_filenr_pos = cur_filenr_pos - DELTA[n];
+                    }
                     break;
+                }
+            }
+
+            while skip_r < 4 && seek_minus[skip_r] >= minimal_filenr_pos {
+                skip_r += 1;
+                if is_tx && skip_r > 2 {
+                    return Ok(count);
                 }
             }
 
@@ -231,7 +255,7 @@ impl RecordPtr {
 
             let cur_filenr_pos = cur_rec.ptr.filenumber_and_pos();
 
-            //println!("Seeking {:?} @ {:?} = {:?}", seek_rec, cur, cur_rec);
+            println!("Scanning {:?} @ {:?} = {:?}", seek_rec, cur, cur_rec);
 
 
 
