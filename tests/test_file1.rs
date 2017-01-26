@@ -9,7 +9,7 @@ use std::fs::File;
 
 mod blk_file;
 
-use std::time::{Instant,Duration};
+use std::time::{Instant};
 
 
 

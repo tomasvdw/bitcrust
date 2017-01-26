@@ -79,13 +79,14 @@ impl RecordPtr {
 
     pub fn seek_and_set(self, stats: &mut SpentTreeStats, fileset: &mut FlatFileSet) -> Result<isize, SpendingError> {
 
+        const SKIP_FIELDS: usize = 4;
         stats.inputs += 1;
 
         let mut count = 0;
 
-        const DELTA: [i64; 4] = [
-            -256 * 256,
-            0,
+        const DELTA: [i64; SKIP_FIELDS] = [
+            -16 * 256,
+            16 * 256,
             256 * 256 ,
             256 * 256 * 256 ];
 
@@ -101,7 +102,7 @@ impl RecordPtr {
 
         // these are the pointers that will be stored in rec. By default, they just point to the
         // previous
-        seek_rec.skips = [-1; 4];
+        seek_rec.skips = [-1; SKIP_FIELDS];
 
         // for lack of a better name, `skip_r` traces which of the four skips of seek_rec are still
         // "following" the jumps. Initially all are (which will cause seek_rec.skips to be all set
@@ -150,7 +151,7 @@ impl RecordPtr {
                 }
                 else {
                     // for now panic is easier for traces
-                    panic!(format!("Output {:?} not found at {:?}", seek_rec, cur.ptr));
+                    //panic!(format!("Output {:?} not found at {:?}", seek_rec, cur.ptr));
                     return Err(SpendingError::OutputNotFound);
                 }
 
@@ -170,16 +171,18 @@ impl RecordPtr {
 
                 } else if cur_rec.ptr.output_index() == seek_rec.ptr.output_index() {
 
-                    panic!(format!("Output {:?} double spent {:?}", seek_rec, cur.ptr));
+                    //panic!(format!("Output {:?} double spent {:?}", seek_rec, cur.ptr));
                     return Err(SpendingError::OutputAlreadySpent);
                 }
             }
 
             if cur.ptr.file_number() == self.ptr.file_number() {
 
-                let diff: i64 = (cur.ptr.file_pos() as i64 - self.ptr.file_pos() as i64) / 16;
+                let diff: i64 = (cur.ptr.file_pos() as i64 - self.ptr.file_pos() as i64) /
+                    mem::size_of::<Record>() as i64;
+
                 if diff > i16::min_value() as i64 && diff < i16::max_value() as i64 {
-                    for n in skip_r..4 {
+                    for n in skip_r..DELTA.len() {
                         seek_rec.skips[n] = diff as i16;
                     }
                 }
@@ -211,7 +214,7 @@ impl RecordPtr {
 
             while skip_r < 4 && seek_minus[skip_r] >= minimal_filenr_pos {
                 skip_r += 1;
-                if is_tx && skip_r > 2 {
+                if is_tx && skip_r > 0 {
                     return Ok(count);
                 }
             }
@@ -304,15 +307,15 @@ impl RecordPtr {
     }
 
     pub fn offset(self, offset: i16) -> RecordPtr {
-        RecordPtr::new(self.ptr.offset(offset as i32 * 16 ))
+        RecordPtr::new(self.ptr.offset(offset as i32 * mem::size_of::<Record>() as i32  ))
     }
 
     pub fn prev_in_block(self) -> RecordPtr {
-        RecordPtr::new(self.ptr.offset(-16))
+        self.offset(-1)
     }
 
     pub fn next_in_block(self) -> RecordPtr {
-        RecordPtr::new(self.ptr.offset(16))
+        self.offset(1)
     }
 
     pub fn get_content_ptr(self, fileset: &mut FlatFileSet) -> FilePtr {

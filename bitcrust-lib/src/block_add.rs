@@ -76,7 +76,6 @@ use transaction;
 use merkle_tree;
 use block::*;
 
-use store::SpendingError;
 use store::RecordPtr;
 use store::fileptr::FilePtr;
 
