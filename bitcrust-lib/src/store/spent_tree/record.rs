@@ -17,11 +17,14 @@ use super::SpentTreeStats;
 ///
 /// The exact format is still in work-in-progress.
 ///
+const SKIP_FIELDS: usize = 12;
+
 #[derive(Debug,Copy,Clone)]
 pub struct Record {
     pub ptr:   FilePtr,
-    pub skips: [i16;4]
+    pub skips: [i16;SKIP_FIELDS]
 }
+
 
 
 
@@ -64,31 +67,37 @@ impl RecordPtr {
         let  rec: &mut Record = fileset.read_fixed(self.ptr);
 
         if previous.is_none() {
-            rec.skips = [0;4];
+            rec.skips = [0;SKIP_FIELDS];
             return;
         }
         let previous = previous.unwrap();
 
         assert!(self.ptr.file_pos() != previous.ptr.file_pos());
 
-        rec.skips = unsafe { mem::transmute(previous.ptr) };//.to_u64();
+        rec.set_ptr_in_skips(previous);//.to_u64();
     }
-
 
 
 
     pub fn seek_and_set(self, stats: &mut SpentTreeStats, fileset: &mut FlatFileSet) -> Result<isize, SpendingError> {
 
-        const SKIP_FIELDS: usize = 4;
         stats.inputs += 1;
 
         let mut count = 0;
 
         const DELTA: [i64; SKIP_FIELDS] = [
-            -16 * 256,
+            - 256 * 256,
+            - 16 * 256,
+            -4 * 256 ,
+            0,
+            4 * 256,
             16 * 256,
-            256 * 256 ,
-            256 * 256 * 256 ];
+            64 * 256 ,
+            256 * 256  ,
+            16 * 256 * 256,
+            64 * 256 * 256,
+            256 * 256 * 256,
+            16 * 256 * 256 * 256 ];
 
         // seek_rec is the one we seek (self)
         let seek_rec: &mut Record = fileset.read_fixed(self.ptr);
@@ -109,21 +118,9 @@ impl RecordPtr {
         // to -1 again), and once seek_plus[0] is cur_filenr_pos is less then
         let mut skip_r = 0;
 
-        let seek_plus = [
-            seek_filenr_pos + DELTA[0],
-            seek_filenr_pos + DELTA[1],
-            seek_filenr_pos + DELTA[2],
-            seek_filenr_pos + DELTA[3],
-        ];
+        let seek_plus: Vec<i64>  = DELTA.iter().map(|n| seek_filenr_pos + n).collect();
+        let seek_minus: Vec<i64> = DELTA.iter().map(|n| seek_filenr_pos - n).collect();
 
-        let mut seek_minus = [
-            seek_filenr_pos - DELTA[0],
-            seek_filenr_pos - DELTA[1],
-            seek_filenr_pos - DELTA[2],
-            seek_filenr_pos - DELTA[3],
-        ];
-
-        //
 
         let mut cur = self.prev_in_block();
 
@@ -145,7 +142,7 @@ impl RecordPtr {
 
             //println!("Seeking {:?} @ {:?} = {:?}", seek_rec, cur, cur_rec);
 
-            if cur_rec.skips == [0; 4] {
+            if cur_rec.skips == [0; SKIP_FIELDS] {
                 if is_tx {
                     return Ok(count);
                 }
@@ -198,7 +195,7 @@ impl RecordPtr {
 
 
             let mut skip = -1;
-            for n in (0..4).rev() {
+            for n in (0..SKIP_FIELDS).rev() {
                 if seek_plus[n] < cur_filenr_pos {
 
                     stats.total_move += cur_rec.skips[n] as i64;
@@ -212,7 +209,7 @@ impl RecordPtr {
                 }
             }
 
-            while skip_r < 4 && seek_minus[skip_r] >= minimal_filenr_pos {
+            while skip_r < SKIP_FIELDS && seek_minus[skip_r] >= minimal_filenr_pos {
                 skip_r += 1;
                 if is_tx && skip_r > 0 {
                     return Ok(count);
@@ -236,7 +233,7 @@ impl RecordPtr {
 
         // seek_rec is the one we seek (self)
         let seek_rec: &mut Record = fileset.read_fixed(self.ptr);
-        seek_rec.skips = [-1; 4];
+        seek_rec.skips = [-1; SKIP_FIELDS];
 
         // this is the transaction position we seek (the fileptr minus the output-index metadata)
         let seek_filenr_pos = seek_rec.ptr.filenumber_and_pos();
@@ -262,7 +259,7 @@ impl RecordPtr {
 
 
 
-            if cur_rec.skips == [0;4] {
+            if cur_rec.skips == [0;SKIP_FIELDS] {
 
                 return Err(SpendingError::OutputNotFound);
 
@@ -301,8 +298,7 @@ impl RecordPtr {
             self.prev_in_block()
         }
         else {
-            let skips:u64 = unsafe { mem::transmute(rec.skips) };
-            RecordPtr::new(FilePtr::from_u64(skips))
+            rec.get_ptr_from_skips()
         }
     }
 
@@ -392,11 +388,23 @@ impl Record {
     pub fn new(content: FilePtr) -> Self {
         Record {
             ptr: content,
-            skips: [0;4]
+            skips: [0;SKIP_FIELDS]
         }
     }
 
 
+    fn set_ptr_in_skips(&mut self, ptr: RecordPtr) {
+
+        let cv: [u64;3] = [ptr.ptr.to_u64(),0,0];
+        self.skips = unsafe { mem::transmute(cv) };
+
+    }
+
+    fn get_ptr_from_skips(&mut self) -> RecordPtr {
+        let cv: [u64;3] = unsafe { mem::transmute(self.skips) };
+
+        RecordPtr::new(FilePtr::from_u64(cv[0]))
+    }
 
 
 }

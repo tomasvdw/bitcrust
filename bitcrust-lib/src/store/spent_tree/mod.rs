@@ -60,6 +60,8 @@ pub struct BlockPtr {
     pub end:   RecordPtr
 }
 
+const SKIP_FIELDS: usize = 12;
+
 
 pub struct SpentTree {
 
@@ -75,7 +77,7 @@ pub struct SpentTreeStats {
     pub seeks: i64,
     pub total_move: i64,
     pub jumps: i64,
-    pub use_diff: [i64; 4]
+    pub use_diff: [i64; SKIP_FIELDS]
 }
 
 impl SpentTree {
@@ -158,7 +160,7 @@ impl SpentTree {
                 return this_ptr;
             }
             else {
-                record.skips = [-1;4];
+                record.skips = [-1;SKIP_FIELDS];
             }
         }
     }
