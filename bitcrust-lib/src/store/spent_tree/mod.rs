@@ -49,6 +49,10 @@ const MAX_CONTENT_SIZE:   u32 = FILE_SIZE - 10 * MB as u32 ;
 const SUBPATH: &'static str   = "spent_tree";
 const PREFIX:  &'static str   = "st-";
 
+
+// temporarily we use a vec instead of the memmap
+const VEC_SIZE: usize = 500_000_000;
+
 #[derive(Debug, PartialEq)]
 pub enum SpendingError {
     OutputNotFound,
@@ -60,7 +64,7 @@ pub struct BlockPtr {
     pub end:   RecordPtr
 }
 
-const SKIP_FIELDS: usize = 12;
+const SKIP_FIELDS: usize = 4;
 
 
 pub struct SpentTree {
@@ -86,6 +90,8 @@ impl SpentTree {
         let dir = &cfg.root.clone().join(SUBPATH);
 
         let stats: SpentTreeStats = Default::default();
+
+
 
         SpentTree {
             fileset: FlatFileSet::new(
@@ -229,13 +235,17 @@ impl SpentTree {
                          previous_end: RecordPtr,
                          target_start: RecordPtr) -> Result<RecordPtr, SpendingError> {
 
+        let timer = ::std::time::Instant::now();
+
         info!(logger, "start scan");
 
-        let mut input_count = 0;
-        let mut total_scan = 0;
-        let mut largest_scan = 0;
-        let mut total_seek = 0;
-        let mut largest_seek = 0;
+        let mut input_count: isize = 0;
+        let mut total_scan: isize = 0;
+        let mut largest_scan: isize = 0;
+        let mut total_seek: isize = 0;
+        let mut largest_seek: isize = 0;
+
+
 
         // we can now make the actual connection
         target_start.set_previous(&mut self.fileset, Some(previous_end));
@@ -260,19 +270,17 @@ impl SpentTree {
 
                 self.stats.blocks += 1;
 
-                info!(logger, if input_count>100 { "big_scan_complete" } else { "small_scan_complete" };
+                let elaps : isize = timer.elapsed().as_secs() as isize * 1000 +
+                    timer.elapsed().subsec_nanos() as isize / 1_000_000 as isize;
+
+                info!(logger, "scan_stats";
+                    "stats" => format!("{:?}", self.stats),
                     "inputs" => input_count,
-                    "scans" => total_scan,
-                    "avg" => total_scan / input_count,
-                    "largest" => largest_scan,
-                    "seeks" => total_seek,
-                    "seek_avg" => total_seek / input_count,
+                    "ms/inputs" => (elaps+1) as f64 / input_count as f64,
+                    "seek_avg" => total_seek / (input_count+1),
                     "seek_largest" => largest_seek
                 );
 
-                info!(logger, "scan stats";
-                    "stats" => format!("{:?}", self.stats)
-                );
 
                 return Ok(this_ptr);
             }
@@ -280,7 +288,11 @@ impl SpentTree {
             input_count += 1;
 
             let scan_count = 1;//this_ptr.seek_and_set_seqscan(&mut self.fileset)?;
-            let seek_count = this_ptr.seek_and_set(&mut self.stats, &mut self.fileset)?;
+            let seek_count = this_ptr.seek_and_set(&mut self.stats, &mut self.fileset, false)?;
+            /*if seek_count > 200000 {
+                this_ptr.seek_and_set(&mut self.stats, &mut self.fileset, true)?;
+                panic!("we have it");
+            }*/
 
             if scan_count > largest_scan {
                 largest_scan = scan_count;
@@ -290,7 +302,8 @@ impl SpentTree {
             if seek_count > largest_seek {
                 largest_seek = seek_count;
             }
-            total_seek += seek_count;
+            total_seek = seek_count;
+
 
         }
 

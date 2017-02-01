@@ -1,5 +1,6 @@
 
 use std::mem;
+use std::fmt;
 
 use store::fileptr::FilePtr;
 use store::flatfileset::FlatFileSet;
@@ -17,9 +18,9 @@ use super::SpentTreeStats;
 ///
 /// The exact format is still in work-in-progress.
 ///
-const SKIP_FIELDS: usize = 12;
+const SKIP_FIELDS: usize = 4;
 
-#[derive(Debug,Copy,Clone)]
+#[derive(Copy,Clone)]
 pub struct Record {
     pub ptr:   FilePtr,
     pub skips: [i16;SKIP_FIELDS]
@@ -51,10 +52,33 @@ fn compare_fileptrs(current: FilePtr, search: FilePtr ) -> CompareResult {
 }
 */
 /// A filepointer that points to a record in the SpentTree
-#[derive(Debug,Copy,Clone)]
+#[derive(Copy,Clone)]
 pub struct RecordPtr {
     pub ptr: FilePtr
 }
+
+
+impl fmt::Debug for RecordPtr {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+
+        write!(fmt, "{:?}", self.ptr)
+
+    }
+}
+
+impl fmt::Debug for Record {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+
+        write!(fmt, "[ptr={:?} skip={:04x}|{:04x}|{:04x}|{:04x}]",
+               self.ptr, self.skips[0],self.skips[1],self.skips[2],self.skips[3])
+
+        /*write!(fmt, "[ptr={:?} skip={:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}]",
+               self.ptr, self.skips[0],self.skips[1],self.skips[2],self.skips[3],self.skips[4],self.skips[5],self.skips[6],
+               self.skips[7],self.skips[8],self.skips[9],self.skips[10],self.skips[11])
+*/
+    }
+}
+
 
 impl RecordPtr {
 
@@ -78,29 +102,58 @@ impl RecordPtr {
     }
 
 
+    fn dump_seek_and_set(self, fileset: &mut FlatFileSet) {
 
-    pub fn seek_and_set(self, stats: &mut SpentTreeStats, fileset: &mut FlatFileSet) -> Result<isize, SpendingError> {
+        use std::io;
+
+        // we are going to do the same procedure as seek_and_set except
+        // that we will mark rows as where we jump'ed to
+
+
+    }
+
+
+    pub fn to_index(self) -> usize {
+        if self.ptr.file_number() != 0 {
+            panic!("Only single file supported")
+        }
+        else {
+            (self.ptr.file_pos() -16) / mem::size_of::<Record>()
+        }
+
+    }
+
+
+    pub fn seek_and_set(self, stats: &mut SpentTreeStats, fileset: &mut FlatFileSet,
+        full_dump: bool) -> Result<isize, SpendingError> {
 
         stats.inputs += 1;
 
         let mut count = 0;
 
         const DELTA: [i64; SKIP_FIELDS] = [
-            - 256 * 256,
             - 16 * 256,
-            -4 * 256 ,
-            0,
             4 * 256,
-            16 * 256,
-            64 * 256 ,
-            256 * 256  ,
-            16 * 256 * 256,
-            64 * 256 * 256,
-            256 * 256 * 256,
-            16 * 256 * 256 * 256 ];
+            4 * 256 * 256  ,
+             256 * 256 * 256 ];
 
-        // seek_rec is the one we seek (self)
+
+
+        let full_dump = false;
+
+        let records: &[Record] = fileset.read_mut_slice::<Record>(FilePtr::new(0,16), 100_000_000);
+        if full_dump {
+            println!("FL# Records loaded");
+        }
+
+        let seek_idx    = self.to_index();
+        let mut cur_idx = self.to_index() - 1;
+
         let seek_rec: &mut Record = fileset.read_fixed(self.ptr);
+
+        if full_dump {
+            println!("FL# Start search for {:?} {:?} ", seek_rec, seek_idx);
+        }
 
 
         // this is the transaction position we seek (the filepos stripped of the output-index metadata)
@@ -113,6 +166,7 @@ impl RecordPtr {
         // previous
         seek_rec.skips = [-1; SKIP_FIELDS];
 
+
         // for lack of a better name, `skip_r` traces which of the four skips of seek_rec are still
         // "following" the jumps. Initially all are (which will cause seek_rec.skips to be all set
         // to -1 again), and once seek_plus[0] is cur_filenr_pos is less then
@@ -122,17 +176,15 @@ impl RecordPtr {
         let seek_minus: Vec<i64> = DELTA.iter().map(|n| seek_filenr_pos - n).collect();
 
 
-        let mut cur = self.prev_in_block();
-
         let is_tx =  seek_rec.ptr.is_transaction();
 
-        //if is_tx {
-        //    return Ok(0);
-        //}
+        if is_tx {
+            return Ok(0);
+        }
 
-        let mut cur_rec: &Record = fileset.read_fixed(cur.ptr);
 
         loop {
+            let cur_rec: Record = records[cur_idx];
 
             stats.seeks += 1;
 
@@ -144,6 +196,9 @@ impl RecordPtr {
 
             if cur_rec.skips == [0; SKIP_FIELDS] {
                 if is_tx {
+                    if full_dump {
+                        println!("FL# Done after {:?} seeks", stats.seeks);
+                    }
                     return Ok(count);
                 }
                 else {
@@ -154,9 +209,14 @@ impl RecordPtr {
 
             } else if cur_rec.ptr.is_blockheader() || cur_rec.ptr.is_guard_blockheader() {
 
+                if full_dump {
+                    println!("FL# {:?}-{:?} JUMPING", cur_idx, cur_rec);
+
+                }
+
                 stats.jumps += 1;
-                cur = cur.prev(fileset);
-                cur_rec = fileset.read_fixed(cur.ptr);
+
+                cur_idx = cur_rec.get_ptr_from_skips().to_index();
                 continue;
             }
 
@@ -164,28 +224,26 @@ impl RecordPtr {
                 if is_tx || cur_rec.ptr.is_transaction() {
                     // we've found the transaction of the output before we
                     // found the same output. So we're all good
+
                     return Ok(count)
 
                 } else if cur_rec.ptr.output_index() == seek_rec.ptr.output_index() {
 
                     //panic!(format!("Output {:?} double spent {:?}", seek_rec, cur.ptr));
+
                     return Err(SpendingError::OutputAlreadySpent);
                 }
             }
 
-            if cur.ptr.file_number() == self.ptr.file_number() {
+            //if cur.ptr.file_number() == self.ptr.file_number() {
 
-                let diff: i64 = (cur.ptr.file_pos() as i64 - self.ptr.file_pos() as i64) /
-                    mem::size_of::<Record>() as i64;
+            let diff: i64 = cur_idx as i64 - seek_idx as i64;
 
-                if diff > i16::min_value() as i64 && diff < i16::max_value() as i64 {
-                    for n in skip_r..DELTA.len() {
-                        seek_rec.skips[n] = diff as i16;
-                    }
+            if diff > i16::min_value() as i64 && diff < i16::max_value() as i64 {
+                for n in skip_r..DELTA.len() {
+
+                    seek_rec.skips[n] = diff as i16;
                 }
-            }
-            else {
-                panic!("Multiple files still untested");
             }
 
 
@@ -212,16 +270,32 @@ impl RecordPtr {
             while skip_r < SKIP_FIELDS && seek_minus[skip_r] >= minimal_filenr_pos {
                 skip_r += 1;
                 if is_tx && skip_r > 0 {
+
                     return Ok(count);
                 }
             }
 
-            cur = cur.offset(skip);
-            /*let cur_ptr = cur_rec as *const Record;
-            let nxt_ptr = unsafe { cur_ptr.offset(skip as isize * 16) };
-            cur_rec = unsafe { nxt_ptr.as_ref().unwrap() };
-            */
-            cur_rec = fileset.read_fixed(cur.ptr);
+            if full_dump {
+                let mut cur = RecordPtr::new(FilePtr::new(0, (16 + cur_idx * mem::size_of::<Record>()) as u32));
+                let target = cur.offset(skip);
+                loop {
+                    let c: &Record = fileset.read_fixed(cur.ptr);
+                    println!("FL# {:?}-{:?} <seek {:?}={:?}>", cur, c, skip, target);
+                    cur = cur.prev(fileset);
+                    let c: &Record = fileset.read_fixed(cur.ptr);
+
+                    if cur.ptr == target.ptr {
+                        println!("FL# {:?}-{:?} FOUND", cur, c);
+                        break;
+                    }
+                }
+
+            }
+
+            cur_idx = (cur_idx as i64 + skip as i64) as usize;
+
+
+
 
         }
 
@@ -395,13 +469,13 @@ impl Record {
 
     fn set_ptr_in_skips(&mut self, ptr: RecordPtr) {
 
-        let cv: [u64;3] = [ptr.ptr.to_u64(),0,0];
+        let cv: [u64;1] = [ptr.ptr.to_u64()];
         self.skips = unsafe { mem::transmute(cv) };
 
     }
 
-    fn get_ptr_from_skips(&mut self) -> RecordPtr {
-        let cv: [u64;3] = unsafe { mem::transmute(self.skips) };
+    fn get_ptr_from_skips(&self) -> RecordPtr {
+        let cv: [u64;1] = unsafe { mem::transmute(self.skips) };
 
         RecordPtr::new(FilePtr::from_u64(cv[0]))
     }

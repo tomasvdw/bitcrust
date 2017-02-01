@@ -59,6 +59,7 @@ impl FilePtr {
 
     /// Constructs a new _transaction_ fileptr
     /// It can be modified after to change the type
+    #[inline(always)]
     pub fn new(fileno: i16, filepos: u32 ) -> FilePtr {
 
         let fileno  = fileno as u64;
@@ -72,6 +73,7 @@ impl FilePtr {
 
     /// Creates a new fileptr from an existing one as input
     ///
+    #[inline(always)]
     pub fn to_input(self, index: u32) -> FilePtr {
 
         let index = index as u64;
@@ -86,6 +88,7 @@ impl FilePtr {
 
     /// Creates a new fileptr from an existing one as input
     ///
+    #[inline(always)]
     pub fn to_output(self, index: u32) -> FilePtr {
 
         let index = index as u64;
@@ -97,6 +100,7 @@ impl FilePtr {
         )
     }
 
+    #[inline(always)]
     pub fn to_guardblock(self) -> FilePtr {
 
         FilePtr(
@@ -104,6 +108,7 @@ impl FilePtr {
         )
     }
 
+    #[inline(always)]
     pub fn to_block(self) -> FilePtr {
 
         FilePtr(
@@ -111,25 +116,30 @@ impl FilePtr {
         )
     }
 
+    #[inline(always)]
     pub fn filenumber_and_pos(self) -> i64 {
         (self.0 & (MASK_FILENO | MASK_FILEPOS)) as i64
     }
 
 
+    #[inline(always)]
     pub fn to_u64(self) -> u64 {
         self.0
     }
 
+    #[inline(always)]
     pub fn from_u64(v: u64) -> Self {
         FilePtr(v)
     }
 
+    #[inline(always)]
     pub fn input_index(self) -> u32 {
         debug_assert!(self.is_input());
 
         ((self.0 & MASK_INDEX1) >> 46) as u32
     }
 
+    #[inline(always)]
     pub fn output_index(self) -> u32 {
 
         debug_assert!(self.is_output());
@@ -137,16 +147,19 @@ impl FilePtr {
         ((self.0 & MASK_INDEX2) >> 46) as u32
     }
 
+    #[inline(always)]
     pub fn file_number(self) -> i16 {
 
         ((self.0 & MASK_FILENO) >> 30)  as i16
     }
 
+    #[inline(always)]
     pub fn file_pos(self) -> usize {
         (self.0 & MASK_FILEPOS) as usize
     }
 
 
+    #[inline(always)]
     pub fn offset(self, offset : i32) -> FilePtr
 
     {
@@ -155,10 +168,12 @@ impl FilePtr {
 
     /// We use a null value as magic NULL value. This is safe
     /// because we're never pointing to the header
+    #[inline(always)]
     pub fn is_null(&self) -> bool {
         self.0 == 0
     }
 
+    #[inline(always)]
     pub fn null() -> FilePtr {
         FilePtr(0)
     }
@@ -185,22 +200,27 @@ impl FilePtr {
 
 
 
+    #[inline(always)]
     pub fn is_transaction(&self) -> bool {
         (self.0 & MASK_TYPE) == TYPE_TRANSACTION
     }
 
+    #[inline(always)]
     pub fn is_input(&self) -> bool {
         (self.0 & MASK_TYPE) == TYPE_INPUT
     }
 
+    #[inline(always)]
     pub fn is_blockheader(&self) -> bool {
         (self.0 & MASK_TYPE) == TYPE_BLOCK
     }
 
+    #[inline(always)]
     pub fn is_guard_blockheader(&self) -> bool {
         (self.0 & MASK_TYPE) == TYPE_GUARD_BLOCK
     }
 
+    #[inline(always)]
     pub fn is_output(&self) -> bool {
         (self.0 & TYPE_OUTPUT_MIN) == TYPE_OUTPUT_MIN
     }
@@ -213,17 +233,17 @@ impl FilePtr {
 impl Debug for FilePtr {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
         if self.is_transaction() {
-            write!(fmt, "TX  {:x}.{:x} T={:x}", self.file_number(), self.file_pos(), self.0)
+            write!(fmt, "TX  {:06x}", self.file_pos())
         } else if self.is_blockheader() {
-            write!(fmt, "BLK {:x}.{:x} T={:x}", self.file_number(), self.file_pos(), self.0)
+            write!(fmt, "BLK {:06x}", self.file_pos())
         } else if self.is_guard_blockheader() {
-            write!(fmt, "BLG {:x}.{:x} T={:x}", self.file_number(), self.file_pos(), self.0)
+            write!(fmt, "BLG {:06x}", self.file_pos())
         }
         else if self.is_input() {
-            write!(fmt, "INP {:x}.{:x} idx={:x} T={:x}", self.file_number(), self.file_pos(), self.input_index(), self.0)
+            write!(fmt, "INP {:06x} idx={:x}", self.file_pos(), self.input_index())
         }
         else if self.is_output() {
-            write!(fmt, "OUT {:x}.{:x} idx={:x} T={:x}", self.file_number(), self.file_pos(), self.output_index(), self.0)
+            write!(fmt, "OUT {:06x} idx={:x}", self.file_pos(), self.output_index())
         }
         else {
             write!(fmt, "ERR T={:x}", self.0)

@@ -33,3 +33,8 @@ tempdir = "0.3"
 name = "bitcrust_admin"
 path = "bitcrust-admin/src/main.rs"
 
+
+[profile.release]
+lto = true
+opt-level = 3
+
