@@ -39,6 +39,8 @@ use store::hash_index::HashIndex;
 
 use transaction::Transaction;
 
+mod params;
+
 pub mod record;
 pub use self::record::{Record,RecordPtr};
 
@@ -64,8 +66,6 @@ pub struct BlockPtr {
     pub end:   RecordPtr
 }
 
-const SKIP_FIELDS: usize = 4;
-
 
 pub struct SpentTree {
 
@@ -74,6 +74,8 @@ pub struct SpentTree {
     stats: SpentTreeStats
 }
 
+
+
 #[derive(Debug, Default)]
 pub struct SpentTreeStats {
     pub blocks: i64,
@@ -81,7 +83,7 @@ pub struct SpentTreeStats {
     pub seeks: i64,
     pub total_move: i64,
     pub jumps: i64,
-    pub use_diff: [i64; SKIP_FIELDS]
+    pub use_diff: [i64; params::SKIP_FIELDS]
 }
 
 impl SpentTree {
@@ -100,6 +102,9 @@ impl SpentTree {
             stats: stats
         }
     }
+
+
+
 
 
     /// Converts the set of block_content-fileptrs
@@ -166,7 +171,7 @@ impl SpentTree {
                 return this_ptr;
             }
             else {
-                record.skips = [-1;SKIP_FIELDS];
+                record.skips = [-1;params::SKIP_FIELDS];
             }
         }
     }
@@ -239,56 +244,36 @@ impl SpentTree {
 
         info!(logger, "start scan");
 
-        let mut input_count: isize = 0;
-        let mut total_scan: isize = 0;
-        let mut largest_scan: isize = 0;
-        let mut total_seek: isize = 0;
-        let mut largest_seek: isize = 0;
-
-
+        let mut input_count: i64 = 0;
+        let mut total_scan: i64 = 0;
+        let mut largest_scan: i64 = 0;
+        let mut total_seek: i64 = 0;
+        let mut largest_seek: i64 = 0;
 
         // we can now make the actual connection
         target_start.set_previous(&mut self.fileset, Some(previous_end));
 
         let mut this_ptr = target_start;
 
+        // count the records
+        let blocksize = this_ptr.iter(&mut self.fileset).count();
+        println!("size: {:?}", blocksize);
+
+        let block_idx              = this_ptr.to_index() + 1;
+        let block:   &mut [Record] = self.fileset.read_mut_slice(this_ptr.next_in_block().ptr, blocksize);
 
 
-        loop {
-            this_ptr = this_ptr.next_in_block();
+        let records: &[Record] = self.fileset.read_mut_slice(FilePtr::new(0,16), 150_000_000);
 
-
-            let record = self.fileset.read_fixed::<Record>(this_ptr.ptr);
-
-            // done?
-            if record.ptr.is_blockheader() {
-                // the blockheader at the end just points to the record before itself:
-                this_ptr.set_previous(&mut self.fileset, Some(this_ptr.prev_in_block()));
-
-                // we can now make the actual connection
-                target_start.set_previous(&mut self.fileset, Some(previous_end));
-
-                self.stats.blocks += 1;
-
-                let elaps : isize = timer.elapsed().as_secs() as isize * 1000 +
-                    timer.elapsed().subsec_nanos() as isize / 1_000_000 as isize;
-
-                info!(logger, "scan_stats";
-                    "stats" => format!("{:?}", self.stats),
-                    "inputs" => input_count,
-                    "ms/inputs" => (elaps+1) as f64 / input_count as f64,
-                    "seek_avg" => total_seek / (input_count+1),
-                    "seek_largest" => largest_seek
-                );
-
-
-                return Ok(this_ptr);
-            }
+        for (i, rec) in block.iter_mut().enumerate() {
+            println!("enum: {:?} (idx={:?}", rec,block_idx+i);
+            debug_assert!(rec.ptr.is_transaction() || rec.ptr.is_output());
 
             input_count += 1;
 
             let scan_count = 1;//this_ptr.seek_and_set_seqscan(&mut self.fileset)?;
-            let seek_count = this_ptr.seek_and_set(&mut self.stats, &mut self.fileset, false)?;
+            let seek_count = this_ptr.seek_and_set(rec, block_idx+i, records, logger, &mut self.stats)?;
+
             /*if seek_count > 200000 {
                 this_ptr.seek_and_set(&mut self.stats, &mut self.fileset, true)?;
                 panic!("we have it");
@@ -302,12 +287,34 @@ impl SpentTree {
             if seek_count > largest_seek {
                 largest_seek = seek_count;
             }
-            total_seek = seek_count;
+            total_seek += seek_count;
 
 
-        }
+        };
+
+        let end_ptr: RecordPtr   = this_ptr.offset(1+blocksize as i32);
+
+        // the blockheader at the end just points to the record before itself:
+        end_ptr.set_previous(&mut self.fileset, Some(end_ptr.prev_in_block()));
+
+        // we can now make the actual connection
+        target_start.set_previous(&mut self.fileset, Some(previous_end));
+
+        self.stats.blocks += 1;
+
+        let elaps : isize = timer.elapsed().as_secs() as isize * 1000 +
+        timer.elapsed().subsec_nanos() as isize / 1_000_000 as isize;
+
+        info!(logger, "scan_stats";
+                        "stats" => format!("{:?}", self.stats),
+                        "inputs" => input_count,
+                        "ms/inputs" => (elaps+1) as f64 / input_count as f64,
+                        "seek_avg" => total_seek / (input_count+1),
+                        "seek_largest" => largest_seek
+                    );
 
 
+        Ok(end_ptr)
     }
 
 }

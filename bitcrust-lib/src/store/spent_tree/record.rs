@@ -1,4 +1,7 @@
 
+#[macro_use]
+use slog;
+
 use std::mem;
 use std::fmt;
 
@@ -9,6 +12,8 @@ use store::spent_tree::SpendingError;
 
 use super::SpentTreeStats;
 
+use super::params;
+
 /// A record is a 16 byte structure that points to either a
 /// * blockheader
 /// * transaction
@@ -18,12 +23,11 @@ use super::SpentTreeStats;
 ///
 /// The exact format is still in work-in-progress.
 ///
-const SKIP_FIELDS: usize = 4;
 
 #[derive(Copy,Clone)]
 pub struct Record {
     pub ptr:   FilePtr,
-    pub skips: [i16;SKIP_FIELDS]
+    pub skips: [i32;params::SKIP_FIELDS]
 }
 
 
@@ -91,7 +95,7 @@ impl RecordPtr {
         let  rec: &mut Record = fileset.read_fixed(self.ptr);
 
         if previous.is_none() {
-            rec.skips = [0;SKIP_FIELDS];
+            rec.skips = [0;params::SKIP_FIELDS];
             return;
         }
         let previous = previous.unwrap();
@@ -124,37 +128,21 @@ impl RecordPtr {
     }
 
 
-    pub fn seek_and_set(self, stats: &mut SpentTreeStats, fileset: &mut FlatFileSet,
-        full_dump: bool) -> Result<isize, SpendingError> {
-
-        stats.inputs += 1;
+    pub fn seek_and_set(&mut self,
+                        seek_rec: &mut Record,
+                        seek_idx: usize,
+                        records:  &[Record],
+                        logger:   &slog::Logger,
+                        stats:    &mut SpentTreeStats) -> Result<i64, SpendingError> {
 
         let mut count = 0;
+        stats.inputs += 1;
 
-        const DELTA: [i64; SKIP_FIELDS] = [
-            - 16 * 256,
-            4 * 256,
-            4 * 256 * 256  ,
-             256 * 256 * 256 ];
+        trace!(logger, "Records loaded");
 
+        let mut cur_idx = seek_idx - 1;        // cur  will walk through the skip-list
 
-
-        let full_dump = false;
-
-        let records: &[Record] = fileset.read_mut_slice::<Record>(FilePtr::new(0,16), 100_000_000);
-        if full_dump {
-            println!("FL# Records loaded");
-        }
-
-        let seek_idx    = self.to_index();
-        let mut cur_idx = self.to_index() - 1;
-
-        let seek_rec: &mut Record = fileset.read_fixed(self.ptr);
-
-        if full_dump {
-            println!("FL# Start search for {:?} {:?} ", seek_rec, seek_idx);
-        }
-
+        trace!(logger, format!("FL# Start search for {:?} {:?} ", seek_rec, seek_idx));
 
         // this is the transaction position we seek (the filepos stripped of the output-index metadata)
         let seek_filenr_pos = seek_rec.ptr.filenumber_and_pos();
@@ -164,55 +152,47 @@ impl RecordPtr {
 
         // these are the pointers that will be stored in rec. By default, they just point to the
         // previous
-        seek_rec.skips = [-1; SKIP_FIELDS];
+        seek_rec.skips = [-1; params::SKIP_FIELDS];
 
 
         // for lack of a better name, `skip_r` traces which of the four skips of seek_rec are still
         // "following" the jumps. Initially all are (which will cause seek_rec.skips to be all set
-        // to -1 again), and once seek_plus[0] is cur_filenr_pos is less then
+        // to -1 again), and once seek_plus[0] is cur_filenr_pos is too small, skip_r will increase
         let mut skip_r = 0;
 
-        let seek_plus: Vec<i64>  = DELTA.iter().map(|n| seek_filenr_pos + n).collect();
-        let seek_minus: Vec<i64> = DELTA.iter().map(|n| seek_filenr_pos - n).collect();
+        let seek_plus: Vec<i64>  = params::DELTA.iter().map(|n| seek_filenr_pos + n).collect();
+        let seek_minus: Vec<i64> = params::DELTA.iter().map(|n| seek_filenr_pos - n).collect();
 
 
         let is_tx =  seek_rec.ptr.is_transaction();
 
-        if is_tx {
-            return Ok(0);
-        }
-
+        //if is_tx { return Ok(0); }
 
         loop {
             let cur_rec: Record = records[cur_idx];
 
             stats.seeks += 1;
-
             count += 1;
 
             let cur_filenr_pos = cur_rec.ptr.filenumber_and_pos();
 
-            //println!("Seeking {:?} @ {:?} = {:?}", seek_rec, cur, cur_rec);
+            if cur_rec.skips == [0; params::SKIP_FIELDS] {
+                // we're at the end
 
-            if cur_rec.skips == [0; SKIP_FIELDS] {
                 if is_tx {
-                    if full_dump {
-                        println!("FL# Done after {:?} seeks", stats.seeks);
-                    }
+                    // a transaction is supposed to be not found
+                    trace!(logger, format!("FL# Done after {:?} seeks", stats.seeks));
                     return Ok(count);
                 }
                 else {
-                    // for now panic is easier for traces
                     //panic!(format!("Output {:?} not found at {:?}", seek_rec, cur.ptr));
                     return Err(SpendingError::OutputNotFound);
                 }
 
             } else if cur_rec.ptr.is_blockheader() || cur_rec.ptr.is_guard_blockheader() {
 
-                if full_dump {
-                    println!("FL# {:?}-{:?} JUMPING", cur_idx, cur_rec);
-
-                }
+                // blockheaders don't have skips; interpret as a full fileptr
+                trace!(logger, format!("FL# {:?}-{:?} JUMPING", cur_idx, cur_rec));
 
                 stats.jumps += 1;
 
@@ -230,52 +210,57 @@ impl RecordPtr {
                 } else if cur_rec.ptr.output_index() == seek_rec.ptr.output_index() {
 
                     //panic!(format!("Output {:?} double spent {:?}", seek_rec, cur.ptr));
-
                     return Err(SpendingError::OutputAlreadySpent);
                 }
             }
 
-            //if cur.ptr.file_number() == self.ptr.file_number() {
 
-            let diff: i64 = cur_idx as i64 - seek_idx as i64;
+            // See if there are skip-values we need to update in the record were seeking
+            if skip_r < params::DELTA.len() {
 
-            if diff > i16::min_value() as i64 && diff < i16::max_value() as i64 {
-                for n in skip_r..DELTA.len() {
+                let diff: i64 = cur_idx as i64 - seek_idx as i64;
+                if diff > i32::min_value() as i64 && diff < i32::max_value() as i64 {
+                    for n in skip_r..params::DELTA.len() {
+                        seek_rec.skips[n] = diff as i32;
+                    }
+                }
+                else {
+                    panic!("Diff too large");
+                }
 
-                    seek_rec.skips[n] = diff as i16;
+                if minimal_filenr_pos > cur_filenr_pos {
+                    minimal_filenr_pos = cur_filenr_pos;
+                }
+
+
+                while skip_r < params::SKIP_FIELDS && seek_minus[skip_r] >= minimal_filenr_pos {
+                    skip_r += 1;
+
+
+                    if is_tx && skip_r >= params::TX_NEEDED_SKIPS {
+                        return Ok(stats.seeks);
+                    }
                 }
             }
 
-
-            if minimal_filenr_pos > cur_filenr_pos {
-                minimal_filenr_pos = cur_filenr_pos;
-            }
-
-
             let mut skip = -1;
-            for n in (0..SKIP_FIELDS).rev() {
+            for n in (0..params::SKIP_FIELDS).rev() {
                 if seek_plus[n] < cur_filenr_pos {
-
                     stats.total_move += cur_rec.skips[n] as i64;
                     stats.use_diff[n] += 1;
                     skip = cur_rec.skips[n];
 
-                    if minimal_filenr_pos > cur_filenr_pos - DELTA[n] {
-                        minimal_filenr_pos = cur_filenr_pos - DELTA[n];
+                    if minimal_filenr_pos > cur_filenr_pos - params::DELTA[n] {
+                        minimal_filenr_pos = cur_filenr_pos - params::DELTA[n];
                     }
                     break;
                 }
             }
 
-            while skip_r < SKIP_FIELDS && seek_minus[skip_r] >= minimal_filenr_pos {
-                skip_r += 1;
-                if is_tx && skip_r > 0 {
 
-                    return Ok(count);
-                }
-            }
 
-            if full_dump {
+
+            /*if full_dump {
                 let mut cur = RecordPtr::new(FilePtr::new(0, (16 + cur_idx * mem::size_of::<Record>()) as u32));
                 let target = cur.offset(skip);
                 loop {
@@ -290,7 +275,7 @@ impl RecordPtr {
                     }
                 }
 
-            }
+            }*/
 
             cur_idx = (cur_idx as i64 + skip as i64) as usize;
 
@@ -307,7 +292,7 @@ impl RecordPtr {
 
         // seek_rec is the one we seek (self)
         let seek_rec: &mut Record = fileset.read_fixed(self.ptr);
-        seek_rec.skips = [-1; SKIP_FIELDS];
+        seek_rec.skips = [-1; params::SKIP_FIELDS];
 
         // this is the transaction position we seek (the fileptr minus the output-index metadata)
         let seek_filenr_pos = seek_rec.ptr.filenumber_and_pos();
@@ -333,7 +318,7 @@ impl RecordPtr {
 
 
 
-            if cur_rec.skips == [0;SKIP_FIELDS] {
+            if cur_rec.skips == [0;params::SKIP_FIELDS] {
 
                 return Err(SpendingError::OutputNotFound);
 
@@ -376,7 +361,7 @@ impl RecordPtr {
         }
     }
 
-    pub fn offset(self, offset: i16) -> RecordPtr {
+    pub fn offset(self, offset: i32) -> RecordPtr {
         RecordPtr::new(self.ptr.offset(offset as i32 * mem::size_of::<Record>() as i32  ))
     }
 
@@ -398,10 +383,10 @@ impl RecordPtr {
     }
 
 
-    pub fn iter(self, fileset: &mut FlatFileSet) -> RecordBackwardsIterator {
+    pub fn iter(self, fileset: &mut FlatFileSet) -> RecordBlockIterator {
 
-        RecordBackwardsIterator {
-            cur_ptr:   self,
+        RecordBlockIterator {
+            cur_ptr:   self.next_in_block(),
             fileset:   fileset
         }
 
@@ -410,27 +395,26 @@ impl RecordPtr {
 
 }
 
-pub struct RecordBackwardsIterator<'a> {
+pub struct RecordBlockIterator<'a> {
     cur_ptr:    RecordPtr,
     fileset:    &'a mut FlatFileSet
 }
 
 
 /// Browsing backwards over the entire tree
-impl<'a> Iterator for RecordBackwardsIterator<'a> {
-    type Item = Record;
+impl<'a> Iterator for RecordBlockIterator<'a> {
+    type Item = RecordPtr;
 
-    fn next(&mut self) -> Option<Record> {
-        if self.cur_ptr.ptr.is_null()  {
+    fn next(&mut self) -> Option<RecordPtr> {
+        let rec: Record = * self.fileset.read_fixed::<Record>(self.cur_ptr.ptr);
+
+        if rec.ptr.is_blockheader() {
             None
         }
         else {
-            self.cur_ptr = self.cur_ptr.prev(self.fileset);
-            let result = *self.fileset.read_fixed::<Record>(self.cur_ptr.ptr);
+            let result = self.cur_ptr;
+            self.cur_ptr = self.cur_ptr.next_in_block();
 
-            if result.skips[0] == 0 {
-                self.cur_ptr.ptr = FilePtr::null()
-            };
             Some(result)
         }
     }
@@ -462,24 +446,23 @@ impl Record {
     pub fn new(content: FilePtr) -> Self {
         Record {
             ptr: content,
-            skips: [0;SKIP_FIELDS]
+            skips: [0;params::SKIP_FIELDS]
         }
     }
 
 
     fn set_ptr_in_skips(&mut self, ptr: RecordPtr) {
 
-        let cv: [u64;1] = [ptr.ptr.to_u64()];
+        let cv: [u64;3] = [ptr.ptr.to_u64(),0,0];
         self.skips = unsafe { mem::transmute(cv) };
 
     }
 
     fn get_ptr_from_skips(&self) -> RecordPtr {
-        let cv: [u64;1] = unsafe { mem::transmute(self.skips) };
+        let cv: [u64;3] = unsafe { mem::transmute(self.skips) };
 
         RecordPtr::new(FilePtr::from_u64(cv[0]))
     }
-
 
 }
 

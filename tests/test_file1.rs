@@ -17,6 +17,8 @@ use std::time::{Instant};
 #[ignore]
 fn load_file1() {
 
+    let timer = Instant::now();
+
     let mut store = bitcrust_lib::init();
 
     let fileno = 0;
@@ -39,11 +41,13 @@ fn load_file1() {
 
 
 
+
         if blocks == 2 {
             break;
         }
 
     }
+
 
 
 
@@ -60,6 +64,7 @@ fn load_file_large() {
     let mut store = bitcrust_lib::init();
     let mut blocks = 0;
     let start = Instant::now();
+    const BLOCK_COUNT: u64 = 150000;
 
     for fileno in 0..99 {
         let name = format!("./data/blk{:05}.dat", fileno);
@@ -87,10 +92,18 @@ fn load_file_large() {
 
             }
 
-            if blocks == 300000 {
+            if blocks >= BLOCK_COUNT {
                 break;
             }
         }
+
+        if blocks >= BLOCK_COUNT {
+            break;
+        }
     }
+
+    println!("DONE: Processed {} blocks in {} sec at {}/s", blocks, start.elapsed().as_secs(),
+             blocks / (start.elapsed().as_secs()+1));
+
 
 }
