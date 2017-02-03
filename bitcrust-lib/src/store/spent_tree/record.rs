@@ -27,7 +27,7 @@ use super::params;
 #[derive(Copy,Clone)]
 pub struct Record {
     pub ptr:   FilePtr,
-    pub skips: [i32;params::SKIP_FIELDS]
+    pub skips: [i16;params::SKIP_FIELDS]
 }
 
 
@@ -219,14 +219,14 @@ impl RecordPtr {
             if skip_r < params::DELTA.len() {
 
                 let diff: i64 = cur_idx as i64 - seek_idx as i64;
-                if diff > i32::min_value() as i64 && diff < i32::max_value() as i64 {
+                if diff > i16::min_value() as i64 && diff < i16::max_value() as i64 {
                     for n in skip_r..params::DELTA.len() {
-                        seek_rec.skips[n] = diff as i32;
+                        seek_rec.skips[n] = diff as i16;
                     }
                 }
-                else {
-                    panic!("Diff too large");
-                }
+                /*else {
+                    println!("Proc Diff too large {:?}", diff);
+                }*/
 
                 if minimal_filenr_pos > cur_filenr_pos {
                     minimal_filenr_pos = cur_filenr_pos;
@@ -453,13 +453,13 @@ impl Record {
 
     fn set_ptr_in_skips(&mut self, ptr: RecordPtr) {
 
-        let cv: [u64;3] = [ptr.ptr.to_u64(),0,0];
+        let cv: [u64;1] = [ptr.ptr.to_u64()];
         self.skips = unsafe { mem::transmute(cv) };
 
     }
 
     fn get_ptr_from_skips(&self) -> RecordPtr {
-        let cv: [u64;3] = unsafe { mem::transmute(self.skips) };
+        let cv: [u64;1] = unsafe { mem::transmute(self.skips) };
 
         RecordPtr::new(FilePtr::from_u64(cv[0]))
     }

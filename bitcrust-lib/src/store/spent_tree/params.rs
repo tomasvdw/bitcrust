@@ -10,10 +10,8 @@
 //      this_tx = jump(this_tx[tx].skips[n])
 pub const DELTA: [i64; SKIP_FIELDS] = [
     -256 * 256 * 256,
-    -32  * 256 * 256,
     2 * 256 * 256,
     32 * 256 * 256 ,
-    256 * 256 * 256,
     16 * 256 * 256 * 256
 ];
 /*
@@ -29,4 +27,4 @@ pub const DELTA: [i64; SKIP_FIELDS] = [
 pub const TX_NEEDED_SKIPS:usize = 0;
 
 
-pub const SKIP_FIELDS: usize = 6;
+pub const SKIP_FIELDS: usize = 4;
