@@ -245,8 +245,6 @@ impl SpentTree {
         info!(logger, "start scan");
 
         let mut input_count: i64 = 0;
-        let mut total_scan: i64 = 0;
-        let mut largest_scan: i64 = 0;
         let mut total_seek: i64 = 0;
         let mut largest_seek: i64 = 0;
 
@@ -271,18 +269,12 @@ impl SpentTree {
 
             input_count += 1;
 
-            let scan_count = 1;//this_ptr.seek_and_set_seqscan(&mut self.fileset)?;
             let seek_count = this_ptr.seek_and_set(rec, block_idx+i, records, logger, &mut self.stats)?;
 
             /*if seek_count > 200000 {
                 this_ptr.seek_and_set(&mut self.stats, &mut self.fileset, true)?;
                 panic!("we have it");
             }*/
-
-            if scan_count > largest_scan {
-                largest_scan = scan_count;
-            }
-            total_scan += scan_count;
 
             if seek_count > largest_seek {
                 largest_seek = seek_count;

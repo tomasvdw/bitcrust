@@ -17,8 +17,6 @@ use std::time::{Instant};
 #[ignore]
 fn load_file1() {
 
-    let timer = Instant::now();
-
     let mut store = bitcrust_lib::init();
 
     let fileno = 0;

@@ -33,28 +33,6 @@ pub struct Record {
 
 
 
-enum CompareResult {
-    TransactionFound,
-    OutputFound,
-    NoneFound,
-    CurrentIsLarger,
-    CurrentIsSmaller
-}
-/*
-fn compare_fileptrs(current: FilePtr, search: FilePtr ) -> CompareResult {
-    if current.filenumber_and_pos() == search.filenumber_and_pos() {
-
-        if current.is_transaction() {
-
-            return TransactionFound;
-        }
-        else {
-
-        }
-    }
-
-}
-*/
 /// A filepointer that points to a record in the SpentTree
 #[derive(Copy,Clone)]
 pub struct RecordPtr {
@@ -106,15 +84,6 @@ impl RecordPtr {
     }
 
 
-    fn dump_seek_and_set(self, fileset: &mut FlatFileSet) {
-
-        use std::io;
-
-        // we are going to do the same procedure as seek_and_set except
-        // that we will mark rows as where we jump'ed to
-
-
-    }
 
 
     pub fn to_index(self) -> usize {
@@ -256,8 +225,6 @@ impl RecordPtr {
                     break;
                 }
             }
-
-
 
 
             /*if full_dump {

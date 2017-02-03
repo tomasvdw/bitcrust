@@ -330,7 +330,6 @@ mod tests {
 
     use store;
     use config;
-    use buffer::*;
     use super::*;
 
     #[test]
