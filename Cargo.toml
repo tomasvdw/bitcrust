@@ -10,7 +10,6 @@ path = "bitcrust-lib/src/lib.rs"
 
 
 [dependencies]
-lmdb-rs = "0.7"
 byteorder = "0.5"
 
 itertools = "0.5.1"

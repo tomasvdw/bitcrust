@@ -16,7 +16,6 @@
 
 
 extern crate memmap;
-extern crate lmdb_rs;
 extern crate itertools;
 extern crate rand;
 extern crate ring;
