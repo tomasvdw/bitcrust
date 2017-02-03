@@ -39,7 +39,6 @@ pub use self::spent_tree::record::{RecordPtr,Record};
 
 use config;
 use hash::*;
-use buffer::*;
 
 use metrics::Metrics;
 use transaction::Transaction;
