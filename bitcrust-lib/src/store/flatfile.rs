@@ -18,23 +18,23 @@ use std::fmt::{Debug,Formatter,Error};
 use std::path::{Path};
 use memmap;
 
-const WRITEPOS_OFFSET  : isize = 4;
-const MAGIC_FILEID     : u32   = 0x62634D4B;
-const INITIAL_WRITEPOS : u32   = 0x10;
+const WRITEPOS_OFFSET  : isize = 8;
+const MAGIC_FILEID     : u64   = 0x62634D4B_00000000;
+pub const INITIAL_WRITEPOS : u64   = 0x10;
 
 pub struct FlatFile {
 
     file:      fs::File,
     map:       memmap::Mmap,
     ptr:       *mut u8,
-    write_ptr: *mut atomic::AtomicU32
+    write_ptr: *mut atomic::AtomicU64
 }
 
 impl FlatFile {
 
     /// Opens the flatfile with the given path and loads the corresponding memory map
     /// Atomically creates the file if needed with the given `initial_size`
-    pub fn open(path: &Path, initial_size: u32) -> Self {
+    pub fn open(path: &Path, initial_size: u64) -> Self {
 
         let file = FlatFile::open_or_create(path, initial_size);
 
@@ -53,7 +53,7 @@ impl FlatFile {
         }
     }
 
-    fn open_or_create(path: &Path, size: u32) -> fs::File {
+    fn open_or_create(path: &Path, size: u64) -> fs::File {
 
         // first we try creating a new file
         let create_result = fs::OpenOptions::new().read(true).write(true).create_new(true).open(path);
@@ -63,8 +63,8 @@ impl FlatFile {
             // initialize file
 
             // we use transmute to ensure we're using native-endianness
-            let magic:    &[u8;4] = unsafe { mem::transmute( &MAGIC_FILEID) };
-            let writepos: &[u8;4] = unsafe { mem::transmute( &INITIAL_WRITEPOS) };
+            let magic:    &[u8;8] = unsafe { mem::transmute( &MAGIC_FILEID) };
+            let writepos: &[u8;8] = unsafe { mem::transmute( &INITIAL_WRITEPOS) };
 
             new_file.write_all(magic)
                 .expect(&format!("Could not write header to {}", path.to_str().unwrap_or("")));
@@ -149,7 +149,7 @@ impl FlatFile {
     /// and returns the position at which the bytes can be written
     ///
     /// If no more then max_size bytes are available, None is returned
-    pub fn alloc_write(&self, size: u32, max_size: u32) -> Option<u32> {
+    pub fn alloc_write(&self, size: u64, max_size: u64) -> Option<u64> {
 
         // loop retries for compare-and-swap
         loop {

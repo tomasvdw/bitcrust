@@ -10,7 +10,10 @@ use hash::*;
 use script::context;
 use store::Store;
 use ffi;
-use store::fileptr::FilePtr;
+
+use store::TxPtr;
+use store::Record;
+use store::HashIndexGuard;
 
 const MAX_TRANSACTION_SIZE: usize = 1_000_000;
 
@@ -31,9 +34,9 @@ pub enum TransactionError {
 
 #[derive(Debug)]
 pub enum TransactionOk {
-    AlreadyExists(FilePtr),
+    AlreadyExists(TxPtr),
 
-    VerifiedAndStored(FilePtr),
+    VerifiedAndStored(TxPtr),
 
 }
 
@@ -126,19 +129,23 @@ impl<'a> Transaction<'a> {
     ///
     /// This checks the passed input-ptrs are valid against the corresponding output of self
     ///
-    pub fn verify_backtracking_outputs(&self, store: &mut Store, inputs: &Vec<FilePtr>) {
+    pub fn verify_backtracking_outputs(&self, store: &mut Store, inputs: &Vec<TxPtr>) {
 
 
-        for input_ptr in inputs {
+        for input_ptr in inputs.into_iter() {
+
+            debug_assert!(input_ptr.is_guard());
+
             let _m = store.metrics.start("block.tx.backtrack");
 
             // read tx from disk
-            let mut tx_raw   = Buffer::new(store.block_content.read(*input_ptr));
+            let mut tx_raw   = Buffer::new(store.transactions.read(*input_ptr));
+            println!("Loading tx from {:?}", input_ptr);
             let tx           = Transaction::parse(&mut tx_raw).
                     expect("Invalid tx data in database");
 
             // find indixes
-            let input_index  = input_ptr.input_index() as usize;
+            let input_index  = input_ptr.get_input_index() as usize;
             let ref input    = tx.txs_in[input_index];
             let output_index = input.prev_tx_out_idx as usize;
 
@@ -152,26 +159,27 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    /// Gets the output fileptrs referenced by the inputs of this tx
+    /// Gets the output records referenced by the inputs of this tx
     ///
-    /// Uses FilePtr::null placeholder for outputs not found
-    pub fn get_output_fileptrs(&self, store: &mut Store) -> Vec<FilePtr> {
+    /// Uses Record placeholder for outputs not found
+    pub fn get_output_records(&self, store: &mut Store) -> Vec<Record> {
 
         self.txs_in.iter()
+
             .filter(|tx_in| !tx_in.prev_tx_out.is_null())
             .map(|input| {
 
-                store.hash_index
+                store.tx_index
                     .get(input.prev_tx_out)
                     .iter()
-                    .find(|ptr| ptr.is_transaction())
-                    .map_or(FilePtr::null(), |ptr| ptr.to_output(input.prev_tx_out_idx))
+                    .find(|ptr| !ptr.is_guard())
+                    .map_or(Record::new_unmatched_input(), |ptr| Record::new_output(*ptr, input.prev_tx_out_idx))
             })
             .collect()
     }
 
-    /// Verifies and stores
-    pub fn verify_and_store(&self, store: &mut Store) -> TransactionResult<(TransactionOk)> {
+    /// Verifies and stores the transaction in the transaction_store and index
+    pub fn verify_and_store(&self, store: &mut Store) -> TransactionResult<TransactionOk> {
 
         self.verify_syntax()?;
 
@@ -180,11 +188,11 @@ impl<'a> Transaction<'a> {
         loop {
 
             // First see if it already exists
-            let existing_ptrs = store.hash_index.get(hash_buf.as_ref());
+            let existing_ptrs = store.tx_index.get(hash_buf.as_ref());
 
             if existing_ptrs
                 .iter()
-                .any(|p| p.is_transaction()) {
+                .any(|p| !p.is_guard()) {
 
                 assert_eq!(existing_ptrs.len(), 1);
 
@@ -196,7 +204,7 @@ impl<'a> Transaction<'a> {
             self.verify_backtracking_outputs(store, &existing_ptrs);
 
             // store & verify
-            let ptr      = store.block_content.write(self.to_raw());
+            let ptr      = store.transactions.write(self.to_raw());
 
             if !self.is_coinbase() {
                 self.verify_input_scripts(store, ptr)?;
@@ -205,7 +213,7 @@ impl<'a> Transaction<'a> {
             // Store reference in the hash_index.
             // This may fail if since ^^ get_ptr new dependent txs were added,
             // in which case we must try again.
-            if store.hash_index.set(hash_buf.as_ref(), ptr, &existing_ptrs) {
+            if store.tx_index.set(hash_buf.as_ref(), ptr, &existing_ptrs) {
 
                 return Ok(TransactionOk::VerifiedAndStored(ptr))
             }
@@ -215,7 +223,7 @@ impl<'a> Transaction<'a> {
 
 
     /// Finds the outputs corresponding to the inputs and verify the scripts
-    pub fn verify_input_scripts(&self, store: &mut Store, tx_ptr: FilePtr) -> TransactionResult<()> {
+    pub fn verify_input_scripts(&self, store: &mut Store, tx_ptr: TxPtr) -> TransactionResult<()> {
 
         let mut _m = store.metrics.start("verify_scoped_scripts");
         _m.set_ticker(self.txs_in.len());
@@ -223,8 +231,8 @@ impl<'a> Transaction<'a> {
         for (index, input) in self.txs_in.iter().enumerate() {
 
 
-            let output = store.hash_index.get_or_set(input.prev_tx_out,
-                                                     tx_ptr.to_input(index as u32 ));
+            let output = store.tx_index.get_or_set(input.prev_tx_out,
+                                                     tx_ptr.to_input(index as u16 ));
             let output = match output {
                 None => {
 
@@ -240,7 +248,7 @@ impl<'a> Transaction<'a> {
             };
 
 
-            let mut previous_tx_raw = Buffer::new(store.block_content.read(output));
+            let mut previous_tx_raw = Buffer::new(store.transactions.read(output));
             let previous_tx = Transaction::parse(&mut previous_tx_raw)?;
 
             let previous_tx_out = previous_tx.txs_out.get(input.prev_tx_out_idx as usize)

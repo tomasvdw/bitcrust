@@ -27,6 +27,13 @@ extern crate rayon;
 pub extern crate slog ;
 extern crate slog_term ;
 
+
+macro_rules! test_cfg {
+    () => (::config::Config::new_empty(format!("{}-{}", file!(), line!())))
+}
+
+
+
 mod hash;
 
 #[macro_use]
@@ -59,9 +66,10 @@ mod block_add;
 
 
 
+
 pub fn init() -> Store {
 
-    let config = config::Config::new_persist();
+    let config = test_cfg!();
     let store = Store::new(&config);
 
     info!(store.logger, "Store intitalized"; "dir" => config.root.to_str().unwrap());

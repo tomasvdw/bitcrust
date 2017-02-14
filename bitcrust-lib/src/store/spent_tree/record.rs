@@ -4,11 +4,15 @@ use slog;
 use std::mem;
 use std::fmt;
 
-use store::fileptr::FilePtr;
+use store::{TxPtr, BlockHeaderPtr};
+use store::FlatFilePtr;
+
 use store::flatfileset::FlatFileSet;
 
 use store::spent_tree::SpendingError;
+use store::spent_tree::BlockPtr;
 
+use store::flatfile::INITIAL_WRITEPOS;
 use super::SpentTreeStats;
 
 use super::params;
@@ -22,163 +26,213 @@ use super::params;
 ///
 /// The exact format is still in work-in-progress.
 ///
-#[derive(Copy, Clone)]
-pub struct Record {
-    pub ptr: FilePtr,
-    pub skips: [i16; params::SKIP_FIELDS]
+#[derive(Debug, Copy, Clone)]
+pub enum Record {
+
+    OrphanBlock {
+        file_number: i16,
+        file_offset: u32,
+    },
+    Block {
+        file_number: i16,
+        file_offset: u32,
+        prev:        u64
+    },
+    Transaction {
+        file_number: i16,
+        file_offset: u32,
+        skips:       [i16; params::SKIP_FIELDS]
+    },
+    OutputLarge {
+        file_number:  i16,
+        file_offset:  u32,
+        output_index: u32
+
+    },
+    Output {
+        output_index: u8,
+        file_number:  i16,
+        file_offset:  u32,
+        skips:       [i16; params::SKIP_FIELDS]
+    },
+
+    // If a referenced output doesn't exist at the time of block-insertion,
+    // the record references an input instead
+    UnmatchedInput
+
 }
 
+impl Record {
+    pub fn new_unmatched_input() -> Record {
+        Record::UnmatchedInput
+    }
+
+    pub fn new_transaction(tx_ptr: TxPtr) -> Record {
+
+        Record::Transaction {
+            file_number: tx_ptr.get_file_number(),
+            file_offset: tx_ptr.get_file_offset() as u32,
+            skips: [-1; params::SKIP_FIELDS]
+        }
+    }
+
+    pub fn new_orphan_block(block_header_ptr: BlockHeaderPtr) -> Record {
+        Record::OrphanBlock {
+            file_number: block_header_ptr.get_file_number(),
+            file_offset: block_header_ptr.get_file_offset() as u32
+
+        }
+
+    }
+
+    pub fn new_block(previous: BlockPtr, orphan_block_record: Record) -> Record {
+
+        match orphan_block_record {
+            Record::OrphanBlock { file_number: n, file_offset: o } =>
+                Record::Block { file_number: n, file_offset: o, prev: previous.start.to_index() },
+
+            _ => panic!("Expecting orphan block record")
+        }
+
+    }
+
+
+    pub fn new_output(txptr: TxPtr, output_index: u32) -> Record {
+        if output_index <= u8::max_value() as u32 {
+            Record::Output {
+                output_index: output_index as u8,
+                file_number:  txptr.get_file_number(),
+                file_offset:  txptr.get_file_offset() as u32,
+                skips:        [-1; params::SKIP_FIELDS]
+            }
+        }
+            else {
+                Record::OutputLarge {
+                    output_index: output_index ,
+                    file_number:  txptr.get_file_number(),
+                    file_offset:  txptr.get_file_offset()  as u32,
+                }
+            }
+
+    }
+
+    pub fn is_transaction(self) -> bool {
+        match self {
+            Record::Transaction { ..}  => true,
+            _ => false
+        }
+    }
+
+    pub fn get_transaction_ptr(self) -> TxPtr {
+        match self {
+            Record::Transaction { file_number: n, file_offset: o, .. } => TxPtr::new(n,o as u64),
+            _ => panic!("transaction record expected")
+
+        }
+    }
+
+    pub fn get_block_header_ptr(self) -> BlockHeaderPtr {
+        match self {
+            Record::Block       { file_number: n, file_offset: o, .. } => BlockHeaderPtr::new(n,o as u64),
+            Record::OrphanBlock { file_number: n, file_offset: o, .. } => BlockHeaderPtr::new(n,o as u64),
+            _ => panic!("transaction record expected")
+
+        }
+    }
+
+    pub fn is_output(self) -> bool {
+        match self {
+            Record::Output { .. }      => true,
+            Record::OutputLarge {..} => true,
+            _ => false
+        }
+
+    }
+
+    pub fn is_block(self) -> bool {
+        match self {
+            Record::Block { .. }      => true,
+            Record::OrphanBlock {..} => true,
+            _ => false
+        }
+
+    }
+
+    pub fn is_unmatched_input(self) -> bool {
+        match self {
+            Record::UnmatchedInput { .. } => true,
+            _ => false
+        }
+    }
+
+    // test only as normally it makes no sense to treat file_offsets from different record-types
+    // as a single value
+    #[cfg(test)]
+    pub fn get_file_offset(self) -> u32 {
+        match self {
+            Record::OrphanBlock { file_offset: f, .. } => f,
+            Record::Block { file_offset: f, .. } => f,
+            Record::Transaction { file_offset: f, .. } => f,
+            Record::Output { file_offset: f, .. } => f,
+            Record::OutputLarge { file_offset: f, .. } => f,
+            _ => unimplemented!()
+        }
+    }
+
+}
 
 /// A filepointer that points to a record in the SpentTree
-#[derive(Copy, Clone)]
-pub struct RecordPtr {
-    pub ptr: FilePtr
-}
+#[derive(PartialEq, Copy, Clone)]
+pub struct RecordPtr(u64);
 
+impl FlatFilePtr for RecordPtr {
+    fn new(file_number: i16, file_offset: u64) -> RecordPtr {
+        assert_eq!(file_number, 0); // can only have one spent-tree file
+
+        RecordPtr((file_offset as u64 - INITIAL_WRITEPOS)
+                      / mem::size_of::<Record>() as u64)
+    }
+
+
+    fn get_file_number(self) -> i16 { 0 }
+    fn get_file_offset(self) -> u64 {
+        INITIAL_WRITEPOS + self.0 * mem::size_of::<Record>() as u64
+    }
+
+
+}
 
 impl fmt::Debug for RecordPtr {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(fmt, "{:?}", self.ptr)
+        write!(fmt, "{:?}", self.0)
     }
 }
 
-impl fmt::Debug for Record {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(fmt, "[ptr={:?} skip={:04x}|{:04x}|{:04x}|{:04x}]",
-               self.ptr, self.skips[0], self.skips[1], self.skips[2], self.skips[3])
-
-        /*write!(fmt, "[ptr={:?} skip={:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}|{:04x}]",
-               self.ptr, self.skips[0],self.skips[1],self.skips[2],self.skips[3],self.skips[4],self.skips[5],self.skips[6],
-               self.skips[7],self.skips[8],self.skips[9],self.skips[10],self.skips[11])
-*/
-    }
-}
 
 
 impl RecordPtr {
-    pub fn new(ptr: FilePtr) -> Self {
-        RecordPtr { ptr: ptr }
-    }
-
-    pub fn set_previous(self, fileset: &mut FlatFileSet, previous: Option<RecordPtr>) {
-        let rec: &mut Record = fileset.read_fixed(self.ptr);
-
-        if previous.is_none() {
-            rec.skips = [0; params::SKIP_FIELDS];
-            return;
-        }
-        let previous = previous.unwrap();
-
-        assert!(self.ptr.file_pos() != previous.ptr.file_pos());
-
-        rec.set_ptr_in_skips(previous);//.to_u64();
+    pub fn new(ptr: u64) -> Self {
+        RecordPtr (ptr )
     }
 
 
-    pub fn to_index(self) -> usize {
-        if self.ptr.file_number() != 0 {
-            panic!("Only single file supported")
-        } else {
-            (self.ptr.file_pos() - 16) / mem::size_of::<Record>()
-        }
+    pub fn to_index(self) -> u64 {
+        self.0
     }
 
-    pub fn seek_and_set_seqscan(self, fileset: &mut FlatFileSet) -> Result<isize, SpendingError> {
-        let mut count = 0;
-
-        // seek_rec is the one we seek (self)
-        let seek_rec: &mut Record = fileset.read_fixed(self.ptr);
-        seek_rec.skips = [-1; params::SKIP_FIELDS];
-
-        // this is the transaction position we seek (the fileptr minus the output-index metadata)
-        let seek_filenr_pos = seek_rec.ptr.filenumber_and_pos();
-
-        let mut cur = self.prev_in_block();
-
-        if seek_rec.ptr.is_transaction() {
-            return Ok(count);
-        }
-
-        debug_assert! (seek_rec.ptr.is_output()); // these are the only ones to search for
-
-        loop
-            {
-                count += 1;
-
-                // cur_rec is the one we are comparing
-                let cur_rec: &Record = fileset.read_fixed(cur.ptr);
-
-                let cur_filenr_pos = cur_rec.ptr.filenumber_and_pos();
-
-                println!("Scanning {:?} @ {:?} = {:?}", seek_rec, cur, cur_rec);
-
-
-                if cur_rec.skips == [0; params::SKIP_FIELDS] {
-                    return Err(SpendingError::OutputNotFound);
-                } else if cur_rec.ptr.is_blockheader() || cur_rec.ptr.is_guard_blockheader() {
-                    cur = cur.prev(fileset);
-                    continue;
-                }
-
-                if cur_filenr_pos == seek_filenr_pos {
-                    if cur_rec.ptr.is_transaction() {
-                        // we've found the transaction of the output before we
-                        // found the output. So we're all good
-                        return Ok(count)
-                    } else if cur_rec.ptr.output_index() == seek_rec.ptr.output_index() {
-                        return Err(SpendingError::OutputAlreadySpent);
-                    }
-                };
-
-                cur = cur.offset(-1);
-            }
-    }
-
-
-    /// Get the previous pointer; this mirrors the ^^ set_previous function
-    pub fn prev(self, fileset: &mut FlatFileSet) -> RecordPtr {
-        let rec: &mut Record = fileset.read_fixed(self.ptr);
-
-        if !rec.ptr.is_guard_blockheader() {
-            self.prev_in_block()
-        } else {
-            rec.get_ptr_from_skips()
-        }
-    }
-
-    pub fn offset(self, offset: i32) -> RecordPtr {
-        RecordPtr::new(self.ptr.offset(offset as i32 * mem::size_of::<Record>() as i32))
-    }
-
-    pub fn prev_in_block(self) -> RecordPtr {
-        self.offset(-1)
-    }
-
-    pub fn next_in_block(self) -> RecordPtr {
-        self.offset(1)
-    }
-
-    pub fn get_content_ptr(self, fileset: &mut FlatFileSet) -> FilePtr {
-        fileset.read_fixed::<Record>(self.ptr).ptr
-    }
-
-    pub fn set_content_ptr(self, fileset: &mut FlatFileSet, new_ptr: FilePtr) {
-        let p: &mut FilePtr = &mut fileset.read_fixed::<Record>(self.ptr).ptr;
-        let _ = p.atomic_replace(FilePtr::null(), new_ptr);
-    }
-
-
+/*
     pub fn iter(self, fileset: &mut FlatFileSet) -> RecordBlockIterator {
         RecordBlockIterator {
             cur_ptr: self.next_in_block(),
             fileset: fileset
         }
     }
+    */
 }
-
+/*
 pub struct RecordBlockIterator<'a> {
     cur_ptr: RecordPtr,
-    fileset: &'a mut FlatFileSet
+    //fileset: &'a mut FlatFileSet<P
 }
 
 
@@ -199,7 +253,7 @@ impl<'a> Iterator for RecordBlockIterator<'a> {
         }
     }
 }
-
+*/
 
 impl Record {
     /*
@@ -220,18 +274,14 @@ impl Record {
 
     /// This is a preliminary new. To set the proper skip pointers
     /// we must now where we are in the file so we do this aferwards in set_skips
-    pub fn new(content: FilePtr) -> Self {
+    /*pub fn new(content: FilePtr) -> Self {
         Record {
             ptr: content,
             skips: [0; params::SKIP_FIELDS]
         }
-    }
+    }*/
 
-    pub fn set_prev_minus_one(&mut self) {
-        self.skips = [-1; params::SKIP_FIELDS];
-    }
-
-
+/*
     fn set_ptr_in_skips(&mut self, ptr: RecordPtr) {
         let cv: [u64; 1] = [ptr.ptr.to_u64()];
         self.skips = unsafe { mem::transmute(cv) };
@@ -242,7 +292,7 @@ impl Record {
 
         RecordPtr::new(FilePtr::from_u64(cv[0]))
     }
-
+*/
 
     pub fn seek_and_set(
         &mut self,
@@ -255,7 +305,8 @@ impl Record {
 
         let mut stats: SpentTreeStats = Default::default();
         stats.inputs += 1;
-
+        Ok(stats)
+        /*
         // cur  will walk through the skip-list, starting from
         // the previous record
         let mut cur_idx = seek_idx - 1;
@@ -391,8 +442,17 @@ impl Record {
 
             cur_idx = (cur_idx as i64 + skip as i64) as usize;
         }
+        */
     }
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_size_of_record() {
+        assert_eq!(::std::mem::size_of::<Record>(), 16);
+
+    }
+}

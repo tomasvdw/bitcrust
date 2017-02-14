@@ -24,39 +24,57 @@ use slog ;
 use slog_term;
 use slog::DrainExt;
 
-pub mod fileptr;
 
+
+mod txptr;
+mod blockheaderptr;
 
 mod flatfile;
 mod flatfileset;
 
-mod block_content;
 mod hash_index;
 mod spent_tree;
 
 pub use self::spent_tree::SpendingError;
+pub use self::spent_tree::BlockPtr;
 pub use self::spent_tree::record::{RecordPtr,Record};
+
+pub use self::txptr::TxPtr;
+pub use self::hash_index::HashIndexGuard;
+pub use self::blockheaderptr::BlockHeaderPtr;
+
+pub use self::flatfileset::{FlatFilePtr,FlatFileSet};
+
 
 use config;
 use hash::*;
 
+
+
 use metrics::Metrics;
-use transaction::Transaction;
-use self::fileptr::FilePtr;
 
 
 
+const MB:                 u64 = 1024 * 1024;
+const FILE_SIZE:          u64 = 2 * 1024 * MB;
+const MAX_CONTENT_SIZE:   u64 = FILE_SIZE - 10 * MB as u64 ;
 
-/// This is the accessor to the
+
+
+/// This is the accessor to all stuff on disk.
+/// A single store cannot be used from multiple threads without precaution,
+/// but multiple Stores from different threads/processes can use the same
+/// files concurrently
 pub struct Store {
 
-    //pub index: index::Index,
+    // Flat files contain transactions and blockheaders
+    pub transactions:  flatfileset::FlatFileSet<TxPtr>,
+    pub block_headers: flatfileset::FlatFileSet<BlockHeaderPtr>,
 
-    // Flat files
-    pub block_content: block_content::BlockContent,
-    pub hash_index:    hash_index::HashIndex,
+    pub tx_index:      hash_index::HashIndex<TxPtr>,
+    pub block_index:   hash_index::HashIndex<BlockPtr>,
+
     pub spent_tree:    spent_tree::SpentTree,
-
 
     pub metrics:       Metrics,
 
@@ -71,9 +89,22 @@ impl Store {
         Store {
             //index: index::Index::new(cfg),
 
-            block_content: block_content::BlockContent::new(&cfg),
-            hash_index:    hash_index::HashIndex::new(&cfg),
-            spent_tree:    spent_tree::SpentTree::new(&cfg),
+            transactions:  FlatFileSet::new(
+                &cfg.root.clone().join("transactions"),
+                "tx",
+                FILE_SIZE,
+                MAX_CONTENT_SIZE),
+
+            block_headers:  FlatFileSet::new(
+                &cfg.root.clone().join("headers"),
+                "bh",
+                FILE_SIZE,
+                MAX_CONTENT_SIZE),
+
+            tx_index:     hash_index::HashIndex::new(&cfg),
+            block_index:  hash_index::HashIndex::new(&cfg),
+
+            spent_tree:   spent_tree::SpentTree::new(&cfg),
 
             metrics:       Metrics::new(),
             logger:        slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!()),
@@ -81,12 +112,14 @@ impl Store {
     }
 
 
-    pub fn get_block_hash(&mut self, blockheader_ptr: FilePtr) -> Hash32Buf {
+
+
+
+    pub fn get_block_hash(&mut self, block_ptr: BlockPtr) -> Hash32Buf {
 
         // follow indirection through spent-tree
-        let block_hdr = self.spent_tree.load_data_from_spent_tree_ptr(
-            &mut self.block_content,
-            blockheader_ptr);
+        let block_hdr_rec = self.spent_tree.get_record(block_ptr.start);
+        let block_hdr     = self.block_headers.read(block_hdr_rec.get_block_header_ptr());
 
         Hash32Buf::double_sha256(block_hdr)
 
@@ -118,24 +151,22 @@ mod tests {
         let hash = Hash32Buf::double_sha256(&block_hdr_raw);
 
 
-        let mut store = Store::new(& config::Config::new_test());
+        let mut store = Store::new(& test_cfg!());
 
-        let block_hdr_ptr = store.block_content.write_blockheader(&block_hdr);
+        let block_hdr_ptr = store.block_headers.write(block_hdr.to_raw());
 
         let blockptr = store.spent_tree.store_block(block_hdr_ptr, vec![]);
 
         // both the start end the end should point to the block_content and
         // the hash should be equal to the original
-        assert_eq!(hash.as_ref(), store.get_block_hash(blockptr.start.ptr).as_ref());
-        assert_eq!(hash.as_ref(), store.get_block_hash(blockptr.end.ptr).as_ref());
-
+        assert_eq!(hash.as_ref(), store.get_block_hash(blockptr).as_ref());
 
 
     }
 
     #[test]
     fn test_store_new() {
-        let _ = Store::new(&config::Config::new_test());
+        let _ = Store::new(& test_cfg!());
     }
 
     // this takes a fake spent tree (created with block! macro's) and use it to construct
@@ -149,9 +180,4 @@ mod tests {
 
     }*/
 
-    #[test]
-    fn test_create_store() {
-     //   tx_builder!();
-
-    }
 }

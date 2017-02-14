@@ -1,6 +1,6 @@
 
 
-//! Index that maps hashes to fileptrs
+//! Index that maps hashes to content pointers
 //!
 //! This is used for transactions & blockheaders; the values found for a hash can be:
 //!
@@ -23,30 +23,90 @@
 //!
 
 use std::{mem};
+use std::sync::atomic;
 use std::cmp::{Ord,Ordering};
 
 use config;
 use hash::*;
 
-use store::fileptr::FilePtr;
+use store::FlatFilePtr;
 use store::flatfileset::FlatFileSet;
 
 
 
-const FILE_SIZE:          u32 = 1 * 1024*1024*1024;
-const MAX_CONTENT_SIZE:   u32 = FILE_SIZE - 10 * 1024*1024;
+const FILE_SIZE:          u64 = 1 * 1024*1024*1024;
+const MAX_CONTENT_SIZE:   u64 = FILE_SIZE - 10 * 1024*1024;
 
 const HASH_ROOT_COUNT:  usize = 256*256*256;
+
+
+/// Trait for objects that can be used as a guard
+/// This is required for types that are stored in the hash-index
+pub trait HashIndexGuard {
+    fn is_guard(self) -> bool;
+}
+
 
 /// Index to lookup fileptr's from hashes
 ///
 /// Internally uses fileset
-pub struct HashIndex {
+pub struct HashIndex<T : HashIndexGuard + Copy + Clone> {
 
-    fileset:    FlatFileSet,
+    fileset:         FlatFileSet<HashIndexPtr>,
 
-    hash_index_root:    &'static [FilePtr; HASH_ROOT_COUNT]
+    hash_index_root: &'static [HashIndexPtr; HASH_ROOT_COUNT],
 
+    phantom:         ::std::marker::PhantomData<T>
+
+}
+
+/// A persistent pointer into the hash-index
+#[derive(Debug, Clone, Copy)]
+pub struct HashIndexPtr {
+    file_offset: u32,
+    file_number: i16,
+    zero: u16
+}
+
+impl FlatFilePtr for HashIndexPtr {
+    fn new(file_number: i16, file_offset: u64) -> Self {
+
+        HashIndexPtr {
+            file_offset: file_offset as u32,
+            file_number: file_number,
+            zero: 0  // we must pad with zero to ensure atomic transmutes work
+        }
+    }
+
+
+    fn get_file_offset(self) -> u64 { self.file_offset as u64 }
+    fn get_file_number(self) -> i16 { self.file_number }
+
+
+}
+
+impl HashIndexPtr {
+    fn null() -> Self { HashIndexPtr::new(0,0) }
+
+    fn is_null(self) -> bool { self.file_offset == 0 && self.file_number == 0 }
+
+    // atomically replaces a self null() value with a new_value
+    pub fn atomic_replace(&self, current_value: HashIndexPtr, new_value: HashIndexPtr) -> bool {
+
+
+        let atomic_self: *mut atomic::AtomicU64 = unsafe { mem::transmute( self ) };
+
+
+        let prev = unsafe {
+            (*atomic_self).compare_and_swap(
+                unsafe { mem::transmute(current_value) },
+                unsafe { mem::transmute(new_value) },
+                atomic::Ordering::Relaxed)
+        };
+
+        prev == unsafe { mem::transmute(current_value) }
+
+    }
 }
 
 
@@ -58,52 +118,67 @@ enum FindNodeResult {
 
     /// The hash is not found; the location where the node should be inserted
     /// is returned
-    NotFound(&'static FilePtr)
+    NotFound(&'static HashIndexPtr)
 }
 
 /// Structures as stored in the fileset
 #[derive(Debug)]
 struct Node {
-    hash: [u8; 32],
-    prev: FilePtr,  // to Node
-    next: FilePtr,  // to Node
-    leaf: FilePtr,  // to Leaf
+    hash: Hash32Buf,
+    prev: HashIndexPtr,  // to Node
+    next: HashIndexPtr,  // to Node
+    leaf: HashIndexPtr,  // to Leaf
 }
 
 /// Leaf of the binary tree
-struct Leaf {
-    value: FilePtr, /// to Data file
-    next:  FilePtr, // to Leaf
+struct Leaf<T : HashIndexGuard> {
+    value: T, /// to Data file
+    next:  HashIndexPtr, // to Leaf
 }
 
 
-impl Leaf {
-    fn new(value: FilePtr) -> Self {
+impl<T : HashIndexGuard> Leaf<T> {
+    fn new(value: T) -> Self {
         Leaf {
             value: value,
-            next: FilePtr::null()
+            next: HashIndexPtr::null()
         }
     }
 }
 
 
 impl Node {
-    fn new(hash: Hash32, leaf_ptr: FilePtr) -> Self {
+    fn new(hash: Hash32, leaf_ptr: HashIndexPtr) -> Self {
         Node {
-            hash: *hash.0,
-            prev: FilePtr::null(),
-            next: FilePtr::null(),
+            hash: hash.as_buf(),
+            prev: HashIndexPtr::null(),
+            next: HashIndexPtr::null(),
             leaf: leaf_ptr
         }
     }
 }
 
-impl HashIndex {
+
+// Returns the first 24-bits of the hash
+//
+// This is the index into the root-hash table
+fn hash_to_index(hash: Hash32) -> usize {
+
+    (hash.0[0] as usize) |
+        (hash.0[1] as usize) << 8  |
+        (hash.0[2] as usize) << 16
+
+}
+
+
+impl<T :'static> HashIndex<T>
+    where T : HashIndexGuard + PartialEq + Copy + Clone
+{
 
     /// Opens the hash_index at the location given in the config
     ///
     /// Creates a new fileset if needed
-    pub fn new(cfg: &config::Config) -> HashIndex {
+    pub fn new(cfg: &config::Config) -> HashIndex<T> {
         let dir = &cfg.root.clone().join("hash_index");
 
         let is_new = !dir.exists();
@@ -114,42 +189,34 @@ impl HashIndex {
         let hash_root_fileptr = if is_new {
 
             // allocate space for root hash table
-            fileset.alloc_write_space(mem::size_of::<[FilePtr; HASH_ROOT_COUNT]>() as u32)
+            fileset.alloc_write_space(mem::size_of::<[HashIndexPtr; HASH_ROOT_COUNT]>() as u64)
         }
         else {
             // hash root must have been the first thing written
-            FilePtr::new(0, 0x10)
+            HashIndexPtr::new(0, super::flatfile::INITIAL_WRITEPOS)
         };
 
         // and keep a reference to it
-        let hash_root_ref: &'static [FilePtr; HASH_ROOT_COUNT]
+        let hash_root_ref: &'static [HashIndexPtr; HASH_ROOT_COUNT]
             = fileset.read_fixed(hash_root_fileptr);
 
         HashIndex {
             fileset: fileset,
-            hash_index_root: hash_root_ref
+            hash_index_root: hash_root_ref,
+            phantom: ::std::marker::PhantomData
         }
     }
 
-    // Returns the first 24-bits of the hash
-    //
-    // This is the index into the root-hash table
-    fn hash_to_index(hash: Hash32) -> usize {
-
-        (hash.0[0] as usize) |
-            (hash.0[1] as usize) << 8  |
-            (hash.0[2] as usize) << 16
-
-    }
 
     /// Collects all the values stored at the given node
-    fn collect_node_values(&mut self, node: &Node) -> Vec<FilePtr> {
+    fn collect_node_values(&mut self, node: &Node) -> Vec<T> {
 
-        let mut result : Vec<FilePtr> = Vec::new();
+        let mut result : Vec<T> = Vec::new();
         let mut leaf_ptr = node.leaf;
 
         while !leaf_ptr.is_null() {
-            let leaf: &Leaf = self.fileset.read_fixed(leaf_ptr);
+            let v: &T = self.fileset.read_fixed(leaf_ptr);
+            let leaf: Leaf<T> = Leaf::new(*v);
             result.push(leaf.value);
 
             leaf_ptr = leaf.next;
@@ -161,13 +228,13 @@ impl HashIndex {
     fn find_node(&mut self, hash: Hash32) -> FindNodeResult {
 
         // use the first 24-bit as index in the root hash table
-        let mut ptr = &self.hash_index_root[HashIndex::hash_to_index(hash)];
+        let mut ptr = &self.hash_index_root[hash_to_index(hash)];
 
         // from there, we follow the binary tree
         while !ptr.is_null() {
             let node: &Node = self.fileset.read_fixed(*ptr);
 
-            ptr = match hash.0.cmp(&node.hash) {
+            ptr = match hash.0.cmp(&node.hash.as_ref().0) {
                 Ordering::Less    => &node.prev,
                 Ordering::Greater => &node.next,
                 Ordering::Equal   => return FindNodeResult::Found(node)
@@ -178,8 +245,8 @@ impl HashIndex {
     }
 
 
-    /// Retrieves the fileptr's of the given hash
-    pub fn get(&mut self, hash: Hash32) -> Vec<FilePtr> {
+    /// Retrieves the fileptr'` of the given hash
+    pub fn get(&mut self, hash: Hash32) -> Vec<T> {
 
         match self.find_node(hash) {
             FindNodeResult::NotFound(_) => {
@@ -192,16 +259,19 @@ impl HashIndex {
         }
     }
 
-    /// Stores a fileptr at the given hash
+    /// Stores a T at the given hash
     ///
-    /// This will bail out atomically (do a noop) if there are existing fileptrs stored at the hash,
+    /// This will bail out atomically (do a noop) if there are existing Ts stored at the hash,
     /// that are not among the passed `verified_ptrs`.
     ///
     /// This way, inputs stores at a hash serve as guards that need to be verified before
     /// the transaction can be stored.
     ///
     /// Similarly, blockheader_guards need to be connected before a block can be stored
-    pub fn set(&mut self, hash: Hash32, store_ptr: FilePtr, verified_ptrs: &[FilePtr]) -> bool {
+    pub fn set(&mut self, hash: Hash32, store_ptr: T, verified_ptrs: &[T]) -> bool {
+
+        debug_assert!(! store_ptr.is_guard());
+        debug_assert!(verified_ptrs.iter().all(|p| p.is_guard()));
 
         // this loops through retries when the CAS operation fails
         loop {
@@ -217,7 +287,7 @@ impl HashIndex {
                     let new_node_ptr = self.fileset.write_fixed(&new_node);
 
                     // then atomically update the pointer
-                    if target.atomic_replace(FilePtr::null(), new_node_ptr) {
+                    if target.atomic_replace(HashIndexPtr::null(), new_node_ptr) {
                         return true;
                     }
 
@@ -255,13 +325,16 @@ impl HashIndex {
     ///
     /// If there is no primary ptr (block/tx) for the given hash
     /// the given guard_ptr is added atomically to block further adds
-    pub fn get_or_set(&mut self, hash: Hash32, guard_ptr: FilePtr) -> Option<FilePtr> {
+    pub fn get_or_set(&mut self, hash: Hash32, guard_ptr: T) -> Option<T> {
 
+        debug_assert!(guard_ptr.is_guard());
         // this loops through retries when the CAS operation fails
         loop {
             match self.find_node(hash) {
 
                 FindNodeResult::NotFound(ptr) => {
+
+                    debug_assert!(ptr.is_null());
 
                     // The transaction doesn't exist; we insert guard_ptr instead
 
@@ -274,7 +347,7 @@ impl HashIndex {
                     let new_node_ptr = self.fileset.write_fixed(&new_node);
 
                     // then atomically update the pointer
-                    if ptr.atomic_replace(FilePtr::null(), new_node_ptr) {
+                    if ptr.atomic_replace(HashIndexPtr::null(), new_node_ptr) {
                         return None;
                     }
                 },
@@ -283,10 +356,11 @@ impl HashIndex {
 
                     // load first leaf
                     let first_value_ptr = node.leaf;
-                    let leaf: &Leaf = self.fileset.read_fixed(first_value_ptr);
+                    let val: &T         = self.fileset.read_fixed(first_value_ptr);
+                    let leaf: Leaf<T>   = Leaf::new(*val);
 
 
-                    if leaf.value.is_transaction() || leaf.value.is_blockheader() {
+                    if !leaf.value.is_guard() {
                         return Some(leaf.value);
                     }
 
@@ -321,30 +395,31 @@ mod tests {
 
     use std::thread;
 
-    use store::fileptr::FilePtr;
     use super::*;
     use self::rand::Rng;
     use config;
     use hash::Hash32Buf;
+    use store::TxPtr;
+    use store::flatfileset::FlatFilePtr;
 
     #[test]
     fn test_size_of_node() {
         assert_eq!(mem::size_of::<Node>(), 56);
-        assert_eq!(mem::size_of::<Leaf>(), 16);
+
     }
 
     #[test]
     fn test_seq() {
 
         const DATA_SIZE: u32 = 100000;
-        const THREADS: usize = 100;
-        const LOOPS: usize = 100;
+        const THREADS: usize = 1;
+        const LOOPS: usize = 10000;
 
         let dir = tempdir::TempDir::new("test1").unwrap();
         let path = PathBuf::from(dir.path());
         let cfg = config::Config { root: path.clone() };
 
-        let _idx = HashIndex::new(& cfg );
+        let _idx: HashIndex<TxPtr> = HashIndex::new(& cfg );
 
         // We create a little transaction world:
         // The "transactions" are file pointers 1 to DATA_SIZE
@@ -365,39 +440,37 @@ mod tests {
 
                 for _ in 0..LOOPS {
 
-                    let tx = FilePtr::new(0, rng.gen_range(10, DATA_SIZE));
-                    let tx_hash = hash(tx.file_pos());
+                    let tx = TxPtr::new(0, rng.gen_range(10, DATA_SIZE) as u64);
+                    let tx_hash = hash(tx.get_file_offset() as usize);
 
                     let found_txs = idx.get(tx_hash.as_ref());
 
                     if !found_txs.is_empty() {
 
                         // check that x is either a tx or a set of inputs
-                        if found_txs.clone().into_iter().all(|tx| tx.is_transaction() ) && found_txs.len() == 1 {
-                            assert_eq!(found_txs[0].file_pos(), tx.file_pos());
-                            //println!("Found 1 transaction");
+                        if found_txs.clone().into_iter().all(|tx: TxPtr| !tx.is_guard() ) && found_txs.len() == 1 {
+                            assert_eq!(found_txs[0].get_file_offset(), tx.get_file_offset());
                             continue;
                         }
-                        if found_txs.clone().into_iter().all(|tx| tx.is_input() )  {
-                            //println!("Found {} inputs", found_txs.len());
+                        if found_txs.clone().into_iter().all(|tx| tx.is_guard() )  {
                             continue;
                         }
-                        //panic!("Expected only 1 tx or 1..n inputs");
+                        panic!("Expected only 1 tx or 1..n inputs");
                     }
                     else {
-                        if tx.file_pos() > 2 {
+                        if tx.get_file_offset() > 2 {
 
                             // some messy ops for messy tests
 
-                            let output_tx1_ptr = FilePtr::new(0, tx.file_pos() as u32 -1);
-                            let output_hash = hash(output_tx1_ptr.file_pos());
+                            let output_tx1_ptr = TxPtr::new(0, tx.get_file_offset()  -1);
+                            let output_hash = hash(output_tx1_ptr.get_file_offset() as usize);
 
-                            let input_ptr = FilePtr::new(0, tx.file_pos() as u32).to_input(1);
+                            let input_ptr = TxPtr::new(0, tx.get_file_offset()).to_input(1);
 
                             let output_tx1 = idx.get_or_set(output_hash.as_ref(), input_ptr);
 
                             if let Some(x) = output_tx1 {
-                                assert_eq!(x.is_transaction(), true);
+                                assert_eq!(!x.is_guard(), true);
 
                                 // script validation goes here
                             }

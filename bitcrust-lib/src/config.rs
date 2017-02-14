@@ -21,13 +21,16 @@ impl Config {
 impl Config {
 
 
-    pub fn new_test() -> Config {
-
-        let path = PathBuf::from("tmp");
+    pub fn new_empty<T : Into<String>>(name: T) -> Config {
+        let mut path = PathBuf::from("tmp");
+        let name: String = name.into()
+            .replace("bitcrust-lib/","")
+            .replace("/", "-");
+        path.push(name);
         let _ =  fs::remove_dir_all(path.clone());
         Config { root: path }
-
     }
+
 
     pub fn new_persist() -> Config {
 

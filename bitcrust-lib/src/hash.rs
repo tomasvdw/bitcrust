@@ -15,6 +15,8 @@ pub struct Hash32Buf([u8;32]);
 
 impl Hash32Buf {
 
+
+
     /// Copies a slice into an owned buffer
     pub fn from_slice(slice: &[u8]) -> Hash32Buf {
         let mut result: Hash32Buf = Hash32Buf([0;32]);
@@ -26,6 +28,7 @@ impl Hash32Buf {
 
         Hash32(&self.0)
     }
+
 
     /// Hashes the input twice with SHA256 and returns an owned buffer;
     /// Can be extracted as an Hash32 using as_ref()
