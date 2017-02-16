@@ -23,7 +23,7 @@
 ///
 ///
 
-
+use std::time;
 
 use itertools::Itertools;
 use buffer::*;
@@ -82,6 +82,13 @@ impl BlockPtr {
             is_guard: true
         }
     }
+    pub fn to_non_guard(self) -> BlockPtr {
+        BlockPtr {
+            start:    self.start,
+            length:   self.length,
+            is_guard: false
+        }
+    }
 }
 
 pub struct SpentTree {
@@ -124,6 +131,29 @@ impl ::std::ops::Add for SpentTreeStats {
 }
 
 
+#[cfg(feature = "dump_tree")]
+fn trace_record(index: usize,
+                record: &Record,
+                stats: &Result<SpentTreeStats, SpendingError>,
+                duration: & time::Duration)
+{
+    let us: u32 = duration.as_secs() as u32 * 1_000_000 + duration.subsec_nanos() / 1000;
+    let stats = match *stats {
+        Err(ref e)   => format!("{:?}", e),
+        Ok(ref  s)   =>  format!("@ {0:<10},st={1:<6},j={1:<6}", s.total_move, s.seeks)
+    };
+    println!("## {0: >10} | {1:?} | st={2}, [{3} us]", index, record, stats, us);
+}
+
+#[cfg(not(feature = "dump_tree"))]
+fn trace_record(_: usize,
+                _: &Record,
+                _: &Result<SpentTreeStats, SpendingError>,
+                _: & time::Duration)
+{
+}
+
+
 
 /// This is the primary algorithm to check double-spents and the existence of outputs
 fn seek_and_set_inputs(
@@ -132,7 +162,9 @@ fn seek_and_set_inputs(
                        block_idx: usize,
                        logger: &slog::Logger) -> Result<SpentTreeStats, SpendingError>
 {
-    trace!(logger, format!("Start idx={:?}", block_idx));
+
+
+    trace_record(block_idx, &block[0], &Ok(Default::default()), &time::Duration::from_secs(0));
 
     let results: Vec<Result<SpentTreeStats, SpendingError>> = block[1..]
 
@@ -140,14 +172,19 @@ fn seek_and_set_inputs(
         .enumerate()
         .map(|(i,rec)| {
 
-            trace!(logger, format!("Testing;{:?}", rec));
             debug_assert!(rec.is_transaction() || rec.is_output());
 
-            rec.seek_and_set(block_idx+i+1, records, logger)
+            let timer = time::Instant::now();
 
+            let stats = rec.seek_and_set(block_idx+i+1, records, logger);
+
+            trace_record(block_idx+i+1, rec, &stats, &timer.elapsed());
+
+            stats
         })
         .collect();
 
+    // Return the sum of stats, or an error if any
     results.into_iter().fold_results(Default::default(), |a,b| { a+b } )
 
 }

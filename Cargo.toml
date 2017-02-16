@@ -38,3 +38,6 @@ path = "bitcrust-admin/src/main.rs"
 lto = true
 opt-level = 3
 
+[features]
+default = []
+dump_tree = []

@@ -145,7 +145,7 @@ fn connect_block(
             "conn"  => format!("{:?}",   conn));
 
         // if we can store this hash we can move to the next one
-        if store.block_index.set(conn.block_hash.as_ref(), conn.block, &conn.solved_guards) {
+        if store.block_index.set(conn.block_hash.as_ref(), conn.block.to_non_guard(), &conn.solved_guards) {
             info!(store.logger, "Connect block - set-hash-loop - ok");
             continue;
         }

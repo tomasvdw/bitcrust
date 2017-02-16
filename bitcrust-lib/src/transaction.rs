@@ -140,7 +140,7 @@ impl<'a> Transaction<'a> {
 
             // read tx from disk
             let mut tx_raw   = Buffer::new(store.transactions.read(*input_ptr));
-            println!("Loading tx from {:?}", input_ptr);
+
             let tx           = Transaction::parse(&mut tx_raw).
                     expect("Invalid tx data in database");
 

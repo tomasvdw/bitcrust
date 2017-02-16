@@ -25,7 +25,7 @@ use super::params;
 ///
 /// The exact format is still in work-in-progress.
 ///
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub enum Record {
 
     OrphanBlock {
@@ -59,6 +59,22 @@ pub enum Record {
     // the record references an input instead
     UnmatchedInput
 
+}
+
+impl fmt::Debug for Record {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match *self {
+
+            Record::Block   { file_number: n, file_offset: o , prev: p } =>
+                write!(fmt, "BLK  {0:>04X}:{1:08x}        (TO {2:24})", n, o, p),
+            Record::Output  { file_number: n, file_offset: o , output_index: x, skips: s } =>
+                write!(fmt, "OUT  {0:>04X}:{1:08x} i{2:<4}  ({3:06} {4:06} {5:06} {6:06})", n, o, x, s[0], s[1], s[2], s[3]),
+            Record::Transaction  { file_number: n, file_offset: o , skips: s } =>
+                write!(fmt, "TX   {0:>04X}:{1:08x}        ({2:06} {3:06} {4:06} {5:06})", n, o, s[0], s[1], s[2], s[3]),
+            _ =>
+                write!(fmt, "???")
+        }
+    }
 }
 
 impl Record {
@@ -377,6 +393,7 @@ impl Record {
                     if cur_filenr_pos == seek_filenr_pos {
                         // we've found the transaction of the output before we
                         // found the same output. So we're all good
+                        stats.total_move = cur_idx as i64 - seek_idx as i64;
                         return Ok(stats);
                     } else {
 
@@ -419,12 +436,6 @@ impl Record {
                         seek_skips[n] = diff as i16;
                     }
                 }
-                /*else {
-                    println!("Proc Diff too large {:?}", diff);
-                }*/
-
-
-
 
                 while skip_r < params::SKIP_FIELDS && seek_minus[skip_r] >= minimal_filenr_pos {
                     skip_r += 1;

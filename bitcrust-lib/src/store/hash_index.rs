@@ -273,8 +273,8 @@ impl<T :'static> HashIndex<T>
     /// Similarly, blockheader_guards need to be connected before a block can be stored
     pub fn set(&mut self, hash: Hash32, store_ptr: T, verified_ptrs: &[T]) -> bool {
 
-        debug_assert!(! store_ptr.is_guard());
-        debug_assert!(verified_ptrs.iter().all(|p| p.is_guard()));
+        assert!(! store_ptr.is_guard());
+        assert!(verified_ptrs.iter().all(|p| p.is_guard()));
 
         // this loops through retries when the CAS operation fails
         loop {
