@@ -101,8 +101,8 @@ impl HashIndexPtr {
 
         let prev = unsafe {
             (*atomic_self).compare_and_swap(
-                unsafe { mem::transmute(current_value) },
-                unsafe { mem::transmute(new_value) },
+                mem::transmute(current_value),
+                mem::transmute(new_value),
                 atomic::Ordering::Relaxed)
         };
 

@@ -324,7 +324,6 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
 mod tests {
 
     use store;
-    use config;
     use super::*;
 
 

@@ -138,9 +138,7 @@ mod tests {
     use super::*;
 
     use block::BlockHeader;
-    use hash::*;
     use buffer::*;
-    use config;
 
     #[test]
     fn test_get_block_hash() {

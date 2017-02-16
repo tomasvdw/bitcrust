@@ -228,10 +228,9 @@ mod tests {
     fn test_blk_builders() {
         tx_builder!(bld);
 
-        let prev: Option<Vec<u8>> = None;
         let block0 = genesis![];
 
-        let block1 = blk![prev = block0;
+        let _ = blk![prev = block0;
             tx!(bld; coinbase => a;12),
             tx!(bld; a     => b, c ),
             tx!(bld; a,b   => c )

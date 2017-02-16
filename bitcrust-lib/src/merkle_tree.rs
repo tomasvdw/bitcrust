@@ -64,7 +64,6 @@ impl MerkleTree {
 mod tests {
 
     use super::*;
-    use hash::*;
     use util::*;
 
 

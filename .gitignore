@@ -7,3 +7,8 @@ launch.json
 .vscode
 *.swp
 
+tmp/
+data/
+.idea/
+.cargo/
+bitcrust.iml

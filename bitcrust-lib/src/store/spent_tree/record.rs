@@ -7,7 +7,6 @@ use std::fmt;
 use store::{TxPtr, BlockHeaderPtr};
 use store::FlatFilePtr;
 
-use store::flatfileset::FlatFileSet;
 
 use store::spent_tree::SpendingError;
 use store::spent_tree::BlockPtr;

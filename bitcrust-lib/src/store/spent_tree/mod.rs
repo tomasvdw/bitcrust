@@ -305,7 +305,6 @@ mod tests {
     extern crate tempdir;
 
 
-    use config;
     use slog_term;
     use slog;
     use slog::DrainExt;
