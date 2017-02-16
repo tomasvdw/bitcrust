@@ -19,8 +19,6 @@ extern crate memmap;
 extern crate itertools;
 extern crate rand;
 extern crate ring;
-extern crate simple_parallel;
-extern crate crossbeam;
 extern crate rayon;
 
 #[macro_use]

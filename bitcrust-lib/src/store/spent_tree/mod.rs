@@ -39,8 +39,6 @@ use store::flatfileset::FlatFileSet;
 use store::hash_index::{HashIndex,HashIndexGuard};
 
 use transaction::Transaction;
-use simple_parallel;
-use crossbeam;
 
 mod params;
 
@@ -138,7 +136,7 @@ fn seek_and_set_inputs(
 
     let results: Vec<Result<SpentTreeStats, SpendingError>> = block[1..]
 
-        .iter_mut()
+        .par_iter_mut()
         .enumerate()
         .map(|(i,rec)| {
 
