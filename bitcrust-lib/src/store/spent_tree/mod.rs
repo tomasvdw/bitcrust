@@ -46,7 +46,7 @@ pub mod record;
 pub use self::record::{Record,RecordPtr};
 
 const MB:                 u64 = 1024 * 1024;
-const FILE_SIZE:          u64 = 1024 * MB ;
+const FILE_SIZE:          u64 = 16 * 1024 * MB ;
 const MAX_CONTENT_SIZE:   u64 = FILE_SIZE - 10 * MB ;
 
 const SUBPATH: &'static str   = "spent_tree";

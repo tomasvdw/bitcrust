@@ -387,10 +387,19 @@ impl Record {
                     }
                 },
 
-                Record::OutputLarge { .. } => {
-                    // TODO implemented
-                    // to rare to consider for performance so we'll jst ok
-                    return Ok(stats);
+                Record::OutputLarge { file_number: f, file_offset: o, output_index: x } => {
+                    let cur_filenr_pos = ((f as i64) << 32) | o as i64;
+
+                    if cur_filenr_pos == seek_filenr_pos  && x as u32 == seek_output_index {
+                        trace!(logger, format!("FL# Already spent {:?} {:?}={:?}", cur_idx, x, seek_output_index));
+
+                        return Err(SpendingError::OutputAlreadySpent);
+                    }
+
+                    if minimal_filenr_pos > cur_filenr_pos {
+                        minimal_filenr_pos = cur_filenr_pos;
+                    }
+                    cur_idx -= 1;
 
                 },
 
