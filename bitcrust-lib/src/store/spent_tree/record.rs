@@ -116,7 +116,7 @@ impl Record {
 
     }
 
-    pub fn is_transaction(&self) -> bool {
+    pub fn is_transaction(self) -> bool {
         match self {
             Record::Transaction { ..}  => true,
             _ => false
@@ -140,7 +140,7 @@ impl Record {
         }
     }
 
-    pub fn is_output(&self) -> bool {
+    pub fn is_output(self) -> bool {
         match self {
             Record::Output { .. }      => true,
             Record::OutputLarge {..} => true,
@@ -149,7 +149,7 @@ impl Record {
 
     }
 
-    pub fn is_block(&self) -> bool {
+    pub fn is_block(self) -> bool {
         match self {
             Record::Block { .. }      => true,
             Record::OrphanBlock {..} => true,
@@ -158,14 +158,14 @@ impl Record {
 
     }
 
-    pub fn is_unmatched_input(&self) -> bool {
+    pub fn is_unmatched_input(self) -> bool {
         match self {
             Record::UnmatchedInput { .. } => true,
             _ => false
         }
     }
 
-    fn filenumber_and_pos(&self) -> i64 {
+    fn filenumber_and_pos(self) -> i64 {
         match self {
             Record::Transaction { file_number: n, file_offset: f, .. } => ((n as i64) << 32)  |  f as i64,
             Record::Output      { file_number: n, file_offset: f, .. } => ((n as i64) << 32)  |  f as i64,
@@ -233,7 +233,7 @@ impl RecordPtr {
     }
 
 
-    pub fn to_index(&self) -> u64 {
+    pub fn to_index(self) -> u64 {
         self.0
     }
 
