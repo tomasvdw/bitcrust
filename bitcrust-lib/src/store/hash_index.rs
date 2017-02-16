@@ -88,9 +88,11 @@ impl FlatFilePtr for HashIndexPtr {
 impl HashIndexPtr {
     fn null() -> Self { HashIndexPtr::new(0,0) }
 
-    fn is_null(self) -> bool { self.file_offset == 0 && self.file_number == 0 }
+    fn is_null(&self) -> bool { self.file_offset == 0 && self.file_number == 0 }
 
-    // atomically replaces a self null() value with a new_value
+
+    /// atomically replaces a hash indexptr value with a new_value,
+    /// fails if the current value is no longer the value supplied
     pub fn atomic_replace(&self, current_value: HashIndexPtr, new_value: HashIndexPtr) -> bool {
 
 
@@ -131,6 +133,7 @@ struct Node {
 }
 
 /// Leaf of the binary tree
+/// The supplied Type is the type of the elements that are stored in the tree
 struct Leaf<T : HashIndexGuard> {
     value: T, /// to Data file
     next:  HashIndexPtr, // to Leaf

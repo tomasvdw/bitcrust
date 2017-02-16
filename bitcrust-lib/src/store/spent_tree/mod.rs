@@ -134,6 +134,7 @@ fn seek_and_set_inputs(
                        block_idx: usize,
                        logger: &slog::Logger) -> Result<SpentTreeStats, SpendingError>
 {
+    trace!(logger, format!("Start idx={:?}", block_idx));
 
     let results: Vec<Result<SpentTreeStats, SpendingError>> = block[1..]
 
@@ -144,7 +145,7 @@ fn seek_and_set_inputs(
             trace!(logger, format!("Testing;{:?}", rec));
             debug_assert!(rec.is_transaction() || rec.is_output());
 
-            rec.seek_and_set(block_idx+i, records, logger)
+            rec.seek_and_set(block_idx+i+1, records, logger)
 
         })
         .collect();
@@ -381,6 +382,10 @@ mod tests {
             st.connect_block(&log, block2a, block3b).unwrap_err(),
             SpendingError::OutputNotFound);
 
+        let block3b = st.store(block!(blk 7 =>
+            [tx 8 => (6;1)],
+            [tx 9 => (2;1)]
+        ));
         st.connect_block(&log, block2b, block3b).unwrap();
 
         // now this should only fir on 2a and not on 3b as at 3b it is already spent
@@ -391,6 +396,11 @@ mod tests {
         assert_eq!(
             st.connect_block(&log, block3b, block4a).unwrap_err(),
             SpendingError::OutputAlreadySpent);
+
+        let block4a = st.store(block!(blk 10 =>
+            [tx 11 => (2;1)],
+            [tx 12 => (2;2)]
+        ));
         st.connect_block(&log, block2b, block4a).unwrap();
 
     }

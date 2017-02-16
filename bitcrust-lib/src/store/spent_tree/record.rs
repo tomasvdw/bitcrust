@@ -89,9 +89,9 @@ impl Record {
 
         match orphan_block_record {
             Record::OrphanBlock { file_number: n, file_offset: o } =>
-                Record::Block { file_number: n, file_offset: o, prev: previous.start.to_index() },
+                Record::Block { file_number: n, file_offset: o, prev: previous.start.to_index() + previous.length - 1 },
 
-            _ => panic!("Expecting orphan block record")
+            _ => panic!("Expecting orphan block record. Tried to link {:?} to prev {:?} ", orphan_block_record, previous)
         }
 
     }
@@ -116,7 +116,7 @@ impl Record {
 
     }
 
-    pub fn is_transaction(self) -> bool {
+    pub fn is_transaction(&self) -> bool {
         match self {
             Record::Transaction { ..}  => true,
             _ => false
@@ -126,7 +126,7 @@ impl Record {
     pub fn get_transaction_ptr(self) -> TxPtr {
         match self {
             Record::Transaction { file_number: n, file_offset: o, .. } => TxPtr::new(n,o as u64),
-            _ => panic!("transaction record expected")
+            _ => panic!("get_transaction_ptr transaction record expected, got  {:?}", self)
 
         }
     }
@@ -140,7 +140,7 @@ impl Record {
         }
     }
 
-    pub fn is_output(self) -> bool {
+    pub fn is_output(&self) -> bool {
         match self {
             Record::Output { .. }      => true,
             Record::OutputLarge {..} => true,
@@ -149,7 +149,7 @@ impl Record {
 
     }
 
-    pub fn is_block(self) -> bool {
+    pub fn is_block(&self) -> bool {
         match self {
             Record::Block { .. }      => true,
             Record::OrphanBlock {..} => true,
@@ -158,10 +158,27 @@ impl Record {
 
     }
 
-    pub fn is_unmatched_input(self) -> bool {
+    pub fn is_unmatched_input(&self) -> bool {
         match self {
             Record::UnmatchedInput { .. } => true,
             _ => false
+        }
+    }
+
+    fn filenumber_and_pos(&self) -> i64 {
+        match self {
+            Record::Transaction { file_number: n, file_offset: f, .. } => ((n as i64) << 32)  |  f as i64,
+            Record::Output      { file_number: n, file_offset: f, .. } => ((n as i64) << 32)  |  f as i64,
+            Record::OutputLarge { file_number: n, file_offset: f, .. } => ((n as i64) << 32)  |  f as i64,
+            _ => unreachable!()
+        }
+    }
+
+    fn output_index(self) -> u32 {
+        match self {
+            Record::Output      { output_index: x, .. } => x as u32,
+            Record::OutputLarge { output_index: x, .. } => x as u32,
+            _ => unreachable!()
         }
     }
 
@@ -171,9 +188,9 @@ impl Record {
     pub fn get_file_offset(self) -> u32 {
         match self {
             Record::OrphanBlock { file_offset: f, .. } => f,
-            Record::Block { file_offset: f, .. } => f,
+            Record::Block       { file_offset: f, .. } => f,
             Record::Transaction { file_offset: f, .. } => f,
-            Record::Output { file_offset: f, .. } => f,
+            Record::Output      { file_offset: f, .. } => f,
             Record::OutputLarge { file_offset: f, .. } => f,
             _ => unimplemented!()
         }
@@ -216,7 +233,7 @@ impl RecordPtr {
     }
 
 
-    pub fn to_index(self) -> u64 {
+    pub fn to_index(&self) -> u64 {
         self.0
     }
 
@@ -301,26 +318,30 @@ impl Record {
         logger: &slog::Logger) -> Result<SpentTreeStats, SpendingError>
 
     {
-        trace!(logger, format!("FL# Start search for {:?} {:?} ", self, seek_idx));
+
+        trace!(logger, format!("FL# Start search for {:?} {:?} {:?}", self, seek_idx, records[seek_idx]));
 
         let mut stats: SpentTreeStats = Default::default();
+
+        // maybe we would like to set skips but there is nothing to actually verify
+        if self.is_transaction() { return Ok(stats); }
+
         stats.inputs += 1;
-        Ok(stats)
-        /*
+
         // cur  will walk through the skip-list, starting from
         // the previous record
         let mut cur_idx = seek_idx - 1;
 
         // this is the transaction position we seek (the filepos stripped of the output-index metadata)
-        let seek_filenr_pos = self.ptr.filenumber_and_pos();
+        let seek_filenr_pos = self.filenumber_and_pos();
+        let seek_output_index = self.output_index();
 
         // all filenr_pos we've passed are at least this high
         let mut minimal_filenr_pos = seek_filenr_pos;
 
         // these are the pointers that will be stored in rec. By default, they just point to the
         // previous
-        self.skips = [-1; params::SKIP_FIELDS];
-
+        let mut seek_skips = [-1; params::SKIP_FIELDS];
 
         // for lack of a better name, `skip_r` traces which of the four skips of seek_rec are still
         // "following" the jumps. Initially all are (which will cause seek_rec.skips to be all set
@@ -330,83 +351,90 @@ impl Record {
         let seek_plus:  Vec<i64> = params::DELTA.iter().map(|n| seek_filenr_pos + n).collect();
         let seek_minus: Vec<i64> = params::DELTA.iter().map(|n| seek_filenr_pos - n).collect();
 
-        let is_tx = self.ptr.is_transaction();
 
-        //if is_tx { return Ok(0); }
+
 
         loop {
-
             let cur_rec: Record = records[cur_idx];
-
             stats.seeks += 1;
+            trace!(logger, format!("FL# Seek now at {:?} ", cur_idx));
 
-            let cur_filenr_pos = cur_rec.ptr.filenumber_and_pos();
-
-            if cur_rec.skips == [0; params::SKIP_FIELDS] {
-                // we're at the end
-
-                if is_tx {
-                    // a transaction is supposed to be not found
-                    trace!(logger, format!("FL# Done after {:?} seeks", stats.seeks));
-
-                    return Ok(stats);
-                } else {
-                    //panic!(format!("Output {:?} not found at {:?}", seek_rec, cur.ptr));
+            match cur_rec {
+                Record::OrphanBlock { .. } => {
+                    // this must mean we've reached the end of the line as we wouldn't find an orphan
+                    // block while connecting somewhere in the middle
                     return Err(SpendingError::OutputNotFound);
+                },
+
+                Record::Block { prev: p, .. } => {
+                    stats.jumps += 1;
+
+                    cur_idx = p as usize;
                 }
-            } else if cur_rec.ptr.is_blockheader() || cur_rec.ptr.is_guard_blockheader() {
-                // blockheaders don't have skips; interpret as a full fileptr
-                trace!(logger, format!("FL# {:?}-{:?} JUMPING", cur_idx, cur_rec));
 
-                stats.jumps += 1;
+                Record::Transaction { file_number: f, file_offset: o, .. } => {
+                    let cur_filenr_pos = ((f as i64) << 32) | o as i64;
 
-                cur_idx = cur_rec.get_ptr_from_skips().to_index();
-                continue;
-            }
+                    if cur_filenr_pos == seek_filenr_pos {
+                        // we've found the transaction of the output before we
+                        // found the same output. So we're all good
+                        return Ok(stats);
+                    } else {
 
-            if seek_filenr_pos == cur_filenr_pos {
-                if is_tx || cur_rec.ptr.is_transaction() {
-                    // we've found the transaction of the output before we
-                    // found the same output. So we're all good
+                        if minimal_filenr_pos > cur_filenr_pos {
+                            minimal_filenr_pos = cur_filenr_pos;
+                        }
+                        cur_idx -= 1;
+                    }
+                },
 
-                    return Ok(stats);
+                Record::Output { file_number: f, file_offset: o, output_index: x, .. } => {
+                    let cur_filenr_pos = ((f as i64) << 32) | o as i64;
 
-                } else if cur_rec.ptr.output_index() == self.ptr.output_index() {
+                    if cur_filenr_pos == seek_filenr_pos  && x as u32 == seek_output_index {
+                        trace!(logger, format!("FL# Already spent {:?} {:?}={:?}", cur_idx, x, seek_output_index));
+                        return Err(SpendingError::OutputAlreadySpent);
+                    }
 
-                    //panic!(format!("Output {:?} double spent {:?}", seek_rec, cur.ptr));
-                    return Err(SpendingError::OutputAlreadySpent);
+                    if minimal_filenr_pos > cur_filenr_pos {
+                        minimal_filenr_pos = cur_filenr_pos;
+                    }
+
+                    cur_idx -= 1;
+                },
+
+                Record::OutputLarge { .. } => {
+                    unimplemented!()
+                },
+
+                _ => {
+                    panic!("Unexpected record type {:?} during set_seek", cur_rec);
                 }
             }
-
 
             // See if there are skip-values we need to update in the record were seeking
             if skip_r < params::DELTA.len() {
                 let diff: i64 = cur_idx as i64 - seek_idx as i64;
                 if diff > i16::min_value() as i64 && diff < i16::max_value() as i64 {
                     for n in skip_r..params::DELTA.len() {
-                        self.skips[n] = diff as i16;
+                        seek_skips[n] = diff as i16;
                     }
                 }
                 /*else {
                     println!("Proc Diff too large {:?}", diff);
                 }*/
 
-                if minimal_filenr_pos > cur_filenr_pos {
-                    minimal_filenr_pos = cur_filenr_pos;
-                }
+
 
 
                 while skip_r < params::SKIP_FIELDS && seek_minus[skip_r] >= minimal_filenr_pos {
                     skip_r += 1;
-
-
-                    if is_tx && skip_r >= params::TX_NEEDED_SKIPS {
-
-                        return Ok(stats);
-                    }
                 }
             }
 
+
+
+            /*
             let mut skip = -1;
             for n in (0..params::SKIP_FIELDS).rev() {
                 if seek_plus[n] < cur_filenr_pos {
@@ -420,29 +448,9 @@ impl Record {
                     }
                     break;
                 }
-            }
-
-
-            /*if full_dump {
-                let mut cur = RecordPtr::new(FilePtr::new(0, (16 + cur_idx * mem::size_of::<Record>()) as u32));
-                let target = cur.offset(skip);
-                loop {
-                    let c: &Record = fileset.read_fixed(cur.ptr);
-                    println!("FL# {:?}-{:?} <seek {:?}={:?}>", cur, c, skip, target);
-                    cur = cur.prev(fileset);
-                    let c: &Record = fileset.read_fixed(cur.ptr);
-
-                    if cur.ptr == target.ptr {
-                        println!("FL# {:?}-{:?} FOUND", cur, c);
-                        break;
-                    }
-                }
-
             }*/
-
-            cur_idx = (cur_idx as i64 + skip as i64) as usize;
         }
-        */
+
     }
 }
 
