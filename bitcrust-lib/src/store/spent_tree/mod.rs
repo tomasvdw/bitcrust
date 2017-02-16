@@ -163,8 +163,8 @@ fn seek_and_set_inputs(
                        logger: &slog::Logger) -> Result<SpentTreeStats, SpendingError>
 {
 
+    let block_timer = time::Instant::now();
 
-    trace_record(block_idx, &block[0], &Ok(Default::default()), &time::Duration::from_secs(0));
 
     let results: Vec<Result<SpentTreeStats, SpendingError>> = block[1..]
 
@@ -183,6 +183,9 @@ fn seek_and_set_inputs(
             stats
         })
         .collect();
+
+
+    trace_record(block_idx, &block[0], &Ok(Default::default()), &block_timer.elapsed());
 
     // Return the sum of stats, or an error if any
     results.into_iter().fold_results(Default::default(), |a,b| { a+b } )
