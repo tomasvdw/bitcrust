@@ -140,7 +140,7 @@ fn trace_record(index: usize,
     let us: u32 = duration.as_secs() as u32 * 1_000_000 + duration.subsec_nanos() / 1000;
     let stats = match *stats {
         Err(ref e)   => format!("{:?}", e),
-        Ok(ref  s)   =>  format!("@ {0:<10},st={1:<6},j={1:<6}", s.total_move, s.seeks)
+        Ok(ref  s)   =>  format!("@ {0:<10},st={1:<6},j={2:<6}", s.total_move, s.seeks, s.jumps)
     };
     println!("## {0: >10} | {1:?} | st={2}, [{3} us]", index, record, stats, us);
 }
@@ -168,7 +168,7 @@ fn seek_and_set_inputs(
 
     let results: Vec<Result<SpentTreeStats, SpendingError>> = block[1..]
 
-        .par_iter_mut()
+        ./*par_*/iter_mut()
         .enumerate()
         .map(|(i,rec)| {
 
