@@ -168,7 +168,7 @@ fn seek_and_set_inputs(
 
     let results: Vec<Result<SpentTreeStats, SpendingError>> = block[1..]
 
-        ./*par_*/iter_mut()
+        .par_iter_mut()
         .enumerate()
         .map(|(i,rec)| {
 

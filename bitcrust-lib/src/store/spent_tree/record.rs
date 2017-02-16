@@ -69,6 +69,8 @@ impl fmt::Debug for Record {
                 write!(fmt, "BLK  {0:>04X}:{1:08x}        (TO {2:24})", n, o, p),
             Record::Output  { file_number: n, file_offset: o , output_index: x, skips: s } =>
                 write!(fmt, "OUT  {0:>04X}:{1:08x} i{2:<4}  ({3:06} {4:06} {5:06} {6:06})", n, o, x, s[0], s[1], s[2], s[3]),
+            Record::OutputLarge  { file_number: n, file_offset: o , output_index: x } =>
+                write!(fmt, "OUL  {0:>04X}:{1:08x} i{2:<6}                             ", n, o, x),
             Record::Transaction  { file_number: n, file_offset: o , skips: s } =>
                 write!(fmt, "TX   {0:>04X}:{1:08x}        ({2:06} {3:06} {4:06} {5:06})", n, o, s[0], s[1], s[2], s[3]),
             _ =>
@@ -289,7 +291,7 @@ impl Record {
 
         // for lack of a better name, `skip_r` traces which of the four skips of seek_rec are still
         // "following" the jumps. Initially all are (which will cause seek_rec.skips to be all set
-        // to -1 again), and once seek_plus[0] is cur_filenr_pos is too small, skip_r will increase
+        // to -1 again), and once seek_minus[0] is cur_filenr_pos is too small, skip_r will increase
         let mut skip_r = 0;
 
         let seek_plus:  Vec<i64> = params::DELTA.iter().map(|n| seek_filenr_pos + n).collect();
@@ -336,12 +338,14 @@ impl Record {
 
                     if cur_filenr_pos == seek_filenr_pos {
 
-                        *self = Record::Output {
-                            file_number:  f,
-                            file_offset:  o,
-                            output_index: seek_output_index as u8,
-                            skips:        seek_skips
-                        };
+                        if seek_output_index <= u8::max_value() as u32 {
+                            *self = Record::Output {
+                                file_number: f,
+                                file_offset: o,
+                                output_index: seek_output_index as u8,
+                                skips: seek_skips
+                            };
+                        }
 
                         // we've found the transaction of the output before we
                         // found the same output. So we're all good
@@ -384,7 +388,10 @@ impl Record {
                 },
 
                 Record::OutputLarge { .. } => {
-                    unimplemented!()
+                    // TODO implemented
+                    // to rare to consider for performance so we'll jst ok
+                    return Ok(stats);
+
                 },
 
                 _ => {
