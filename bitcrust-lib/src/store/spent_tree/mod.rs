@@ -106,6 +106,7 @@ pub struct SpentTreeStats {
     pub inputs:     i64,
     pub seeks:      i64,
     pub total_move: i64,
+    pub total_diff: i64,
     pub jumps:      i64,
     pub use_diff:   [i64; params::SKIP_FIELDS]
 }
@@ -124,6 +125,7 @@ impl ::std::ops::Add for SpentTreeStats {
             inputs: self.inputs + other.inputs,
             seeks:  self.seeks  + other.seeks,
             total_move: self.total_move + other.total_move,
+            total_diff: self.total_diff+ other.total_diff,
             jumps: self.jumps   + other.jumps,
             use_diff: use_diff
         }
@@ -140,7 +142,7 @@ fn trace_record(index: usize,
     let us: u32 = duration.as_secs() as u32 * 1_000_000 + duration.subsec_nanos() / 1000;
     let stats = match *stats {
         Err(ref e)   => format!("{:?}", e),
-        Ok(ref  s)   =>  format!("@ {0:<10},st={1:<6},j={2:<6}", s.total_move, s.seeks, s.jumps)
+        Ok(ref  s)   =>  format!("@ {0:<10}={1:<10},st={2:<6},j={3:<5}", s.total_move, s.total_diff, s.seeks, s.jumps)
     };
     println!("## {0: >10} | {1:?} | st={2}, [{3} us]", index, record, stats, us);
 }

@@ -33,6 +33,8 @@ mod flatfile;
 mod flatfileset;
 
 mod hash_index;
+mod spent_index;
+
 mod spent_tree;
 
 pub use self::spent_tree::SpendingError;
@@ -76,7 +78,7 @@ pub struct Store {
 
     pub spent_tree:    spent_tree::SpentTree,
 
-    pub metrics:       Metrics,
+    pub metrics:       Metrics, // todo; this needs to go; structured logging is su
 
     pub logger:        slog::Logger
 }

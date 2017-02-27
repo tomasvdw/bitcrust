@@ -16,6 +16,24 @@ use super::SpentTreeStats;
 
 use super::params;
 
+#[derive(Copy, Clone)]
+pub struct Skips {
+    pub b1: u8,
+    pub b2: u8,
+    pub b3: u8,
+    pub s1: i8,
+    pub s2: i16,
+    pub s3: i16,
+
+}
+
+impl Skips {
+    fn new() -> Skips
+    {
+        Skips { s1:-1, s2: -1, s3: -1, b1:0, b2:0, b3: 0 }
+    }
+}
+
 /// A record is a 16 byte structure that points to either a
 /// * blockheader
 /// * transaction
@@ -40,7 +58,7 @@ pub enum Record {
     Transaction {
         file_number: i16,
         file_offset: u32,
-        skips:       [i16; params::SKIP_FIELDS]
+        skips:       Skips, //[i16; params::SKIP_FIELDS]
     },
     OutputLarge {
         file_number:  i16,
@@ -52,7 +70,7 @@ pub enum Record {
         output_index: u8,
         file_number:  i16,
         file_offset:  u32,
-        skips:       [i16; params::SKIP_FIELDS]
+        skips:       Skips, //[i16; params::SKIP_FIELDS]
     },
 
     // If a referenced output doesn't exist at the time of block-insertion,
@@ -66,13 +84,13 @@ impl fmt::Debug for Record {
         match *self {
 
             Record::Block   { file_number: n, file_offset: o , prev: p } =>
-                write!(fmt, "BLK  {0:>04X}:{1:08x}        (TO {2:24})", n, o, p),
+                write!(fmt, "BLK  {0:>04X}:{1:08x}        (TO {2:29})", n, o, p),
             Record::Output  { file_number: n, file_offset: o , output_index: x, skips: s } =>
-                write!(fmt, "OUT  {0:>04X}:{1:08x} i{2:<4}  ({3:06} {4:06} {5:06} {6:06})", n, o, x, s[0], s[1], s[2], s[3]),
+                write!(fmt, "OUT  {0:>04X}:{1:08x} i{2:<4}  ({3:06} {4:06} {5:06} {6:03} {7:03} {8:03})", n, o, x, s.s1, s.s2, s.s3,s.b1,s.b2,s.b3),
             Record::OutputLarge  { file_number: n, file_offset: o , output_index: x } =>
-                write!(fmt, "OUL  {0:>04X}:{1:08x} i{2:<6}                             ", n, o, x),
+                write!(fmt, "OUL  {0:>04X}:{1:08x} i{2:<6}                                  ", n, o, x),
             Record::Transaction  { file_number: n, file_offset: o , skips: s } =>
-                write!(fmt, "TX   {0:>04X}:{1:08x}        ({2:06} {3:06} {4:06} {5:06})", n, o, s[0], s[1], s[2], s[3]),
+                write!(fmt, "TX   {0:>04X}:{1:08x}        ({2:06} {3:06} {4:06} {5:03} {6:03} {7:03})", n, o, s.s1, s.s2, s.s3,s.b1,s.b2,s.b3),
             _ =>
                 write!(fmt, "???")
         }
@@ -89,7 +107,7 @@ impl Record {
         Record::Transaction {
             file_number: tx_ptr.get_file_number(),
             file_offset: tx_ptr.get_file_offset() as u32,
-            skips: [-1; params::SKIP_FIELDS]
+            skips: Skips::new()
         }
     }
 
@@ -120,7 +138,7 @@ impl Record {
                 output_index: output_index as u8,
                 file_number:  txptr.get_file_number(),
                 file_offset:  txptr.get_file_offset() as u32,
-                skips:        [-1; params::SKIP_FIELDS]
+                skips:        Skips::new()
             }
         }
         else {
@@ -179,6 +197,38 @@ impl Record {
         match self {
             Record::UnmatchedInput { .. } => true,
             _ => false
+        }
+    }
+
+    /// This creates a non-cryptographic perfect hash of the transaction or output
+    pub fn hash(self) -> [u8;8] {
+
+
+        fn gen_hash(file_number: i16, file_offset: u32, output: Option<u32>) -> [u8;8] {
+
+            // we can add the output index to the file-offset because the output-count
+            // is always smaller then the transaction size
+            let f = file_offset + output.map(|x| x+1).unwrap_or(0);
+            let n = file_number as u32;
+
+            [
+                 (f >> 8) as u8,
+                 (f >> 0) as u8,
+                 (n >> 0) as u8,
+                 (f >> 16) as u8,
+                 (n >> 8) as u8,
+                 (f >> 24) as u8,
+                 0 as u8,
+                 0 as u8
+            ]
+        }
+
+        match self {
+            Record::Transaction { file_number: n, file_offset: f, .. } =>                  gen_hash(n, f, None),
+            Record::Output      { file_number: n, file_offset: f, output_index: o, .. } => gen_hash(n, f, Some(o as u32)),
+            Record::OutputLarge { file_number: n, file_offset: f, output_index: o, .. } => gen_hash(n, f, Some(o as u32)),
+            Record::Block       { file_number: n, file_offset: f, .. } =>                  gen_hash(n, f, None),
+            _ => unreachable!()
         }
     }
 
@@ -287,12 +337,15 @@ impl Record {
 
         // these are the pointers that will be stored in rec. By default, they just point to the
         // previous
-        let mut seek_skips = [-1; params::SKIP_FIELDS];
+        let mut seek_skips: [i32; params::SKIP_FIELDS] = [-1; params::SKIP_FIELDS];
+        let mut seek_skip_blocks = [0_u8,0_u8, 0_u8];
 
         // for lack of a better name, `skip_r` traces which of the four skips of seek_rec are still
         // "following" the jumps. Initially all are (which will cause seek_rec.skips to be all set
         // to -1 again), and once seek_minus[0] is cur_filenr_pos is too small, skip_r will increase
         let mut skip_r = 0;
+        let mut skip_blocks = 0_u8;
+
 
         let seek_plus:  Vec<i64> = params::DELTA.iter().map(|n| seek_filenr_pos + n).collect();
         let seek_minus: Vec<i64> = params::DELTA.iter().map(|n| seek_filenr_pos - n).collect();
@@ -309,16 +362,14 @@ impl Record {
             while skip_r < params::SKIP_FIELDS && seek_minus[skip_r] >= minimal_filenr_pos {
                 skip_r += 1;
             }
-            if skip_r < params::DELTA.len() {
-                let diff: i64 = cur_idx as i64 - seek_idx as i64;
-                if diff > i16::min_value() as i64 && diff < i16::max_value() as i64 {
-                    for n in skip_r..params::DELTA.len() {
-                        seek_skips[n] = diff as i16;
-                    }
-                }
 
+            let diff: i64 = cur_idx as i64 - seek_idx as i64;
 
-            }
+            if skip_r < 1 && diff > i8::min_value()  as i64 && diff < i8::max_value()  as i64 { seek_skips[0] = diff as i32;  seek_skip_blocks[0] = skip_blocks; }
+            if skip_r < 2 && diff > i16::min_value()  as i64 && diff < i16::max_value()  as i64 { seek_skips[1] = diff as i32;  seek_skip_blocks[1] = skip_blocks;  }
+            if skip_r < 3 && diff > i16::min_value() as i64 && diff < i16::max_value() as i64 { seek_skips[2] = diff as i32;  seek_skip_blocks[2] = skip_blocks;  }
+            //if skip_r < 4 && diff > i32::min_value() as i64 && diff < i32::max_value() as i64 { seek_skips[3] = diff as i32 }
+
 
             match cur_rec {
                 Record::OrphanBlock { .. } => {
@@ -329,6 +380,7 @@ impl Record {
 
                 Record::Block { prev: p, .. } => {
                     stats.jumps += 1;
+                    skip_blocks = skip_blocks.saturating_add(1);
 
                     cur_idx = p as usize;
                 }
@@ -343,13 +395,20 @@ impl Record {
                                 file_number: f,
                                 file_offset: o,
                                 output_index: seek_output_index as u8,
-                                skips: seek_skips
+                                skips: Skips {
+                                    s1: seek_skips[0] as i8,
+                                    s2: seek_skips[1] as i16,
+                                    s3: seek_skips[2] as i16,
+                                    b1: seek_skip_blocks[0],
+                                    b2: seek_skip_blocks[1],
+                                    b3: seek_skip_blocks[2]
+                                }
                             };
                         }
 
                         // we've found the transaction of the output before we
                         // found the same output. So we're all good
-                        stats.total_move = cur_idx as i64 - seek_idx as i64;
+                        stats.total_diff = cur_idx as i64 - seek_idx as i64;
                         return Ok(stats);
                     } else {
 
@@ -357,6 +416,7 @@ impl Record {
                             minimal_filenr_pos = cur_filenr_pos;
                         }
                         cur_idx -= 1;
+                        stats.total_move += 1;
                     }
                 },
 
@@ -371,7 +431,9 @@ impl Record {
                     let mut skip: i64 = -1;
                     for n in (0..params::SKIP_FIELDS).rev() {
                         if seek_plus[n] < cur_filenr_pos {
-                            skip = s[n] as i64;
+                            if n == 2 { skip = s.s3 as i64; skip_blocks = skip_blocks.saturating_add(s.b3); };
+                            if n == 1 { skip = s.s2 as i64; skip_blocks = skip_blocks.saturating_add(s.b2); };
+                            if n == 0 { skip = s.s1 as i64; skip_blocks = skip_blocks.saturating_add(s.b1); };
 
                             if minimal_filenr_pos > cur_filenr_pos - params::DELTA[n] {
                                 minimal_filenr_pos = cur_filenr_pos - params::DELTA[n];
@@ -380,6 +442,7 @@ impl Record {
                         }
                     }
 
+                    stats.total_move += skip;
                     cur_idx = (cur_idx as i64 + skip) as usize;
 
                     if minimal_filenr_pos > cur_filenr_pos {
@@ -400,6 +463,7 @@ impl Record {
                         minimal_filenr_pos = cur_filenr_pos;
                     }
                     cur_idx -= 1;
+                    stats.total_move += 1;
 
                 },
 

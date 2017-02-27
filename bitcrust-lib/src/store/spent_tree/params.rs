@@ -9,11 +9,16 @@
 //   if seek_tx < this_tx + DELTA[n] then
 //      this_tx = jump(this_tx[tx].skips[n])
 pub const DELTA: [i64; SKIP_FIELDS] = [
-    -256 * 256 * 256,
-    2 * 256 * 256,
-    32 * 256 * 256 ,
-    16 * 256 * 256 * 256
+    4 * 256 * 256,  // 2 * 256 * 256
+    32 * 256 * 256,//32 * 256 * 256 ,
+    16 * 256 * 256 * 256 //16 * 256 * 256 * 256
 ];
+///
+/// On every record we partition the space into 6 groups;
+/// The total range of these groups slowly changes;
+///
+///  [] [] [] [] [] []
+///
 /*
 [
 12665503791,
@@ -27,4 +32,4 @@ pub const DELTA: [i64; SKIP_FIELDS] = [
 pub const TX_NEEDED_SKIPS:usize = 0;
 
 
-pub const SKIP_FIELDS: usize = 4;
+pub const SKIP_FIELDS: usize = 3;

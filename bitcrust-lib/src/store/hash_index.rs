@@ -52,9 +52,9 @@ pub trait HashIndexGuard {
 /// Internally uses fileset
 pub struct HashIndex<T : HashIndexGuard + Copy + Clone> {
 
-    fileset:         FlatFileSet<HashIndexPtr>,
+    fileset:         FlatFileSet<IndexPtr>,
 
-    hash_index_root: &'static [HashIndexPtr; HASH_ROOT_COUNT],
+    hash_index_root: &'static [IndexPtr; HASH_ROOT_COUNT],
 
     phantom:         ::std::marker::PhantomData<T>
 
@@ -62,16 +62,16 @@ pub struct HashIndex<T : HashIndexGuard + Copy + Clone> {
 
 /// A persistent pointer into the hash-index
 #[derive(Debug, Clone, Copy)]
-pub struct HashIndexPtr {
+pub struct IndexPtr {
     file_offset: u32,
     file_number: i16,
     zero: u16
 }
 
-impl FlatFilePtr for HashIndexPtr {
+impl FlatFilePtr for IndexPtr {
     fn new(file_number: i16, file_offset: u64) -> Self {
 
-        HashIndexPtr {
+        IndexPtr {
             file_offset: file_offset as u32,
             file_number: file_number,
             zero: 0  // we must pad with zero to ensure atomic transmutes work
@@ -85,15 +85,15 @@ impl FlatFilePtr for HashIndexPtr {
 
 }
 
-impl HashIndexPtr {
-    fn null() -> Self { HashIndexPtr::new(0,0) }
+impl IndexPtr {
+    pub fn null() -> Self { IndexPtr::new(0, 0) }
 
-    fn is_null(&self) -> bool { self.file_offset == 0 && self.file_number == 0 }
+    pub fn is_null(&self) -> bool { self.file_offset == 0 && self.file_number == 0 }
 
 
     /// atomically replaces a hash indexptr value with a new_value,
     /// fails if the current value is no longer the value supplied
-    pub fn atomic_replace(&self, current_value: HashIndexPtr, new_value: HashIndexPtr) -> bool {
+    pub fn atomic_replace(&self, current_value: IndexPtr, new_value: IndexPtr) -> bool {
 
 
         let atomic_self: *mut atomic::AtomicU64 = unsafe { mem::transmute( self ) };
@@ -120,23 +120,23 @@ enum FindNodeResult {
 
     /// The hash is not found; the location where the node should be inserted
     /// is returned
-    NotFound(&'static HashIndexPtr)
+    NotFound(&'static IndexPtr)
 }
 
 /// Structures as stored in the fileset
 #[derive(Debug)]
 struct Node {
     hash: Hash32Buf,
-    prev: HashIndexPtr,  // to Node
-    next: HashIndexPtr,  // to Node
-    leaf: HashIndexPtr,  // to Leaf
+    prev: IndexPtr,  // to Node
+    next: IndexPtr,  // to Node
+    leaf: IndexPtr,  // to Leaf
 }
 
 /// Leaf of the binary tree
 /// The supplied Type is the type of the elements that are stored in the tree
 struct Leaf<T : HashIndexGuard> {
     value: T, /// to Data file
-    next:  HashIndexPtr, // to Leaf
+    next: IndexPtr, // to Leaf
 }
 
 
@@ -144,18 +144,18 @@ impl<T : HashIndexGuard> Leaf<T> {
     fn new(value: T) -> Self {
         Leaf {
             value: value,
-            next: HashIndexPtr::null()
+            next: IndexPtr::null()
         }
     }
 }
 
 
 impl Node {
-    fn new(hash: Hash32, leaf_ptr: HashIndexPtr) -> Self {
+    fn new(hash: Hash32, leaf_ptr: IndexPtr) -> Self {
         Node {
             hash: hash.as_buf(),
-            prev: HashIndexPtr::null(),
-            next: HashIndexPtr::null(),
+            prev: IndexPtr::null(),
+            next: IndexPtr::null(),
             leaf: leaf_ptr
         }
     }
@@ -192,15 +192,15 @@ impl<T :'static> HashIndex<T>
         let hash_root_fileptr = if is_new {
 
             // allocate space for root hash table
-            fileset.alloc_write_space(mem::size_of::<[HashIndexPtr; HASH_ROOT_COUNT]>() as u64)
+            fileset.alloc_write_space(mem::size_of::<[IndexPtr; HASH_ROOT_COUNT]>() as u64)
         }
         else {
             // hash root must have been the first thing written
-            HashIndexPtr::new(0, super::flatfile::INITIAL_WRITEPOS)
+            IndexPtr::new(0, super::flatfile::INITIAL_WRITEPOS)
         };
 
         // and keep a reference to it
-        let hash_root_ref: &'static [HashIndexPtr; HASH_ROOT_COUNT]
+        let hash_root_ref: &'static [IndexPtr; HASH_ROOT_COUNT]
             = fileset.read_fixed(hash_root_fileptr);
 
         HashIndex {
@@ -290,7 +290,7 @@ impl<T :'static> HashIndex<T>
                     let new_node_ptr = self.fileset.write_fixed(&new_node);
 
                     // then atomically update the pointer
-                    if target.atomic_replace(HashIndexPtr::null(), new_node_ptr) {
+                    if target.atomic_replace(IndexPtr::null(), new_node_ptr) {
                         return true;
                     }
 
@@ -350,7 +350,7 @@ impl<T :'static> HashIndex<T>
                     let new_node_ptr = self.fileset.write_fixed(&new_node);
 
                     // then atomically update the pointer
-                    if ptr.atomic_replace(HashIndexPtr::null(), new_node_ptr) {
+                    if ptr.atomic_replace(IndexPtr::null(), new_node_ptr) {
                         return None;
                     }
                 },
@@ -415,8 +415,8 @@ mod tests {
     fn test_seq() {
 
         const DATA_SIZE: u32 = 100000;
-        const THREADS: usize = 1;
-        const LOOPS: usize = 10000;
+        const THREADS: usize = 100;
+        const LOOPS: usize = 500;
 
         let dir = tempdir::TempDir::new("test1").unwrap();
         let path = PathBuf::from(dir.path());
