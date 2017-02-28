@@ -234,6 +234,8 @@ impl Record {
             let f = file_offset + output.map(|x| x+1).unwrap_or(0);
             let n = file_number as u32;
 
+            // this looks pretty random; hopefully it spreads aroung in the spent-index root
+            // but the performance of this particular "hash-function" is untested
             [
                  (f >> 8) as u8,
                  (f >> 0) as u8,

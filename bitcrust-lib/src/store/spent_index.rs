@@ -1,8 +1,12 @@
-#![allow(mutable_transmutes)]
-
 //! Index that stores transactions and spent outputs
 //!
-//! This serves as a broom-wagon
+//! This serves as a broom-wagon for the spent-tree.
+//! After X blocks, outputs and transactions are stored here,
+//! and when outputs aren't found in the spent tree for X blocks,
+//! they are searched here.
+//!
+//! The data-structure here is similar to hash-index:
+//! a large root hash-table with each element pointing to an unbalanced binary tree
 //!
 
 use std::{mem};
@@ -126,13 +130,9 @@ impl SpentIndex
         // use the first 24-bit as index in the root hash table
         let mut ptr = &self.index_root[hash_to_index(hash)];
 
-        // here we must cheat; read_fixed requires a mutable reference and we *know* it can't grow
-        // here, so we just force
-        let set: &mut FlatFileSet<IndexPtr> = unsafe { mem::transmute(&self.fileset) };
-
         // from there, we follow the binary tree
         while !ptr.is_null() {
-            let node: &Node = set.read_fixed(*ptr);
+            let node: &Node = self.fileset.read_fixed_readonly(*ptr);
 
             ptr = match hash.cmp(&node.hash) {
                 Ordering::Less    => &node.prev,

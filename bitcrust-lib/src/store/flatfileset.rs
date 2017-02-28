@@ -191,6 +191,23 @@ impl<P: FlatFilePtr + Copy + Clone> FlatFileSet<P> {
 
     }
 
+    /// Returns a mutable reference to the given Flatfile
+    ///
+    /// Panics if it is not yet opened
+    fn get_flatfile_readonly(&self, fileno: i16) -> &FlatFile {
+
+        // convert filenumber to index in file-vector
+        let file_idx = (fileno - self.first_file) as usize;
+
+        if self.files[file_idx].is_none() {
+
+            panic!("get_flatfile_readonly called, but file not yet open");
+        }
+
+        self.files[file_idx].as_ref().unwrap()
+
+    }
+
     /// Reserves `size` bytes in the flatfileset
     ///
     /// Creates a new file if needed
@@ -304,6 +321,19 @@ impl<P: FlatFilePtr + Copy + Clone> FlatFileSet<P> {
         let fileno   = pos.get_file_number();
         let filepos  = pos.get_file_offset();
         let file     = self.get_flatfile(fileno);
+
+        file.get(filepos as usize)
+    }
+
+    /// Reads the fixed size buffer at the given position
+    /// But panics if this requires to map more files
+    ///
+    /// This allows it to be called with an immutable reference
+    pub fn read_fixed_readonly<T>(&self, pos: P) -> &'static mut T {
+
+        let fileno   = pos.get_file_number();
+        let filepos  = pos.get_file_offset();
+        let file     = self.get_flatfile_readonly(fileno);
 
         file.get(filepos as usize)
     }
