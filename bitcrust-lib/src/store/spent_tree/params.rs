@@ -9,7 +9,7 @@
 //   if seek_tx < this_tx + DELTA[n] then
 //      this_tx = jump(this_tx[tx].skips[n])
 pub const DELTA: [i64; SKIP_FIELDS] = [
-    4 * 256 * 256,  // 2 * 256 * 256
+    2 * 256 * 256,
     32 * 256 * 256,//32 * 256 * 256 ,
     16 * 256 * 256 * 256 //16 * 256 * 256 * 256
 ];

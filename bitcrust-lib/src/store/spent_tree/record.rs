@@ -10,6 +10,7 @@ use store::FlatFilePtr;
 
 use store::spent_tree::SpendingError;
 use store::spent_tree::BlockPtr;
+use store::spent_index::SpentIndex;
 
 use store::flatfile::INITIAL_WRITEPOS;
 use super::SpentTreeStats;
@@ -51,7 +52,7 @@ pub enum Record {
         file_offset: u32,
     },
     Block {
-        file_number: i16,
+        prev_size:   [u8;3],
         file_offset: u32,
         prev:        u64
     },
@@ -83,14 +84,19 @@ impl fmt::Debug for Record {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
 
-            Record::Block   { file_number: n, file_offset: o , prev: p } =>
-                write!(fmt, "BLK  {0:>04X}:{1:08x}        (TO {2:29})", n, o, p),
+            Record::Block   { prev_size:_, file_offset: o , prev: p } =>
+                write!(fmt, "BLK  {0:>04X}:{1:08x}        (TO {2:29})", 0, o, p),
             Record::Output  { file_number: n, file_offset: o , output_index: x, skips: s } =>
                 write!(fmt, "OUT  {0:>04X}:{1:08x} i{2:<4}  ({3:06} {4:06} {5:06} {6:03} {7:03} {8:03})", n, o, x, s.s1, s.s2, s.s3,s.b1,s.b2,s.b3),
             Record::OutputLarge  { file_number: n, file_offset: o , output_index: x } =>
                 write!(fmt, "OUL  {0:>04X}:{1:08x} i{2:<6}                                  ", n, o, x),
             Record::Transaction  { file_number: n, file_offset: o , skips: s } =>
                 write!(fmt, "TX   {0:>04X}:{1:08x}        ({2:06} {3:06} {4:06} {5:03} {6:03} {7:03})", n, o, s.s1, s.s2, s.s3,s.b1,s.b2,s.b3),
+
+            Record::OrphanBlock   { ..  } =>
+                write!(fmt, "??? OPRHAN BLOCK "),
+            Record::UnmatchedInput { .. } =>
+                write!(fmt, "??? UNMATCHED INPUT "),
             _ =>
                 write!(fmt, "???")
         }
@@ -122,9 +128,10 @@ impl Record {
 
     pub fn new_block(previous: BlockPtr, orphan_block_record: Record) -> Record {
 
+        let prev_size = [(previous.length >>16) as u8, (previous.length >> 8) as u8, previous.length  as u8];
         match orphan_block_record {
-            Record::OrphanBlock { file_number: n, file_offset: o } =>
-                Record::Block { file_number: n, file_offset: o, prev: previous.start.to_index() + previous.length - 1 },
+            Record::OrphanBlock { file_number: _, file_offset: o } =>
+                Record::Block { prev_size: prev_size, file_offset: o, prev: previous.start.to_index() + previous.length - 1 },
 
             _ => panic!("Expecting orphan block record. Tried to link {:?} to prev {:?} ", orphan_block_record, previous)
         }
@@ -151,6 +158,22 @@ impl Record {
 
     }
 
+    /// If called on block-record, returns the index of the block-record and the record-count
+    /// of the previous block
+    pub fn previous_block(self) -> (usize, usize) {
+        match self {
+            Record::Block { prev: prev, prev_size: prev_size, .. } => {
+                let prev_size = (prev_size[0] as usize) << 16
+                    + (prev_size[1] as usize) << 8
+                    + (prev_size[2] as usize) << 0;
+
+                (prev as usize - prev_size + 1, prev_size)
+
+            },
+            _ => unreachable!()
+        }
+    }
+
     pub fn is_transaction(self) -> bool {
         match self {
             Record::Transaction { ..}  => true,
@@ -168,8 +191,8 @@ impl Record {
 
     pub fn get_block_header_ptr(self) -> BlockHeaderPtr {
         match self {
-            Record::Block       { file_number: n, file_offset: o, .. } => BlockHeaderPtr::new(n,o as u64),
-            Record::OrphanBlock { file_number: n, file_offset: o, .. } => BlockHeaderPtr::new(n,o as u64),
+            Record::Block       { file_offset: o, .. } => BlockHeaderPtr::new(0,o as u64),
+            Record::OrphanBlock { file_offset: o, .. } => BlockHeaderPtr::new(0,o as u64),
             _ => panic!("transaction record expected")
 
         }
@@ -200,7 +223,7 @@ impl Record {
         }
     }
 
-    /// This creates a non-cryptographic perfect hash of the transaction or output
+    /// This creates a non-cryptographic but perfect hash of the transaction or output
     pub fn hash(self) -> [u8;8] {
 
 
@@ -222,12 +245,12 @@ impl Record {
                  0 as u8
             ]
         }
-
         match self {
             Record::Transaction { file_number: n, file_offset: f, .. } =>                  gen_hash(n, f, None),
             Record::Output      { file_number: n, file_offset: f, output_index: o, .. } => gen_hash(n, f, Some(o as u32)),
             Record::OutputLarge { file_number: n, file_offset: f, output_index: o, .. } => gen_hash(n, f, Some(o as u32)),
-            Record::Block       { file_number: n, file_offset: f, .. } =>                  gen_hash(n, f, None),
+            Record::Block       { file_offset: f, .. } =>                                  gen_hash(0, f, None),
+            Record::OrphanBlock { file_offset: f, .. } =>                                  gen_hash(0, f, None),
             _ => unreachable!()
         }
     }
@@ -241,6 +264,14 @@ impl Record {
         }
     }
 
+    fn to_transaction(self) -> Record {
+        match self {
+            Record::Output      { file_number: n, file_offset: f, .. } => Record::new_transaction(TxPtr::new(n, f as u64)),
+            Record::OutputLarge { file_number: n, file_offset: f, .. } => Record::new_transaction(TxPtr::new(n, f as u64)),
+            _ => unreachable!()
+        }
+    }
+
     fn output_index(self) -> u32 {
         match self {
             Record::Output      { output_index: x, .. } => x as u32,
@@ -250,7 +281,7 @@ impl Record {
     }
 
     // test only as normally it makes no sense to treat file_offsets from different record-types
-    // as a single value
+    // as the same expression
     #[cfg(test)]
     pub fn get_file_offset(self) -> u32 {
         match self {
@@ -262,6 +293,8 @@ impl Record {
             _ => unimplemented!()
         }
     }
+
+
 
 }
 
@@ -310,6 +343,7 @@ impl Record {
 
     pub fn seek_and_set(
         &mut self,
+        spent_index: &SpentIndex,
         seek_idx: usize,
         records: &[Record],
         logger: &slog::Logger) -> Result<SpentTreeStats, SpendingError>
@@ -355,6 +389,23 @@ impl Record {
             stats.seeks += 1;
             trace!(logger, format!("FL# Seek now at {:?} ", cur_idx));
 
+            if skip_blocks > 20 {
+
+                let output_hash = self.hash();
+                let tx_hash = self.to_transaction().hash();
+
+                if spent_index.exists(output_hash) {
+                    trace!(logger, format!("FL# Hash exists! {:?} == {:?}", output_hash,self));
+
+                    return Err(SpendingError::OutputAlreadySpent);
+                }
+
+                if !spent_index.exists(tx_hash) {
+                    return Err(SpendingError::OutputNotFound);
+                }
+
+                return Ok(stats);
+            }
             // deduces that the wrong seek-val is set @ 106868
             //if seek_idx ==109401 { info!(logger, "FL# Seek now at {:?} ", cur_idx); }
 

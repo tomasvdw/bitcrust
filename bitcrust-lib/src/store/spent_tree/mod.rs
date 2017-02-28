@@ -37,6 +37,7 @@ use store::{TxPtr,BlockHeaderPtr};
 use store::flatfileset::FlatFileSet;
 
 use store::hash_index::{HashIndex,HashIndexGuard};
+use store::spent_index::SpentIndex;
 
 use transaction::Transaction;
 
@@ -69,6 +70,7 @@ pub struct BlockPtr {
     pub is_guard: bool
 }
 
+
 impl HashIndexGuard for BlockPtr {
     fn is_guard(self) -> bool { self.is_guard }
 }
@@ -88,6 +90,30 @@ impl BlockPtr {
             length:   self.length,
             is_guard: false
         }
+    }
+
+    // Jumps back a block-record to the previous block
+    fn scan_back(&self, records: &[Record], count: usize) -> BlockPtr {
+
+        // Seek back
+        let mut rec = records[self.start.to_index() as usize];
+        let mut n=0;
+
+        loop {
+            let (i,s) = rec.previous_block();
+            n = n+1;
+            if n == count {
+                return BlockPtr {
+                    start   : RecordPtr::new(i as u64),
+                    length  : s as u64,
+                    is_guard: false
+                }
+            } else {
+                rec = records[i];
+            }
+        };
+        unreachable!()
+
     }
 }
 
@@ -162,6 +188,7 @@ fn seek_and_set_inputs(
                        records: &[Record],
                        block: &mut [Record],
                        block_idx: usize,
+                       spent_index: &SpentIndex,
                        logger: &slog::Logger) -> Result<SpentTreeStats, SpendingError>
 {
 
@@ -178,7 +205,7 @@ fn seek_and_set_inputs(
 
             let timer = time::Instant::now();
 
-            let stats = rec.seek_and_set(block_idx+i+1, records, logger);
+            let stats = rec.seek_and_set(spent_index, block_idx+i+1, records, logger);
 
             trace_record(block_idx+i+1, rec, &stats, &timer.elapsed());
 
@@ -301,10 +328,13 @@ impl SpentTree {
 
 
 
+
+
     /// Verifies of each output in the block at target_start
     /// Then lays the connection between previous_end and target_start
     pub fn connect_block(&mut self,
-                         logger: &slog::Logger,
+                         spent_index:    &mut SpentIndex,
+                         logger:         &slog::Logger,
                          previous_block: BlockPtr,
                          target_block:   BlockPtr) -> Result<(), SpendingError> {
 
@@ -314,12 +344,22 @@ impl SpentTree {
         let block:   &mut [Record] = self.fileset.read_mut_slice(target_block.start, target_block.length as usize);
         let records: &[Record]     = self.get_all_records();
 
+
         // Make the link,
         block[0] = Record::new_block(previous_block, block[0]);
 
+        // TODO this should jump 10 blocks back. This is important once we allow forks
+        let s = previous_block.start.to_index() as usize;
+        let l = previous_block.length as usize;
+        let immutable_block: &[Record] = &records[s+1..s+l];
+        for rec in immutable_block.iter() {
+
+            //println!("Hash Set {:?} = {:?}", rec, rec.hash());
+            spent_index.set(rec.hash());
+        }
 
         // verify all inputs and set proper skips
-        let stats  = seek_and_set_inputs(records, block, block_idx as usize, logger)?;
+        let stats  = seek_and_set_inputs(records, block, block_idx as usize, spent_index, logger)?;
 
 
         let elaps : isize = timer.elapsed().as_secs() as isize * 1000 +
@@ -352,7 +392,9 @@ mod tests {
     use slog::DrainExt;
     use store::flatfileset::FlatFilePtr;
     use super::*;
+    use store::spent_index::SpentIndex;
     use store::{BlockHeaderPtr, TxPtr};
+
     /// Macro to create a block for the spent_tree tests
     /// blockheaders and txs are unqiue numbers (fileptrs but where they point to doesn't matter
     /// for the spent_tree).
@@ -392,6 +434,7 @@ mod tests {
         let log = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
 
         let mut st  = SpentTree::new(& test_cfg!());
+        let mut si  = SpentIndex::new(& test_cfg!());
 
         let block1 = st.store(block!(blk 1 =>
             [tx 2]
@@ -407,8 +450,8 @@ mod tests {
 
 
         // create a tree, both 2a and 2b attached to 1
-        st.connect_block(&log, block1, block2a).unwrap();
-        st.connect_block(&log, block1, block2b).unwrap();
+        st.connect_block(&mut si, &log, block1, block2a).unwrap();
+        st.connect_block(&mut si, &log, block1, block2b).unwrap();
 
         // this one should only "fit" onto 2b
         let block3b = st.store(block!(blk 7 =>
@@ -418,14 +461,14 @@ mod tests {
 
 
         assert_eq!(
-            st.connect_block(&log, block2a, block3b).unwrap_err(),
+            st.connect_block(&mut si, &log, block2a, block3b).unwrap_err(),
             SpendingError::OutputNotFound);
 
         let block3b = st.store(block!(blk 7 =>
             [tx 8 => (6;1)],
             [tx 9 => (2;1)]
         ));
-        st.connect_block(&log, block2b, block3b).unwrap();
+        st.connect_block(&mut si, &log, block2b, block3b).unwrap();
 
         // now this should only fir on 2a and not on 3b as at 3b it is already spent
         let block4a = st.store(block!(blk 10 =>
@@ -433,14 +476,14 @@ mod tests {
             [tx 12 => (2;2)]
         ));
         assert_eq!(
-            st.connect_block(&log, block3b, block4a).unwrap_err(),
+            st.connect_block(&mut si, &log, block3b, block4a).unwrap_err(),
             SpendingError::OutputAlreadySpent);
 
         let block4a = st.store(block!(blk 10 =>
             [tx 11 => (2;1)],
             [tx 12 => (2;2)]
         ));
-        st.connect_block(&log, block2b, block4a).unwrap();
+        st.connect_block(&mut si, &log, block2b, block4a).unwrap();
 
     }
 
@@ -456,6 +499,7 @@ mod tests {
 
 
         let mut st  = SpentTree::new(& test_cfg!() );
+        let mut si  = SpentIndex::new(& test_cfg!());
 
         let block_ptr = st.store_block(block1.0, block1.1);
 
@@ -468,7 +512,7 @@ mod tests {
 
         println!("{:?}", block_ptr2.start);
 
-        st.connect_block(&log, block_ptr, block_ptr2).unwrap();
+        st.connect_block(&mut si, &log, block_ptr, block_ptr2).unwrap();
 
         let recs = st.get_all_records();
         assert!(   recs[0].is_block() );

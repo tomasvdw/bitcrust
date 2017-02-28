@@ -77,6 +77,7 @@ pub struct Store {
     pub block_index:   hash_index::HashIndex<BlockPtr>,
 
     pub spent_tree:    spent_tree::SpentTree,
+    pub spent_index:   spent_index::SpentIndex,
 
     pub metrics:       Metrics, // todo; this needs to go; structured logging is su
 
@@ -107,6 +108,8 @@ impl Store {
             block_index:  hash_index::HashIndex::new(&cfg),
 
             spent_tree:   spent_tree::SpentTree::new(&cfg),
+            spent_index:  spent_index::SpentIndex::new(&cfg),
+
 
             metrics:       Metrics::new(),
             logger:        slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!()),

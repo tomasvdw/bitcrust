@@ -1,4 +1,4 @@
-
+#![allow(mutable_transmutes)]
 
 //! Index that stores transactions and spent outputs
 //!
@@ -81,6 +81,7 @@ fn hash_to_index(hash: [u8;8]) -> usize {
 
 }
 
+unsafe impl Sync for SpentIndex {}
 
 impl SpentIndex
 {
@@ -120,14 +121,18 @@ impl SpentIndex
 
 
     // Finds the node containing the hash, or the location the hash should be inserted
-    fn find_node(&mut self, hash: [u8;8]) -> FindNodeResult {
+    fn find_node(&self, hash: [u8;8]) -> FindNodeResult {
 
         // use the first 24-bit as index in the root hash table
         let mut ptr = &self.index_root[hash_to_index(hash)];
 
+        // here we must cheat; read_fixed requires a mutable reference and we *know* it can't grow
+        // here, so we just force
+        let set: &mut FlatFileSet<IndexPtr> = unsafe { mem::transmute(&self.fileset) };
+
         // from there, we follow the binary tree
         while !ptr.is_null() {
-            let node: &Node = self.fileset.read_fixed(*ptr);
+            let node: &Node = set.read_fixed(*ptr);
 
             ptr = match hash.cmp(&node.hash) {
                 Ordering::Less    => &node.prev,
@@ -141,7 +146,7 @@ impl SpentIndex
 
 
     /// Tests if the given hash exists.
-    pub fn exists(&mut self, hash: [u8;8]) -> bool {
+    pub fn exists(&self, hash: [u8;8]) -> bool {
 
         match self.find_node(hash) {
             FindNodeResult::NotFound(_) => false,
@@ -153,6 +158,7 @@ impl SpentIndex
 
     /// Stores a recordhash
     pub fn set(&mut self, hash: [u8;8])  {
+
 
         // this loops through retries when the CAS operation fails
         loop {

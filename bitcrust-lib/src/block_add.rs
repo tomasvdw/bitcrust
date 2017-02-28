@@ -125,7 +125,7 @@ fn connect_block(
 
     // connect first block ...
     if let Some(previous_block) = previous_block {
-        store.spent_tree.connect_block( & store.logger, previous_block, this_block) ?;
+        store.spent_tree.connect_block( &mut store.spent_index, & store.logger, previous_block, this_block) ?;
     }
 
 
@@ -187,7 +187,7 @@ fn connect_block(
                 ptr
             );
 
-            store.spent_tree.connect_block(&store.logger, conn.block, ptr)?;
+            store.spent_tree.connect_block(&mut store.spent_index, &store.logger, conn.block, ptr)?;
 
 
             todo.push(Connection {
