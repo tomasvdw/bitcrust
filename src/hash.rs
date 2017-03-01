@@ -1,6 +1,7 @@
 //! Hashing functions
 //! For now: Hash32 acts as a reference wrapper
 //! and HashBuf acts as an owned hash
+//! TODO; move to AsRef trait instead of explicit conversions
 
 use buffer;
 use std::mem;
@@ -14,8 +15,6 @@ use ring;
 pub struct Hash32Buf([u8;32]);
 
 impl Hash32Buf {
-
-
 
     /// Copies a slice into an owned buffer
     pub fn from_slice(slice: &[u8]) -> Hash32Buf {

@@ -74,10 +74,10 @@ impl<'a> Parse<'a> for Transaction<'a> {
 
         let org_buffer = *buffer;
         Ok(Transaction {
-            version:   try!(i32::parse(buffer)),
-            txs_in:    try!(Vec::parse(buffer)),
-            txs_out:   try!(Vec::parse(buffer)),
-            lock_time: try!(u32::parse(buffer)),
+            version:   i32::parse(buffer)?,
+            txs_in:    Vec::parse(buffer)?,
+            txs_out:   Vec::parse(buffer)?,
+            lock_time: u32::parse(buffer)?,
             raw:       buffer.consumed_since(org_buffer)
 
         })

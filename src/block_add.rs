@@ -347,11 +347,8 @@ mod tests {
             tx!(bld; c => g )
         );
 
-        println!("1");
         add_block(&mut store, &block0);
-        println!("2");
         add_block(&mut store, &block1);
-        println!("3");
         add_block(&mut store, &block2);
 
     }

@@ -6,7 +6,7 @@ authors = ["Tomas van der Wansem <tomas@tomasvdw.nl>"]
 
 [lib]
 name = "bitcrust_lib"
-path = "bitcrust-lib/src/lib.rs"
+path = "src/lib.rs"
 
 
 [dependencies]
@@ -28,10 +28,6 @@ tempdir = "0.3"
 
 
 
-
-[[bin]]
-name = "bitcrust_admin"
-path = "bitcrust-admin/src/main.rs"
 
 
 [profile.release]

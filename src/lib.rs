@@ -7,13 +7,6 @@
 
 
 
-//!
-//! Bitcrust main documentation
-//! Provides access to the bitcrust database
-/// let db = Db::new();
-///
-
-
 extern crate memmap;
 extern crate itertools;
 extern crate rand;
@@ -25,6 +18,7 @@ pub extern crate slog ;
 extern crate slog_term ;
 
 
+/// Macro to create and empty a storage folder; used by tests
 macro_rules! test_cfg {
     () => (::config::Config::new_empty(format!("{}-{}", file!(), line!())))
 }
@@ -36,34 +30,23 @@ mod hash;
 #[macro_use]
 mod builders;
 
-
-mod ffi;
 pub mod metrics;
-
-mod buffer;
-
-mod util;
-
-pub use block::Block;
-
-
-
 pub mod transaction;
 pub mod block;
 pub mod script;
 
+mod ffi;
+mod buffer;
+mod util;
 mod store;
-
 mod config;
-
 mod merkle_tree;
-use store::Store;
-
 mod block_add;
 
 
+use store::Store;
 
-
+// Creates a store; mock interface
 pub fn init() -> Store {
 
     let config = test_cfg!();
@@ -74,6 +57,7 @@ pub fn init() -> Store {
     store
 }
 
+// This is a preliminary interface.
 pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
     block_add::add_block(store, buffer)
 }
