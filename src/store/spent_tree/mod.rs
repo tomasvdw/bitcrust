@@ -357,18 +357,21 @@ impl SpentTree {
             //println!("Hash Set {:?} = {:?}", rec, rec.hash());
             spent_index.set(rec.hash());
         }
+        let elaps1 : isize = timer.elapsed().as_secs() as isize * 1000 +
+            timer.elapsed().subsec_nanos() as isize / 1_000_000 as isize;
 
         // verify all inputs and set proper skips
         let stats  = seek_and_set_inputs(records, block, block_idx as usize, spent_index, logger)?;
 
 
-        let elaps : isize = timer.elapsed().as_secs() as isize * 1000 +
+        let elaps2 : isize = timer.elapsed().as_secs() as isize * 1000 +
             timer.elapsed().subsec_nanos() as isize / 1_000_000 as isize;
 
-        info!(logger, "scan_stats";
+        info!(logger, "connected";
             "stats" => format!("{:?}", stats),
             "inputs" => stats.inputs,
-            "ms/inputs" => (elaps+1) as f64 / stats.inputs as f64,
+            "set ms/inputs" => (elaps2+1) as f64 / stats.inputs as f64,
+            "ms/inputs" => (elaps2+1) as f64 / stats.inputs as f64,
             "seek_avg" => stats.seeks / (stats.inputs+1)
         );
 

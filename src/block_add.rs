@@ -108,7 +108,7 @@ fn connect_block(
 
     -> BlockResult<()>
 {
-    info!(store.logger, "Connect block";
+    trace!(store.logger, "Connect block";
         "this_hash"  =>  format!("{:?}", this_block_hash),
         "prev_end"   =>  format!("{:?}", previous_block),
         "this_start" =>  format!("{:?}", this_block)
@@ -141,12 +141,12 @@ fn connect_block(
 
     while let Some(conn) = todo.pop() {
 
-        info!(store.logger, "Connect block - set-hash-loop";
+        trace!(store.logger, "Connect block - set-hash-loop";
             "conn"  => format!("{:?}",   conn));
 
         // if we can store this hash we can move to the next one
         if store.block_index.set(conn.block_hash.as_ref(), conn.block.to_non_guard(), &conn.solved_guards) {
-            info!(store.logger, "Connect block - set-hash-loop - ok");
+            trace!(store.logger, "Connect block - set-hash-loop - ok");
             continue;
         }
 
@@ -155,7 +155,7 @@ fn connect_block(
         if guards.iter().any(|ptr| !ptr.is_guard()) {
             // this is not a guard, this is _this_ block. It seems the block
             // was added by a concurrent user; will do fine.
-            info!(store.logger, "Connect block - set-hash-loop - concurrent add");
+            trace!(store.logger, "Connect block - set-hash-loop - concurrent add");
             continue;
         }
 
@@ -175,7 +175,7 @@ fn connect_block(
 
             let hash = store.get_block_hash(ptr);
 
-            info!(store.logger, "Connect block - set-hash-loop";
+            trace!(store.logger, "Connect block - set-hash-loop";
                 "guard" => format!("{:?}", ptr),
                 "hash" => format!("{:?}",   hash),
                 "conn"  => format!("{:?}",   conn));
@@ -264,19 +264,17 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
     let block      = Block::new(buffer) .unwrap();
     let block_hash = Hash32Buf::double_sha256( block.header.to_raw());
 
-    let block_logger = slog::Logger::new(&store.logger, o!("hash" => format!("{:?}", block_hash)));
-    info!(block_logger, "start");
+    let block_logger = slog::Logger::new(&store.logger, o!());
+    info!(block_logger, "add_block - start"; "hash" => format!("{:?}", block_hash));
 
     // already done?
     if block_exists(store, block_hash.as_ref()) {
-        info!(store.logger, "Block already exists");
+        info!(store.logger, "add_block - Block already exists");
         return;
     }
 
     // check and store the transactions in block_content and check the merkle_root
     let spent_tree_ptrs = verify_and_store_transactions(store, &block).unwrap();
-
-    info!(block_logger, "transactions done");
 
     // store the blockheader in block_content
     let block_header_ptr = store.block_headers.write( &block.header.to_raw());
@@ -287,7 +285,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
 
     if is_genesis_block(block_hash.as_ref()) {
 
-        info ! (block_logger, "verify_and_store - storing genesis block");
+        info ! (block_logger, "add_block - storing genesis block");
 
         // there is None previous block, but we call connect_block anyway as this will also
         // connect to next blocks if they are already in
@@ -299,7 +297,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
         // if it is not yet in, this hash will be inserted as a guard-block
         let previous_block = store.block_index.get_or_set( block.header.prev_hash, block_ptr.to_guard());
 
-        info ! (block_logger, "verify_and_store";
+        info! (block_logger, "add_block - tranactions done";
             "previous" => format!("{:?}", block.header.prev_hash),
             "ptr" => format!("{:?}", previous_block));
 
@@ -315,7 +313,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
     // TODO verify PoW
     // TODO verify header-syntax
 
-    info!(block_logger, "done");
+    info!(block_logger, "add_block - done");
 }
 
 
