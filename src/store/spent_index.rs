@@ -81,7 +81,8 @@ fn hash_to_index(hash: [u8;8]) -> usize {
 
     (hash[0] as usize) |
         (hash[1] as usize) << 8  |
-        (hash[2] as usize) << 16
+        (hash[2] as usize) << 16 |
+        0 //((hash[3] & 0x0F as usize) << 24)
 
 }
 

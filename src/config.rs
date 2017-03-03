@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 
 
-
+#[derive(Clone)]
 pub struct Config {
     pub root: PathBuf
 }
@@ -20,6 +20,12 @@ impl Config {
 }
 impl Config {
 
+    pub fn new(path: &str) -> Config {
+
+        let path = PathBuf::from(path);
+        Config { root: path }
+
+    }
 
     pub fn new_empty<T : Into<String>>(name: T) -> Config {
         let mut path = PathBuf::from("tmp");

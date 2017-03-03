@@ -16,13 +16,15 @@ use store::SpendingError;
 
 use transaction::{Transaction, TransactionError};
 
-
+pub const MAX_BLOCK_SIZE: usize =  1_000_000;
 
 #[derive(Debug)]
 pub enum BlockError {
     NoTransanctions,
     FirstNotCoinbase,
     DoubleCoinbase,
+
+    BlockTooLarge,
 
     IncorrectMerkleRoot,
 
@@ -69,8 +71,7 @@ pub struct Block<'a> {
 
 
     pub header: BlockHeader<'a>,
-    pub txcount: usize,
-    pub txs:    &'a[u8],
+    pub txs:    Vec<Transaction<'a>>,
 
     /// the full block as slice
     raw:        &'a[u8],
@@ -105,8 +106,7 @@ impl<'a> Block<'a> {
         Ok(Block {
             raw:     raw,
             header:  BlockHeader::parse(&mut buf)?,
-            txcount: buf.parse_compact_size()?,
-            txs:     buf.inner
+            txs:     Vec::parse(&mut buf)?
 
         })
     }
@@ -125,6 +125,7 @@ impl<'a> Block<'a> {
     }
 
 
+/*
     /// Parses each transaction in the block, and executes the callback for each
     ///
     /// This will also check whether only the first transaction is a coinbase
@@ -167,10 +168,8 @@ impl<'a> Block<'a> {
         else {
             Ok(())
         }
-    }
+    }*/
 }
-
-
 
 
 
@@ -195,6 +194,12 @@ impl<'a> Parse<'a> for BlockHeader<'a> {
 }
 
 impl<'a> ToRaw<'a> for BlockHeader<'a> {
+    fn to_raw(&self) -> &[u8] {
+        self.raw
+    }
+}
+
+impl<'a> ToRaw<'a> for Block<'a> {
     fn to_raw(&self) -> &[u8] {
         self.raw
     }

@@ -226,11 +226,17 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
     let mut result_ptrs  = Vec::new();
     let mut merkle       = merkle_tree::MerkleTree::new();
 
-    block.process_transactions(|tx| {
+    if block.to_raw().len() > ::block::MAX_BLOCK_SIZE {
+        return Err(BlockError::BlockTooLarge);
+    }
+
+    for tx in block.txs.iter() {
 
         total_amount += 1;
 
-        let res = tx.verify_and_store(store).unwrap();
+        let hash_buf = Hash32Buf::double_sha256(tx.to_raw());
+
+        let res = tx.verify_and_store(store, hash_buf.as_ref()).unwrap();
 
         // AlreadyExists and VerifiedAndStored are both ok here
         let ptr = match res {
@@ -241,11 +247,11 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
         result_ptrs.push(Record::new_transaction(ptr));
         result_ptrs.append(&mut tx.get_output_records(store));
 
-        merkle.add_hash(Hash32Buf::double_sha256(tx.to_raw()).as_ref());
+        merkle.add_hash(hash_buf.as_ref());
 
-        Ok(())
 
-    })?;
+
+    };
 
     let calculated_merkle_root = merkle.get_merkle_root();
     block.verify_merkle_root(calculated_merkle_root.as_ref()).unwrap();
@@ -278,6 +284,9 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
 
     // store the blockheader in block_content
     let block_header_ptr = store.block_headers.write( &block.header.to_raw());
+
+    // we also store the txcount, although we only use it for a reindex benchmark
+    let _ = store.block_headers.write_fixed( &block.txs.len());
 
     // store the block in the spent_tree
     let block_ptr       = store.spent_tree.store_block(block_header_ptr, spent_tree_ptrs);

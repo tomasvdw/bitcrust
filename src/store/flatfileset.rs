@@ -305,7 +305,7 @@ impl<P: FlatFilePtr + Copy + Clone> FlatFileSet<P> {
 
 
     /// Reads the length-prefixed buffer at the given position
-    pub fn read(&mut self, pos: P) -> &[u8] {
+    pub fn read(&mut self, pos: P) -> &'static [u8] {
 
         let fileno   = pos.get_file_number();
         let filepos  = pos.get_file_offset() as usize;
@@ -338,6 +338,52 @@ impl<P: FlatFilePtr + Copy + Clone> FlatFileSet<P> {
         file.get(filepos as usize)
     }
 
+    fn offset(&mut self, pos: P, bytes: usize) -> P {
+        if pos.get_file_offset() > self.max_size {
+
+            P::new(pos.get_file_number() + 1, super::flatfile::INITIAL_WRITEPOS)
+        } else {
+
+            P::new(pos.get_file_number(), pos.get_file_offset() + bytes as u64)
+        }
+
+    }
+
+    pub fn read_set(&mut self, pos: P, count: usize) -> (Vec<&'static [u8]>, P) {
+
+        let mut result = Vec::with_capacity(count);
+        let mut pos = pos;
+        for _ in 0..count {
+            let blob = self.read(pos);
+            result.push(blob);
+
+            pos = self.offset(pos, blob.len() + 4);
+        };
+
+        (result, pos)
+    }
+
+    /// This is a special reader used for the reindex benchmark
+    /// It reads and returns all blockheaders+txcount
+    #[test]
+    pub fn read_block_headers(&mut self) -> Vec<(&'static [u8], usize)> {
+        let mut result = Vec::new();
+        let mut pos = P::new(0, super::flatfile::INITIAL_WRITEPOS);
+        loop {
+            let blob = self.read(pos);
+            if blob.len() == 0 {
+                break;
+            }
+            pos = self.offset(pos, blob.len() + 4);
+            let tx_count = self.read_fixed(pos);
+            pos = self.offset(pos, mem::size_of::<usize>());
+            result.push( (blob, *tx_count) );
+
+        };
+
+        result
+
+    }
 }
 
 

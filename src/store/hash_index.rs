@@ -181,8 +181,8 @@ impl<T :'static> HashIndex<T>
     /// Opens the hash_index at the location given in the config
     ///
     /// Creates a new fileset if needed
-    pub fn new(cfg: &config::Config) -> HashIndex<T> {
-        let dir = &cfg.root.clone().join("hash_index");
+    pub fn new(cfg: &config::Config, dir: &str) -> HashIndex<T> {
+        let dir = &cfg.root.clone().join(dir);
 
         let is_new = !dir.exists();
 
@@ -422,7 +422,7 @@ mod tests {
         let path = PathBuf::from(dir.path());
         let cfg = config::Config { root: path.clone() };
 
-        let _idx: HashIndex<TxPtr> = HashIndex::new(& cfg );
+        let _idx: HashIndex<TxPtr> = HashIndex::new(& cfg, "test" );
 
         // We create a little transaction world:
         // The "transactions" are file pointers 1 to DATA_SIZE
@@ -439,7 +439,7 @@ mod tests {
                 let mut rng = rand::thread_rng();
                 let cfg = config::Config { root: path };
 
-                let mut idx = HashIndex::new(&cfg);
+                let mut idx = HashIndex::new(&cfg, "test");
 
                 for _ in 0..LOOPS {
 

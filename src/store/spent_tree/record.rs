@@ -140,7 +140,7 @@ impl Record {
 
 
     pub fn new_output(txptr: TxPtr, output_index: u32) -> Record {
-        if output_index <= u8::max_value() as u32 {
+        /*if output_index <= 0 { //u8::max_value() as u32 {
             Record::Output {
                 output_index: output_index as u8,
                 file_number:  txptr.get_file_number(),
@@ -148,7 +148,7 @@ impl Record {
                 skips:        Skips::new()
             }
         }
-        else {
+        else*/ {
             Record::OutputLarge {
                 output_index: output_index ,
                 file_number:  txptr.get_file_number(),
@@ -391,7 +391,7 @@ impl Record {
             stats.seeks += 1;
             trace!(logger, format!("FL# Seek now at {:?} ", cur_idx));
 
-            if skip_blocks > 20 {
+            if skip_blocks > 3 {
 
                 let output_hash = self.hash();
                 let tx_hash = self.to_transaction().hash();
@@ -443,7 +443,7 @@ impl Record {
 
                     if cur_filenr_pos == seek_filenr_pos {
 
-                        if seek_output_index <= u8::max_value() as u32 {
+                        /*if seek_output_index <= u8::max_value() as u32 {
                             *self = Record::Output {
                                 file_number: f,
                                 file_offset: o,
@@ -457,7 +457,7 @@ impl Record {
                                     b3: seek_skip_blocks[2]
                                 }
                             };
-                        }
+                        }*/
 
                         // we've found the transaction of the output before we
                         // found the same output. So we're all good

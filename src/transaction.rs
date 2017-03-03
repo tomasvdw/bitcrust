@@ -179,16 +179,14 @@ impl<'a> Transaction<'a> {
     }
 
     /// Verifies and stores the transaction in the transaction_store and index
-    pub fn verify_and_store(&self, store: &mut Store) -> TransactionResult<TransactionOk> {
+    pub fn verify_and_store(&self, store: &mut Store, hash: Hash32) -> TransactionResult<TransactionOk> {
 
         self.verify_syntax()?;
-
-        let hash_buf = Hash32Buf::double_sha256(self.to_raw());
 
         loop {
 
             // First see if it already exists
-            let existing_ptrs = store.tx_index.get(hash_buf.as_ref());
+            let existing_ptrs = store.tx_index.get(hash);
 
             if existing_ptrs
                 .iter()
@@ -213,7 +211,7 @@ impl<'a> Transaction<'a> {
             // Store reference in the hash_index.
             // This may fail if since ^^ get_ptr new dependent txs were added,
             // in which case we must try again.
-            if store.tx_index.set(hash_buf.as_ref(), ptr, &existing_ptrs) {
+            if store.tx_index.set(hash, ptr, &existing_ptrs) {
 
                 return Ok(TransactionOk::VerifiedAndStored(ptr))
             }
@@ -255,6 +253,7 @@ impl<'a> Transaction<'a> {
                 .ok_or(TransactionError::OutputIndexNotFound)?;
 
             let mut _m2 = store.metrics.start("verify_scripts");
+
             ffi::verify_script(previous_tx_out.pk_script, self.to_raw(), index as u32)
                 .expect("TODO: Handle script error more gracefully");
 

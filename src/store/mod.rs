@@ -104,8 +104,8 @@ impl Store {
                 FILE_SIZE,
                 MAX_CONTENT_SIZE),
 
-            tx_index:     hash_index::HashIndex::new(&cfg),
-            block_index:  hash_index::HashIndex::new(&cfg),
+            tx_index:     hash_index::HashIndex::new(&cfg, "tx-index"),
+            block_index:  hash_index::HashIndex::new(&cfg, "block-index"),
 
             spent_tree:   spent_tree::SpentTree::new(&cfg),
             spent_index:  spent_index::SpentIndex::new(&cfg),
@@ -182,5 +182,37 @@ mod tests {
 
 
     }*/
+
+    use config::Config;
+    use std::fs;
+    
+    use rayon::prelude::*;
+    //use block::BlockHeader;
+
+    ///
+    #[test]
+    #[ignore]
+    fn reindex() {
+        let _ = fs::remove_dir_all("rindex/spent-tree");
+        let _ = fs::remove_dir_all("rindex/spent-index");
+        let _ = fs::remove_dir_all("rindex/tx-index");
+        let _ = fs::remove_dir_all("rindex/block-index");
+
+        let cfg = Config::new("rindex");
+        let mut store = Store::new(&cfg);
+
+        let mut pos = TxPtr::new(0, super::flatfile::INITIAL_WRITEPOS);
+
+        for (n, (header, tx_count)) in store.block_headers.read_block_headers().into_iter().enumerate() {
+
+            println!("Block {} with {} transactions", n, tx_count);
+            let _ = BlockHeader::parse(&mut Buffer::new(header));
+
+            let (txs,p) = store.transactions.read_set(pos, tx_count);
+            pos = p;
+            println!("Blockheader {:?}", txs[0]);
+        }
+
+    }
 
 }
