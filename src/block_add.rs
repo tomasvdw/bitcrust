@@ -228,15 +228,11 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
         return Err(BlockError::BlockTooLarge);
     }
 
-    // we map the transactions to a tuple of amount, hash, and set of records
-    let tuples: Vec<Hash32Buf> = block.txs.par_iter().map(|tx| {
+    // we map the transactions to a tuple of hash and a record
+    let tuples: Vec<(Hash32Buf, Record)> = block.txs.iter().map(|tx| {
 
         let tx_store = &mut store.transactions.clone();
         let tx_index = &mut store.tx_index.clone();
-
-        let mut result_ptrs  = Vec::new();
-
-        let amount = 1;
 
         let hash_buf = Hash32Buf::double_sha256(tx.to_raw());
 
@@ -248,32 +244,26 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
             transaction::TransactionOk::VerifiedAndStored(ptr) => ptr
         };
 
-        result_ptrs.push(Record::new_transaction(ptr));
-//        result_ptrs.append(&mut tx.get_output_records(store));
+        let rec = Record::new_transaction(ptr);
 
-
-        hash_buf
+        (hash_buf, rec)
     }).collect();
 
-    //let records =
-    /*let mut merkle       = merkle_tree::MerkleTree::new();
-    let (amount, hashes, records) = tuples.fold(
-        (0_u64, Vec::new(), Vec::new()),
-        |total, tuple| {
-            total.0 += tuple.0;
-            total.1.push(tuple.1);
-            total.2.append(tuple.2);
-        }
-    );
+    // the result of above loop is a hash and a ptr for each transaction; split them.
+    let (hashes, ptrs): (Vec<Hash32Buf>, Vec<Record>) = tuples.into_iter().unzip();
 
-
-    for hash in hashes {
-        merkle.add_hash(hash.as_ref());
-    }
-    let calculated_merkle_root = merkle.get_merkle_root();
+    // check merkle roots
+    let calculated_merkle_root = merkle_tree::get_merkle_root(hashes);
     block.verify_merkle_root(calculated_merkle_root.as_ref()).unwrap();
-*/
-    Ok(Vec::new())
+
+    // construct records for in the spent-tree
+    let mut records: Vec<Record> = Vec::new();
+    for (tx,rec) in block.txs.iter().zip(ptrs) {
+        records.push(rec);
+        records.append(&mut tx.get_output_records(store));
+    }
+
+    Ok(records)
 }
 
 

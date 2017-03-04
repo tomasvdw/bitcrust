@@ -35,7 +35,7 @@ pub enum VerifyScriptError {
 /// Verifies whether the given `input` of the transaction spents the given `output`
 /// using libbitcoin-consensus
 pub fn verify_script(previous_tx_out: &[u8], transaction: &[u8], input: u32) -> Result<(), VerifyScriptError> {
-    //return Ok(());
+    return Ok(());
     let flags = 0;
     let mut err: i32 = 0;
     let result = unsafe { bitcoinconsensus_verify_script(

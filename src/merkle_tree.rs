@@ -37,6 +37,12 @@ fn shrink_merkle_tree(hashes: Vec<Hash32Buf>) -> Vec<Hash32Buf> {
     shrink_merkle_tree(result)
 }
 
+/// Calculates the merkle root for the given set of hashes
+pub fn get_merkle_root(hashes: Vec<Hash32Buf>) -> Hash32Buf {
+
+    shrink_merkle_tree(hashes)[0]
+}
+
 impl MerkleTree {
     pub fn new() -> MerkleTree {
 
