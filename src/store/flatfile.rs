@@ -24,10 +24,23 @@ pub const INITIAL_WRITEPOS : u64   = 0x10;
 
 pub struct FlatFile {
 
-    file:      fs::File,
-    map:       memmap::Mmap,
+    file:      Option<fs::File>,
+    map:       Option<memmap::Mmap>,
     ptr:       *mut u8,
     write_ptr: *mut atomic::AtomicU64
+}
+
+impl Clone for FlatFile {
+
+    fn clone(&self) -> FlatFile {
+
+        FlatFile {
+            file:     None,
+            map:      None,
+            ptr:      self.ptr,
+            write_ptr:self.write_ptr
+        }
+    }
 }
 
 impl FlatFile {
@@ -46,8 +59,8 @@ impl FlatFile {
         let write_ptr = unsafe { mem::transmute(ptr.offset(WRITEPOS_OFFSET)) };
 
         FlatFile {
-            file:      file,
-            map:       map,
+            file:      Some(file),
+            map:       Some(map),
             ptr:       ptr,
             write_ptr: write_ptr
         }

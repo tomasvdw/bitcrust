@@ -14,6 +14,8 @@ use ffi;
 use store::TxPtr;
 use store::Record;
 use store::HashIndexGuard;
+use store::TxIndex;
+use store::FlatFileSet;
 
 const MAX_TRANSACTION_SIZE: usize = 1_000_000;
 
@@ -129,17 +131,15 @@ impl<'a> Transaction<'a> {
     ///
     /// This checks the passed input-ptrs are valid against the corresponding output of self
     ///
-    pub fn verify_backtracking_outputs(&self, store: &mut Store, inputs: &Vec<TxPtr>) {
+    pub fn verify_backtracking_outputs(&self, tx_store: &mut FlatFileSet<TxPtr>, inputs: &Vec<TxPtr>) {
 
 
         for input_ptr in inputs.into_iter() {
 
             debug_assert!(input_ptr.is_guard());
 
-            let _m = store.metrics.start("block.tx.backtrack");
-
             // read tx from disk
-            let mut tx_raw   = Buffer::new(store.transactions.read(*input_ptr));
+            let mut tx_raw   = Buffer::new(tx_store.read(*input_ptr));
 
             let tx           = Transaction::parse(&mut tx_raw).
                     expect("Invalid tx data in database");
@@ -148,8 +148,6 @@ impl<'a> Transaction<'a> {
             let input_index  = input_ptr.get_input_index() as usize;
             let ref input    = tx.txs_in[input_index];
             let output_index = input.prev_tx_out_idx as usize;
-
-            let _m2 = store.metrics.start("block.tx.backtrack.verify");
 
             ffi::verify_script(self.txs_out[output_index].pk_script, tx.to_raw(), input_index as u32)
                 .expect("TODO: Handle script error without panic");
@@ -179,14 +177,17 @@ impl<'a> Transaction<'a> {
     }
 
     /// Verifies and stores the transaction in the transaction_store and index
-    pub fn verify_and_store(&self, store: &mut Store, hash: Hash32) -> TransactionResult<TransactionOk> {
+    pub fn verify_and_store(&self,
+                            tx_index: &mut TxIndex,
+                            tx_store: &mut FlatFileSet<TxPtr>,
+                            hash: Hash32) -> TransactionResult<TransactionOk> {
 
         self.verify_syntax()?;
 
         loop {
 
             // First see if it already exists
-            let existing_ptrs = store.tx_index.get(hash);
+            let existing_ptrs = tx_index.get(hash);
 
             if existing_ptrs
                 .iter()
@@ -199,19 +200,20 @@ impl<'a> Transaction<'a> {
 
             // existing_ptrs (if any) are now inputs that are waiting for this transactions
             // they need to be verified
-            self.verify_backtracking_outputs(store, &existing_ptrs);
+            self.verify_backtracking_outputs(tx_store, &existing_ptrs);
 
             // store & verify
-            let ptr      = store.transactions.write(self.to_raw());
+            let ptr      = tx_store.write(self.to_raw());
+
 
             if !self.is_coinbase() {
-                self.verify_input_scripts(store, ptr)?;
+                self.verify_input_scripts(tx_index, tx_store, ptr)?;
             }
 
             // Store reference in the hash_index.
             // This may fail if since ^^ get_ptr new dependent txs were added,
             // in which case we must try again.
-            if store.tx_index.set(hash, ptr, &existing_ptrs) {
+            if tx_index.set(hash, ptr, &existing_ptrs) {
 
                 return Ok(TransactionOk::VerifiedAndStored(ptr))
             }
@@ -221,15 +223,15 @@ impl<'a> Transaction<'a> {
 
 
     /// Finds the outputs corresponding to the inputs and verify the scripts
-    pub fn verify_input_scripts(&self, store: &mut Store, tx_ptr: TxPtr) -> TransactionResult<()> {
-
-        let mut _m = store.metrics.start("verify_scoped_scripts");
-        _m.set_ticker(self.txs_in.len());
+    pub fn verify_input_scripts(&self,
+                                tx_index: &mut TxIndex,
+                                tx_store: &mut FlatFileSet<TxPtr>,
+                                tx_ptr: TxPtr) -> TransactionResult<()> {
 
         for (index, input) in self.txs_in.iter().enumerate() {
 
 
-            let output = store.tx_index.get_or_set(input.prev_tx_out,
+            let output = tx_index.get_or_set(input.prev_tx_out,
                                                      tx_ptr.to_input(index as u16 ));
             let output = match output {
                 None => {
@@ -246,13 +248,12 @@ impl<'a> Transaction<'a> {
             };
 
 
-            let mut previous_tx_raw = Buffer::new(store.transactions.read(output));
+            let mut previous_tx_raw = Buffer::new(tx_store.read(output));
             let previous_tx = Transaction::parse(&mut previous_tx_raw)?;
 
             let previous_tx_out = previous_tx.txs_out.get(input.prev_tx_out_idx as usize)
                 .ok_or(TransactionError::OutputIndexNotFound)?;
 
-            let mut _m2 = store.metrics.start("verify_scripts");
 
             ffi::verify_script(previous_tx_out.pk_script, self.to_raw(), index as u32)
                 .expect("TODO: Handle script error more gracefully");

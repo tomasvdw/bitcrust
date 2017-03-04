@@ -67,7 +67,7 @@ Block storing is a tricky part; blocks are stored in the spent-tree and referenc
 use hash::*;
 use util::*;
 use buffer::*;
-
+use rayon::prelude::*;
 use slog ;
 
 use store::Store;
@@ -222,21 +222,25 @@ fn block_exists(store: & mut Store, block_hash: Hash32) -> bool {
 ///
 fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResult<Vec<Record>> {
 
-    let mut total_amount = 0_u64;
-    let mut result_ptrs  = Vec::new();
-    let mut merkle       = merkle_tree::MerkleTree::new();
 
     if block.to_raw().len() > ::block::MAX_BLOCK_SIZE {
+        panic!("Block too large");
         return Err(BlockError::BlockTooLarge);
     }
 
-    for tx in block.txs.iter() {
+    // we map the transactions to a tuple of amount, hash, and set of records
+    let tuples: Vec<Hash32Buf> = block.txs.par_iter().map(|tx| {
 
-        total_amount += 1;
+        let tx_store = &mut store.transactions.clone();
+        let tx_index = &mut store.tx_index.clone();
+
+        let mut result_ptrs  = Vec::new();
+
+        let amount = 1;
 
         let hash_buf = Hash32Buf::double_sha256(tx.to_raw());
 
-        let res = tx.verify_and_store(store, hash_buf.as_ref()).unwrap();
+        let res = tx.verify_and_store(tx_index, tx_store, hash_buf.as_ref()).unwrap();
 
         // AlreadyExists and VerifiedAndStored are both ok here
         let ptr = match res {
@@ -245,18 +249,31 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
         };
 
         result_ptrs.push(Record::new_transaction(ptr));
-        result_ptrs.append(&mut tx.get_output_records(store));
-
-        merkle.add_hash(hash_buf.as_ref());
+//        result_ptrs.append(&mut tx.get_output_records(store));
 
 
+        hash_buf
+    }).collect();
 
-    };
+    //let records =
+    /*let mut merkle       = merkle_tree::MerkleTree::new();
+    let (amount, hashes, records) = tuples.fold(
+        (0_u64, Vec::new(), Vec::new()),
+        |total, tuple| {
+            total.0 += tuple.0;
+            total.1.push(tuple.1);
+            total.2.append(tuple.2);
+        }
+    );
 
+
+    for hash in hashes {
+        merkle.add_hash(hash.as_ref());
+    }
     let calculated_merkle_root = merkle.get_merkle_root();
     block.verify_merkle_root(calculated_merkle_root.as_ref()).unwrap();
-
-    Ok(result_ptrs)
+*/
+    Ok(Vec::new())
 }
 
 
@@ -289,6 +306,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
     let _ = store.block_headers.write_fixed( &block.txs.len());
 
     // store the block in the spent_tree
+    /*
     let block_ptr       = store.spent_tree.store_block(block_header_ptr, spent_tree_ptrs);
 
 
@@ -317,7 +335,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
         }
 
     }
-
+*/
     // TODO verify amounts
     // TODO verify PoW
     // TODO verify header-syntax
@@ -333,6 +351,24 @@ mod tests {
     use store;
     use super::*;
 
+
+    use rayon::prelude::*;
+    #[test]
+    fn test_clone_into_thread() {
+
+        struct X { data: Vec<u32> };
+        impl Clone for X {
+            fn clone(&self) -> X { X { data: self.data.clone() } }
+        }
+        let mut x = X { data: vec![1,2,3,4,5,6,7,8,9,10]};
+
+        let y = vec![10,11,12,13,14,15,16,17,18,19,20];
+
+        y.into_par_iter().map(|z| {
+            let u = &mut x.clone(); // is this possible?
+            println!("{:?} {:?} ", z, u.data); u.data.push(2);
+        });
+    }
 
 
     #[test]

@@ -63,6 +63,9 @@ impl convert::From<SpendingError> for BlockError {
 
 type BlockResult<T> = Result<T, BlockError>;
 
+
+
+
 /// Parsed block
 ///
 /// The transactions are not yet parsed and referenced as a slice

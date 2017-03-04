@@ -53,6 +53,24 @@ pub struct FlatFileSet<P: FlatFilePtr + Copy + Clone> {
     phantom:    ::std::marker::PhantomData<P>
 }
 
+impl<P : FlatFilePtr + Copy + Clone> Clone for FlatFileSet<P> {
+
+    fn clone(&self) -> FlatFileSet<P> {
+        let f = self.files.clone();
+
+        FlatFileSet {
+            path:       self.path.clone(),
+            prefix:     self.prefix,
+            first_file: self.first_file,
+            last_file:  self.last_file,
+            files:      f,
+            start_size: self.start_size,
+            max_size:   self.max_size,
+            phantom:    ::std::marker::PhantomData
+        }
+    }
+}
+
 
 /// An error used internally for filenames that do not match the pattern
 #[derive(Debug)]
@@ -172,6 +190,10 @@ impl<P: FlatFilePtr + Copy + Clone> FlatFileSet<P> {
 
         // convert filenumber to index in file-vector
         let file_idx = (fileno - self.first_file) as usize;
+
+        while self.files.len() <= file_idx {
+            self.files.push(None);
+        }
 
         if self.files[file_idx].is_none() {
 

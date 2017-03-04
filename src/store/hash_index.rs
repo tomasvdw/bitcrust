@@ -60,6 +60,23 @@ pub struct HashIndex<T : HashIndexGuard + Copy + Clone> {
 
 }
 
+impl<T : HashIndexGuard + Copy + Clone> Clone for HashIndex<T> {
+
+    fn clone(&self) -> HashIndex<T> {
+
+        let mut fileset = self.fileset.clone();
+        let root = fileset.read_fixed(IndexPtr::new(0, super::flatfile::INITIAL_WRITEPOS));
+        HashIndex {
+
+            fileset:         fileset,
+            hash_index_root: root,
+            phantom:         ::std::marker::PhantomData
+
+        }
+
+    }
+}
+
 /// A persistent pointer into the hash-index
 #[derive(Debug, Clone, Copy)]
 pub struct IndexPtr {

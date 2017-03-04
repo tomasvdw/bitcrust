@@ -61,7 +61,7 @@ fn load_file1() {
 fn load_file_large() {
 
     let start = Instant::now();
-    const BLOCK_COUNT: u64 = 250000;
+    const BLOCK_COUNT: u64 = 350000;
 
     let mut blocks = 0;
 
@@ -99,7 +99,7 @@ fn load_file_large() {
         }
 
         if blocks >= BLOCK_COUNT {
-            panic!("done");
+            break;
         }
     }
 

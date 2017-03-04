@@ -42,11 +42,12 @@ pub use self::spent_tree::BlockPtr;
 pub use self::spent_tree::record::{RecordPtr,Record};
 
 pub use self::txptr::TxPtr;
-pub use self::hash_index::HashIndexGuard;
+pub use self::hash_index::{HashIndex, HashIndexGuard};
 pub use self::blockheaderptr::BlockHeaderPtr;
 
 pub use self::flatfileset::{FlatFilePtr,FlatFileSet};
 
+pub type TxIndex = HashIndex<TxPtr>;
 
 use config;
 use hash::*;
@@ -68,20 +69,20 @@ const MAX_CONTENT_SIZE:   u64 = FILE_SIZE - 10 * MB as u64 ;
 /// but multiple Stores from different threads/processes can use the same
 /// files concurrently
 pub struct Store {
-
     // Flat files contain transactions and blockheaders
-    pub transactions:  flatfileset::FlatFileSet<TxPtr>,
+    pub transactions: flatfileset::FlatFileSet<TxPtr>,
     pub block_headers: flatfileset::FlatFileSet<BlockHeaderPtr>,
 
-    pub tx_index:      hash_index::HashIndex<TxPtr>,
-    pub block_index:   hash_index::HashIndex<BlockPtr>,
+    pub tx_index:      TxIndex,
+    pub block_index: hash_index::HashIndex<BlockPtr>,
 
-    pub spent_tree:    spent_tree::SpentTree,
-    pub spent_index:   spent_index::SpentIndex,
+    pub spent_tree: spent_tree::SpentTree,
+    pub spent_index: spent_index::SpentIndex,
 
-    pub metrics:       Metrics, // todo; this needs to go; structured logging is su
+    pub metrics: Metrics,
+    // todo; this needs to go; structured logging is su
 
-    pub logger:        slog::Logger
+    pub logger: slog::Logger,
 }
 
 
@@ -135,7 +136,7 @@ impl Store {
 }
 
 
-
+unsafe impl Sync for Store {}
 
 #[cfg(test)]
 mod tests {
@@ -185,7 +186,7 @@ mod tests {
 
     use config::Config;
     use std::fs;
-    
+
     use rayon::prelude::*;
     //use block::BlockHeader;
 
