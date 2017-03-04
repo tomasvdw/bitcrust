@@ -228,15 +228,14 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
         return Err(BlockError::BlockTooLarge);
     }
 
+
     // we map the transactions to a tuple of hash and a record
     let tuples: Vec<(Hash32Buf, Record)> = block.txs.iter().map(|tx| {
 
-        let tx_store = &mut store.transactions.clone();
-        let tx_index = &mut store.tx_index.clone();
 
         let hash_buf = Hash32Buf::double_sha256(tx.to_raw());
 
-        let res = tx.verify_and_store(tx_index, tx_store, hash_buf.as_ref()).unwrap();
+        let res = tx.verify_and_store(&mut store.tx_index, &mut store.transactions, hash_buf.as_ref()).unwrap();
 
         // AlreadyExists and VerifiedAndStored are both ok here
         let ptr = match res {
