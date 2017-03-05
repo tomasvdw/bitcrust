@@ -57,6 +57,17 @@ pub fn init() -> Store {
     store
 }
 
+// Creates a store; mock interface
+pub fn init_prs() -> Store {
+
+    let config = config::Config::new("prs");
+    let store = Store::new(&config);
+
+    info!(store.logger, "Store intitalized"; "dir" => config.root.to_str().unwrap());
+
+    store
+}
+
 // This is a preliminary interface.
 pub fn add_block(store: &mut store::Store, buffer: &[u8]) {
     block_add::add_block(store, buffer)

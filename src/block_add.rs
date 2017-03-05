@@ -248,7 +248,7 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
         (hash_buf, rec)
     }).collect();
 
-    // the result of above loop is a hash and a ptr for each transaction; split them.
+    // the result of above loop is a hash and a record for each transaction; split them.
     let (hashes, ptrs): (Vec<Hash32Buf>, Vec<Record>) = tuples.into_iter().unzip();
 
     // check merkle roots
@@ -295,7 +295,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
     let _ = store.block_headers.write_fixed( &block.txs.len());
 
     // store the block in the spent_tree
-    /*
+
     let block_ptr       = store.spent_tree.store_block(block_header_ptr, spent_tree_ptrs);
 
 
@@ -324,7 +324,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
         }
 
     }
-*/
+
     // TODO verify amounts
     // TODO verify PoW
     // TODO verify header-syntax

@@ -83,6 +83,8 @@ pub struct Store {
     // todo; this needs to go; structured logging is su
 
     pub logger: slog::Logger,
+
+    cfg: config::Config
 }
 
 
@@ -114,6 +116,7 @@ impl Store {
 
             metrics:       Metrics::new(),
             logger:        slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!()),
+            cfg:           cfg.clone()
         }
     }
 
@@ -124,7 +127,7 @@ impl Store {
     pub fn get_block_hash(&mut self, block_ptr: BlockPtr) -> Hash32Buf {
 
         // follow indirection through spent-tree
-        let block_hdr_rec = self.spent_tree.get_record(block_ptr.start);
+        let block_hdr_rec = self.spent_tree.get_record(block_ptr.end());
         let block_hdr     = self.block_headers.read(block_hdr_rec.get_block_header_ptr());
 
         Hash32Buf::double_sha256(block_hdr)
@@ -135,6 +138,12 @@ impl Store {
 
 }
 
+impl Clone for Store {
+    fn clone(&self) -> Store {
+
+        Store::new(&self.cfg)
+    }
+}
 
 unsafe impl Sync for Store {}
 

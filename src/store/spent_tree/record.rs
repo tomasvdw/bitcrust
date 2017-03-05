@@ -17,287 +17,172 @@ use super::SpentTreeStats;
 
 use super::params;
 
-#[derive(Copy, Clone)]
-pub struct Skips {
-    pub b1: u8,
-    pub b2: u8,
-    pub b3: u8,
-    pub s1: i8,
-    pub s2: i16,
-    pub s3: i16,
+// highest 2 bits are record-type
+// 11 => start of block
+// 10 => end of block
+// 00 => transaction
+// 01 => transaction-output
+const RECORD_TYPE:u64    = 0xC000_0000_0000_0000;
+const START_OF_BLOCK:u64 = 0xC000_0000_0000_0000;
+const END_OF_BLOCK:u64   = 0x8000_0000_0000_0000;
+const TRANSACTION:u64    = 0x0000_0000_0000_0000;
+const OUTPUT:u64         = 0x4000_0000_0000_0000;
 
-}
+// START_OF_BLOCK;
+// bits 0-61   fileoffset end of the previous block (in spent-tree)
+//
+// END_OF_BLOCK:
+// bits 0 -31   fileoffset of blockheader
+// bits 32-61   number of records in block
+//
+// TRANSACTION:
+// bits 0 -31   fileoffset of transaction
+// bits 32-47   filenumber of transaction
+//
+// OUTPUT:
+// bits 0 -31   fileoffset of transaction
+// bits 32-47   filenumber of transaction
+// bits 48-61   output-index
 
-impl Skips {
-    fn new() -> Skips
-    {
-        Skips { s1:-1, s2: -1, s3: -1, b1:0, b2:0, b3: 0 }
-    }
-}
-
-/// A record is a 16 byte structure that points to either a
-/// * blockheader
-/// * transaction
-/// * transaction-output
-///
-/// The skips point to other Records; at least the previous.
-///
-/// The exact format is still in work-in-progress.
-///
-#[derive(Copy, Clone)]
-pub enum Record {
-
-    OrphanBlock {
-        file_number: i16,
-        file_offset: u32,
-    },
-    Block {
-        prev_size:   [u8;3],
-        file_offset: u32,
-        prev:        u64
-    },
-    Transaction {
-        file_number: i16,
-        file_offset: u32,
-        skips:       Skips, //[i16; params::SKIP_FIELDS]
-    },
-    OutputLarge {
-        file_number:  i16,
-        file_offset:  u32,
-        output_index: u32
-
-    },
-    Output {
-        output_index: u8,
-        file_number:  i16,
-        file_offset:  u32,
-        skips:       Skips, //[i16; params::SKIP_FIELDS]
-    },
-
-    // If a referenced output doesn't exist at the time of block-insertion,
-    // the record references an input instead
-    UnmatchedInput
-
-}
+#[derive(Clone,Copy,PartialEq)]
+pub struct Record(u64);
 
 impl fmt::Debug for Record {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match *self {
-
-            Record::Block   { prev_size:_, file_offset: o , prev: p } =>
-                write!(fmt, "BLK  {0:>04X}:{1:08x}        (TO {2:29})", 0, o, p),
-            Record::Output  { file_number: n, file_offset: o , output_index: x, skips: s } =>
-                write!(fmt, "OUT  {0:>04X}:{1:08x} i{2:<4}  ({3:06} {4:06} {5:06} {6:03} {7:03} {8:03})", n, o, x, s.s1, s.s2, s.s3,s.b1,s.b2,s.b3),
-            Record::OutputLarge  { file_number: n, file_offset: o , output_index: x } =>
-                write!(fmt, "OUL  {0:>04X}:{1:08x} i{2:<6}                                  ", n, o, x),
-            Record::Transaction  { file_number: n, file_offset: o , skips: s } =>
-                write!(fmt, "TX   {0:>04X}:{1:08x}        ({2:06} {3:06} {4:06} {5:03} {6:03} {7:03})", n, o, s.s1, s.s2, s.s3,s.b1,s.b2,s.b3),
-
-            Record::OrphanBlock   { ..  } =>
-                write!(fmt, "??? OPRHAN BLOCK "),
-            Record::UnmatchedInput { .. } =>
-                write!(fmt, "??? UNMATCHED INPUT "),
-            _ =>
-                write!(fmt, "???")
-        }
+        write!(fmt, "REC  {0:016X} ", self.0)
     }
 }
 
 impl Record {
     pub fn new_unmatched_input() -> Record {
-        Record::UnmatchedInput
+        Record (0)
     }
 
     pub fn new_transaction(tx_ptr: TxPtr) -> Record {
 
-        Record::Transaction {
-            file_number: tx_ptr.get_file_number(),
-            file_offset: tx_ptr.get_file_offset() as u32,
-            skips: Skips::new()
-        }
+        Record(
+            (tx_ptr.get_file_number() as u64) << 32 |
+            tx_ptr.get_file_offset()
+        )
     }
 
-    pub fn new_orphan_block(block_header_ptr: BlockHeaderPtr) -> Record {
-        Record::OrphanBlock {
-            file_number: block_header_ptr.get_file_number(),
-            file_offset: block_header_ptr.get_file_offset() as u32
+    pub fn new_orphan_block_start() -> Record {
 
-        }
-
+        Record(
+            START_OF_BLOCK
+        )
     }
 
-    pub fn new_block(previous: BlockPtr, orphan_block_record: Record) -> Record {
+    pub fn new_block_start(previous: BlockPtr) -> Record {
 
-        let prev_size = [(previous.length >>16) as u8, (previous.length >> 8) as u8, previous.length  as u8];
-        match orphan_block_record {
-            Record::OrphanBlock { file_number: _, file_offset: o } =>
-                Record::Block { prev_size: prev_size, file_offset: o, prev: previous.start.to_index() + previous.length - 1 },
-
-            _ => panic!("Expecting orphan block record. Tried to link {:?} to prev {:?} ", orphan_block_record, previous)
-        }
+        Record(
+            START_OF_BLOCK | (previous.start.to_index() + previous.length - 1)
+        )
 
     }
+    pub fn new_block_end(block: BlockHeaderPtr, size: usize) -> Record {
+
+        debug_assert!(block.get_file_number() == 0);
+        debug_assert!(size <= 0x3FFF_FFFF);
+
+        Record(
+            END_OF_BLOCK |
+                (block.get_file_offset()) |
+                ((size as u64) << 32)
+        )
+    }
+
 
 
     pub fn new_output(txptr: TxPtr, output_index: u32) -> Record {
-        /*if output_index <= 0 { //u8::max_value() as u32 {
-            Record::Output {
-                output_index: output_index as u8,
-                file_number:  txptr.get_file_number(),
-                file_offset:  txptr.get_file_offset() as u32,
-                skips:        Skips::new()
-            }
-        }
-        else*/ {
-            Record::OutputLarge {
-                output_index: output_index ,
-                file_number:  txptr.get_file_number(),
-                file_offset:  txptr.get_file_offset()  as u32,
-            }
-        }
+        assert!(output_index <= 0x3fff); // TODO: this might not be true; fallback is needed
 
+        Record(
+            OUTPUT |
+                (output_index as u64) << 48 |
+                txptr.get_file_offset()
+        )
     }
 
     /// If called on block-record, returns the index of the block-record and the record-count
     /// of the previous block
     pub fn previous_block(self) -> (usize, usize) {
-        match self {
-            Record::Block { prev: prev, prev_size: prev_size, .. } => {
-                let prev_size = (prev_size[0] as usize) << 16
-                    + (prev_size[1] as usize) << 8
-                    + (prev_size[2] as usize) << 0;
-
-                (prev as usize - prev_size + 1, prev_size)
-
-            },
-            _ => unreachable!()
-        }
+        unimplemented!()
     }
 
     pub fn is_transaction(self) -> bool {
-        match self {
-            Record::Transaction { ..}  => true,
-            _ => false
-        }
+
+        (self.0 & RECORD_TYPE) == TRANSACTION
     }
 
     pub fn get_transaction_ptr(self) -> TxPtr {
-        match self {
-            Record::Transaction { file_number: n, file_offset: o, .. } => TxPtr::new(n,o as u64),
-            _ => panic!("get_transaction_ptr transaction record expected, got  {:?}", self)
 
-        }
+        debug_assert!(self.is_transaction() || self.is_output());
+
+        TxPtr::new(
+            ((self.0 & 0xFFFF_0000_0000) >> 32) as i16,
+            self.0 & 0xFFFF_FFFF
+        )
     }
 
     pub fn get_block_header_ptr(self) -> BlockHeaderPtr {
-        match self {
-            Record::Block       { file_offset: o, .. } => BlockHeaderPtr::new(0,o as u64),
-            Record::OrphanBlock { file_offset: o, .. } => BlockHeaderPtr::new(0,o as u64),
-            _ => panic!("transaction record expected")
 
-        }
+        debug_assert!((self.0 & RECORD_TYPE) == END_OF_BLOCK);
+
+        BlockHeaderPtr::new(0, self.0 & 0xFFFF_FFFF)
     }
 
     pub fn is_output(self) -> bool {
-        match self {
-            Record::Output { .. }      => true,
-            Record::OutputLarge {..} => true,
-            _ => false
-        }
 
+        (self.0 & RECORD_TYPE) == OUTPUT
     }
 
-    pub fn is_block(self) -> bool {
-        match self {
-            Record::Block { .. }      => true,
-            Record::OrphanBlock {..} => true,
-            _ => false
-        }
+    pub fn is_block_start(self) -> bool {
 
+        (self.0 & RECORD_TYPE) == START_OF_BLOCK
+    }
+
+    pub fn is_block_end(self) -> bool {
+
+        (self.0 & RECORD_TYPE) == END_OF_BLOCK
     }
 
     pub fn is_unmatched_input(self) -> bool {
-        match self {
-            Record::UnmatchedInput { .. } => true,
-            _ => false
-        }
+        self.0 == 0
     }
 
     /// This creates a non-cryptographic but perfect hash of the transaction or output
-    pub fn hash(self) -> [u8;8] {
+    pub fn hash(self) -> u64 {
 
+        debug_assert!(self.is_transaction() || self.is_output());
 
-        fn gen_hash(file_number: i16, file_offset: u32, output: Option<u32>) -> [u8;8] {
-
-            // we can add the output index to the file-offset because the output-count
-            // is always smaller then the transaction size
-            let f = file_offset + output.map(|x| x+1).unwrap_or(0);
-            let n = file_number as u32;
-
-            // this looks pretty random; hopefully it spreads aroung in the spent-index root
-            // but the performance of this particular "hash-function" is untested
-            [
-                 (f >> 8) as u8,
-                 (f >> 0) as u8,
-                 (n >> 0) as u8,
-                 (f >> 16) as u8,
-                 (n >> 8) as u8,
-                 (f >> 24) as u8,
-                 0 as u8,
-                 0 as u8
-            ]
-        }
-        match self {
-            Record::Transaction { file_number: n, file_offset: f, .. } =>                  gen_hash(n, f, None),
-            Record::Output      { file_number: n, file_offset: f, output_index: o, .. } => gen_hash(n, f, Some(o as u32)),
-            Record::OutputLarge { file_number: n, file_offset: f, output_index: o, .. } => gen_hash(n, f, Some(o as u32)),
-            Record::Block       { file_offset: f, .. } =>                                  gen_hash(0, f, None),
-            Record::OrphanBlock { file_offset: f, .. } =>                                  gen_hash(0, f, None),
-            _ => unreachable!()
-        }
+        // We drop 4 bits from the filenumber and, for an output  add 1 + the output-index
+        // The result is just as unique but smaller; we just drop the info to find the transaction
+        // or the transaction from an output
+        ((self.0 & 0xFFFF_FFFF_FFFF) >> 4)
+        + (self.0 >> 62) // the bit that indicates its an output
+        + ((self.0 & 0x1FFF_0000_0000_0000) >> 48)
     }
 
-    fn filenumber_and_pos(self) -> i64 {
-        match self {
-            Record::Transaction { file_number: n, file_offset: f, .. } => ((n as i64) << 32)  |  f as i64,
-            Record::Output      { file_number: n, file_offset: f, .. } => ((n as i64) << 32)  |  f as i64,
-            Record::OutputLarge { file_number: n, file_offset: f, .. } => ((n as i64) << 32)  |  f as i64,
-            _ => unreachable!()
-        }
-    }
 
     fn to_transaction(self) -> Record {
-        match self {
-            Record::Output      { file_number: n, file_offset: f, .. } => Record::new_transaction(TxPtr::new(n, f as u64)),
-            Record::OutputLarge { file_number: n, file_offset: f, .. } => Record::new_transaction(TxPtr::new(n, f as u64)),
-            _ => unreachable!()
-        }
+
+        debug_assert!(self.is_output());
+
+        Record(self.0 & 0x0000_FFFF_FFFF_FFFF)
     }
 
     fn output_index(self) -> u32 {
-        match self {
-            Record::Output      { output_index: x, .. } => x as u32,
-            Record::OutputLarge { output_index: x, .. } => x as u32,
-            _ => unreachable!()
-        }
+        unreachable!()
     }
 
     // test only as normally it makes no sense to treat file_offsets from different record-types
     // as the same expression
     #[cfg(test)]
     pub fn get_file_offset(self) -> u32 {
-        match self {
-            Record::OrphanBlock { file_offset: f, .. } => f,
-            Record::Block       { file_offset: f, .. } => f,
-            Record::Transaction { file_offset: f, .. } => f,
-            Record::Output      { file_offset: f, .. } => f,
-            Record::OutputLarge { file_offset: f, .. } => f,
-            _ => unimplemented!()
-        }
+
+        self.0 as u32
     }
-
-
-
 }
 
 /// A filepointer that points to a record in the SpentTree
@@ -317,8 +202,6 @@ impl FlatFilePtr for RecordPtr {
     fn get_file_offset(self) -> u64 {
         INITIAL_WRITEPOS + self.0 * mem::size_of::<Record>() as u64
     }
-
-
 }
 
 impl fmt::Debug for RecordPtr {
@@ -357,7 +240,53 @@ impl Record {
 
         let mut stats: SpentTreeStats = Default::default();
 
-        if self.is_transaction() { return Ok(stats); }
+        if self.is_transaction() { return Ok(stats) }
+
+        let seek_output      = *self;
+        let seek_transaction = self.to_transaction();
+
+        debug_assert!(seek_output.is_output());
+        debug_assert!(self.0 == records[seek_idx].0);
+
+        let mut seek_idx = seek_idx as u64;
+
+        seek_idx -= 1;
+        loop {
+
+
+            stats.seeks += 1;
+
+            trace!(logger, format!("FL# Search  {:?} @ {:?}", self, seek_idx));
+
+            let seek_rec = records[seek_idx as usize];
+
+            if seek_rec.0 == START_OF_BLOCK {
+
+                return Err(SpendingError::OutputNotFound);
+            }
+            else if (seek_rec.0 & START_OF_BLOCK) == START_OF_BLOCK {
+
+                // jump to next block
+                stats.jumps += 1;
+                seek_idx = seek_rec.0 & !START_OF_BLOCK;
+                trace!(logger, format!("FL# Jump to {:?} @ {:?}", seek_rec, seek_idx));
+            } else if seek_rec == seek_transaction {
+
+                return Ok(stats);
+            }
+            else if seek_rec == seek_output {
+                return Err(SpendingError::OutputAlreadySpent);
+            }
+            else {
+                seek_idx -= 1;
+            }
+
+
+        }
+
+        //return Ok(stats);
+        /*
+        let mut stats: SpentTreeStats = Default::default();
 
         stats.inputs += 1;
 
@@ -525,7 +454,7 @@ impl Record {
                 }
             }
 
-
+*/
             /*
             let mut skip = -1;
             for n in (0..params::SKIP_FIELDS).rev() {
@@ -538,7 +467,7 @@ impl Record {
                     break;
                 }
             }*/
-        }
+
 
     }
 }
@@ -549,7 +478,7 @@ mod tests {
 
     #[test]
     fn test_size_of_record() {
-        assert_eq!(::std::mem::size_of::<Record>(), 16);
+        assert_eq!(::std::mem::size_of::<Record>(), 8);
 
     }
 }

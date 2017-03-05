@@ -7,17 +7,14 @@
 ///
 /// A block consists of the chain of records:
 ///
-/// [block-header] <- [transaction] <- [spent-output] <- [spent-output] <- [transaction] <- ...
+/// [start-of-block] <- [transaction] <- [spent-output] <- [spent-output] <- [transaction] <- [end-of-block]...
 ///
 /// One [spent-output] record is added per input of a transaction.
 ///
-/// Blocks are added regardless of they connect to a previous block. If the previous block comes in
-/// later the following blocks are readded.
+/// Blocks are connected with the [start-of-block] record which points to the [end-of-block] of previous block.
+/// Often this is the previous records, but blocks can also be added in different order.
+/// The [start-of-block] then point to NULL until the previous block comes in.
 ///
-/// Verification takes place on *tip-propagation*. The top pointer is moved forward to the next block
-/// after all [spent-outputs] in that block have been checked. This entails scanning back the chain.
-/// The scan is succesful if the transaction is found and unsuccesful if it is not found or if the
-/// same spent-output is found before the transaction.
 ///
 ///
 ///
@@ -90,6 +87,10 @@ impl BlockPtr {
             length:   self.length,
             is_guard: false
         }
+    }
+
+    pub fn end(self ) -> RecordPtr {
+        RecordPtr::new(self.start.to_index() + self.length -1)
     }
 
     // Jumps back a block-record to the previous block
@@ -194,12 +195,13 @@ fn seek_and_set_inputs(
 
     let block_timer = time::Instant::now();
 
-
-    let results: Vec<Result<SpentTreeStats, SpendingError>> = block[1..]
+    let len = block.len()-2;
+    let results: Vec<Result<SpentTreeStats, SpendingError>> = block[1..len]
 
         .par_iter_mut()
         .enumerate()
         .map(|(i,rec)| {
+
 
             debug_assert!(rec.is_transaction() || rec.is_output());
 
@@ -261,9 +263,11 @@ impl SpentTree {
     /// The result is a BlockPtr that can be stored in the hash-index
     pub fn store_block(&mut self, block_header_ptr: BlockHeaderPtr, file_ptrs: Vec<Record>) -> BlockPtr {
 
-        let block: Vec<Record> = vec![ Record::new_orphan_block(block_header_ptr)]
+        let  count = file_ptrs.len();
+        let block: Vec<Record> = vec![ Record::new_orphan_block_start()]
             .into_iter()
             .chain(file_ptrs.into_iter())
+            .chain(vec![Record::new_block_end(block_header_ptr, count)]).into_iter()
             .collect();
 
 
@@ -346,17 +350,18 @@ impl SpentTree {
 
 
         // Make the link,
-        block[0] = Record::new_block(previous_block, block[0]);
+        block[0] = Record::new_block_start(previous_block);
 
         // TODO this should jump 10 blocks back. This is important once we allow forks
-        let s = previous_block.start.to_index() as usize;
+        /*let s = previous_block.start.to_index() as usize;
         let l = previous_block.length as usize;
         let immutable_block: &[Record] = &records[s+1..s+l];
         for rec in immutable_block.iter() {
 
             //println!("Hash Set {:?} = {:?}", rec, rec.hash());
-            spent_index.set(rec.hash());
-        }
+            //TODO spent_index.set([rec.hash());
+        }*/
+
 
         // verify all inputs and set proper skips
         let stats  = seek_and_set_inputs(records, block, block_idx as usize, spent_index, logger)?;
@@ -368,9 +373,9 @@ impl SpentTree {
         info!(logger, "connected";
             "stats" => format!("{:?}", stats),
             "inputs" => stats.inputs,
-            "set ms/inputs" => (elaps2+1) as f64 / stats.inputs as f64,
             "ms/inputs" => (elaps2+1) as f64 / stats.inputs as f64,
-            "seek_avg" => stats.seeks / (stats.inputs+1)
+            "ms/inputs" => (elaps2+1) as f64 / stats.inputs as f64,
+        "seek_avg" => stats.seeks / (stats.inputs+1)
         );
 
         Ok(())
@@ -516,18 +521,20 @@ mod tests {
         st.connect_block(&mut si, &log, block_ptr, block_ptr2).unwrap();
 
         let recs = st.get_all_records();
-        assert!(   recs[0].is_block() );
-        assert_eq!(recs[0].get_file_offset(), 1);
+        assert!(   recs[0].is_block_start() );
         assert!(   recs[1].is_transaction() );
         assert_eq!(recs[1].get_file_offset(), 2);
         assert!(   recs[2].is_output() );
         assert!(   recs[3].is_output() );
         assert!(   recs[4].is_transaction() );
-        assert!(   recs[5].is_block() );
-        assert!(   recs[6].is_transaction() );
-        assert!(   recs[7].is_output() );
+        assert!(   recs[5].is_block_end() );
+        assert_eq!(recs[5].get_file_offset(), 1);
+        assert!(   recs[6].is_block_start() );
+        assert!(   recs[7].is_transaction() );
         assert!(   recs[8].is_output() );
-        assert!(   recs[9].is_transaction() );
+        assert!(   recs[9].is_output() );
+        assert!(   recs[10].is_transaction() );
+        assert!(   recs[11].is_block_end() );
 
 
     }
