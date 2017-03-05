@@ -65,8 +65,8 @@ impl SpentIndex
 
     /// Tests if the given hash exists.
     pub fn exists(&self, hash: u64) -> bool {
-
-        (self.bitvector[(hash >> 6) as usize].load(Ordering::Relaxed) & (1 << (hash & 0x3F))) > 0
+        let idx =  (hash >> 6) as usize;
+        (self.bitvector[idx].load(Ordering::Relaxed) & (1 << (hash & 0x3F))) > 0
     }
 
 

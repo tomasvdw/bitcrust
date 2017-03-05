@@ -195,7 +195,8 @@ fn seek_and_set_inputs(
 
     let block_timer = time::Instant::now();
 
-    let len = block.len()-2;
+    // length of block minus start and end records (thus outputs and transactions only
+    let len = block.len()-1;
     let results: Vec<Result<SpentTreeStats, SpendingError>> = block[1..len]
 
         .par_iter_mut()
@@ -353,18 +354,19 @@ impl SpentTree {
         block[0] = Record::new_block_start(previous_block);
 
         // TODO this should jump 10 blocks back. This is important once we allow forks
-        /*let s = previous_block.start.to_index() as usize;
+        let s = previous_block.start.to_index() as usize;
         let l = previous_block.length as usize;
-        let immutable_block: &[Record] = &records[s+1..s+l];
+        let immutable_block: &[Record] = &records[s+1..s+l-1];
         for rec in immutable_block.iter() {
 
             //println!("Hash Set {:?} = {:?}", rec, rec.hash());
-            //TODO spent_index.set([rec.hash());
-        }*/
+            spent_index.set(rec.hash());
+        }
 
 
         // verify all inputs and set proper skips
         let stats  = seek_and_set_inputs(records, block, block_idx as usize, spent_index, logger)?;
+
 
 
         let elaps2 : isize = timer.elapsed().as_secs() as isize * 1000 +

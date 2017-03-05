@@ -253,6 +253,21 @@ impl Record {
         seek_idx -= 1;
         loop {
 
+            if stats.jumps >= 1 {
+
+                // On initial load, the spent-index is always up-to-date after one block
+
+                if spent_index.exists(seek_output.hash()) {
+                    return Err(SpendingError::OutputAlreadySpent);
+
+                }
+                else if !spent_index.exists(seek_transaction.hash()) {
+                    return Err(SpendingError::OutputNotFound);
+                }
+                else {
+                    return Ok(stats);
+                }
+            }
 
             stats.seeks += 1;
 
