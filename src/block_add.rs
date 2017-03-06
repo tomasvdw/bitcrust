@@ -81,6 +81,9 @@ use store::HashIndexGuard;
 
 type BlockResult<T> = Result<T, BlockError>;
 
+// minimum number of hashes to use parallel hashing
+const PARALLEL_HASHING_THRESHOLD: usize = 60;
+
 
 /// Returns true if the given hash is the hash of a genesis block
 fn is_genesis_block(hash: Hash32) -> bool {
@@ -229,10 +232,17 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
     }
 
     // hash all transactions (in parallel)
-    let hashes: Vec<Hash32Buf> = block.txs.par_iter().map(|tx| {
-
-        Hash32Buf::double_sha256(tx.to_raw())
-    }).collect();
+    let hashes: Vec<Hash32Buf> = if block.txs.len() > PARALLEL_HASHING_THRESHOLD {
+        block.txs.par_iter().map(|tx| {
+            Hash32Buf::double_sha256(tx.to_raw())
+        }).collect()
+    }
+    else // or sequential
+    {
+        block.txs.iter().map(|tx| {
+            Hash32Buf::double_sha256(tx.to_raw())
+        }).collect()
+    };
 
 
     // here we verify and store
@@ -295,7 +305,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
 
     let block_ptr       = store.spent_tree.store_block(block_header_ptr, spent_tree_ptrs);
 
-/*
+
     if is_genesis_block(block_hash.as_ref()) {
 
         info ! (block_logger, "add_block - storing genesis block");
@@ -321,7 +331,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
         }
 
     }
-*/
+
     // TODO verify amounts
     // TODO verify PoW
     // TODO verify header-syntax
