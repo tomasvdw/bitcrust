@@ -190,14 +190,14 @@ fn seek_and_set_inputs(
                        block: &mut [Record],
                        block_idx: usize,
                        spent_index: &SpentIndex,
-                       logger: &slog::Logger) -> Result<SpentTreeStats, SpendingError>
+                       logger: &slog::Logger) -> Result<usize, SpendingError>
 {
 
     let block_timer = time::Instant::now();
 
     // length of block minus start and end records (thus outputs and transactions only
     let len = block.len()-1;
-    let results: Vec<Result<SpentTreeStats, SpendingError>> = block[1..len]
+    let results: Vec<Result<usize, SpendingError>> = block[1..len]
 
         .par_iter_mut()
         .enumerate()
@@ -206,20 +206,13 @@ fn seek_and_set_inputs(
 
             debug_assert!(rec.is_transaction() || rec.is_output());
 
-            let timer = time::Instant::now();
+            rec.verify_spent(spent_index, block_idx+i+1, records, logger)
 
-            let stats = rec.seek_and_set(spent_index, block_idx+i+1, records, logger);
-
-            trace_record(block_idx+i+1, rec, &stats, &timer.elapsed());
-
-            stats
         })
         .collect();
 
 
-    trace_record(block_idx, &block[0], &Ok(Default::default()), &block_timer.elapsed());
-
-    // Return the sum of stats, or an error if any
+    // Return the input_count, or an error if any
     results.into_iter().fold_results(Default::default(), |a,b| { a+b } )
 
 }
@@ -353,31 +346,28 @@ impl SpentTree {
         // Make the link,
         block[0] = Record::new_block_start(previous_block);
 
-        // TODO this should jump 10 blocks back. This is important once we allow forks
+
+        // Update the spent-index
+        // TODO this should jump 10 blocks back; and register its parent-requirement.
+        // This is important once we allow forks
         let s = previous_block.start.to_index() as usize;
         let l = previous_block.length as usize;
         let immutable_block: &[Record] = &records[s+1..s+l-1];
         for rec in immutable_block.iter() {
 
-            //println!("Hash Set {:?} = {:?}", rec, rec.hash());
             spent_index.set(rec.hash());
         }
 
+        // verify all inputs in the spent tree and spent-index
+        let input_count = seek_and_set_inputs(records, block, block_idx as usize, spent_index, logger)?;
 
-        // verify all inputs and set proper skips
-        let stats  = seek_and_set_inputs(records, block, block_idx as usize, spent_index, logger)?;
-
-
-
-        let elaps2 : isize = timer.elapsed().as_secs() as isize * 1000 +
+        let elapsed : isize = timer.elapsed().as_secs() as isize * 1000 +
             timer.elapsed().subsec_nanos() as isize / 1_000_000 as isize;
 
         info!(logger, "connected";
-            "stats" => format!("{:?}", stats),
-            "inputs" => stats.inputs,
-            "ms/inputs" => (elaps2+1) as f64 / stats.inputs as f64,
-            "ms/inputs" => (elaps2+1) as f64 / stats.inputs as f64,
-        "seek_avg" => stats.seeks / (stats.inputs+1)
+            "records" => block.len(),
+            "inputs" => input_count,
+            "ms/input" => (elapsed+1) as f64 / input_count as f64,
         );
 
         Ok(())

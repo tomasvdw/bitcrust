@@ -21,7 +21,7 @@ use super::params;
 // 11 => start of block
 // 10 => end of block
 // 00 => transaction
-// 01 => transaction-output
+// 01 => spent-output
 const RECORD_TYPE:u64    = 0xC000_0000_0000_0000;
 const START_OF_BLOCK:u64 = 0xC000_0000_0000_0000;
 const END_OF_BLOCK:u64   = 0x8000_0000_0000_0000;
@@ -43,6 +43,10 @@ const OUTPUT:u64         = 0x4000_0000_0000_0000;
 // bits 0 -31   fileoffset of transaction
 // bits 32-47   filenumber of transaction
 // bits 48-61   output-index
+
+// a orphan start of block is a start of block without a previous
+const ORPHAN_START_OF_BLOCK:u64 = 0xC000_0000_0000_0000;
+
 
 #[derive(Clone,Copy,PartialEq)]
 pub struct Record(u64);
@@ -94,13 +98,14 @@ impl Record {
 
 
 
-    pub fn new_output(txptr: TxPtr, output_index: u32) -> Record {
+    pub fn new_output(tx_ptr: TxPtr, output_index: u32) -> Record {
         assert!(output_index <= 0x3fff); // TODO: this might not be true; fallback is needed
 
         Record(
             OUTPUT |
                 (output_index as u64) << 48 |
-                txptr.get_file_offset()
+                (tx_ptr.get_file_number() as u64) << 32 |
+                tx_ptr.get_file_offset()
         )
     }
 
@@ -226,21 +231,43 @@ impl RecordPtr {
 
 impl Record {
 
-    pub fn seek_and_set(
+    /// Checks if the output is not double-spent in the bit-index
+    fn verify_spent_in_index(&mut self,
+                             spent_index: &SpentIndex) -> Result<usize, SpendingError>
+    {
+        let seek_output      = *self;
+        let seek_transaction = self.to_transaction();
+
+        if spent_index.exists(seek_output.hash()) {
+
+            return Err(SpendingError::OutputAlreadySpent);
+        }
+        else if !spent_index.exists(seek_transaction.hash()) {
+
+            return Err(SpendingError::OutputNotFound);
+        }
+        else {
+
+            return Ok(1);
+        }
+
+    }
+
+
+    /// Verifies whether this this output is not already spent,
+    /// and whether it is stored before self in the blockchain
+    pub fn verify_spent(
         &mut self,
         spent_index: &SpentIndex,
         seek_idx: usize,
         records: &[Record],
-        logger: &slog::Logger) -> Result<SpentTreeStats, SpendingError>
+        logger: &slog::Logger) -> Result<usize, SpendingError>
 
     {
 
-
         trace!(logger, format!("FL# Start search for {:?} {:?} {:?}", self, seek_idx, records[seek_idx]));
 
-        let mut stats: SpentTreeStats = Default::default();
-
-        if self.is_transaction() { return Ok(stats) }
+        if self.is_transaction() { return Ok(0) }
 
         let seek_output      = *self;
         let seek_transaction = self.to_transaction();
@@ -250,239 +277,51 @@ impl Record {
 
         let mut seek_idx = seek_idx as u64;
 
+        let mut blocks = 0;
+
         seek_idx -= 1;
         loop {
+            trace!(logger, format!("FL# Search  {:?} @ {:?}", self, seek_idx));
 
-            if stats.jumps >= 1 {
 
-                // On initial load, the spent-index is always up-to-date after one block
+            // TODO: we need to be aware here of the chances of forking.
+            // On initial load, the spent-index is always up-to-date after one block
+            // so we use that after one jump
+            if blocks >= 3 {
 
-                if spent_index.exists(seek_output.hash()) {
-                    return Err(SpendingError::OutputAlreadySpent);
-
-                }
-                else if !spent_index.exists(seek_transaction.hash()) {
-                    return Err(SpendingError::OutputNotFound);
-                }
-                else {
-                    return Ok(stats);
-                }
+                return self.verify_spent_in_index(spent_index)
             }
 
-            stats.seeks += 1;
-
-            trace!(logger, format!("FL# Search  {:?} @ {:?}", self, seek_idx));
 
             let seek_rec = records[seek_idx as usize];
 
-            if seek_rec.0 == START_OF_BLOCK {
+            if seek_rec.0 == ORPHAN_START_OF_BLOCK {
 
+                // Looks like we reached genesis
                 return Err(SpendingError::OutputNotFound);
             }
             else if (seek_rec.0 & START_OF_BLOCK) == START_OF_BLOCK {
 
-                // jump to next block
-                stats.jumps += 1;
+                // jump to previous block
+                blocks += 1;
                 seek_idx = seek_rec.0 & !START_OF_BLOCK;
+
                 trace!(logger, format!("FL# Jump to {:?} @ {:?}", seek_rec, seek_idx));
+
             } else if seek_rec == seek_transaction {
 
-                return Ok(stats);
+                // Found tx before spent => all ok
+                return Ok(1);
             }
             else if seek_rec == seek_output {
+
                 return Err(SpendingError::OutputAlreadySpent);
             }
             else {
+
                 seek_idx -= 1;
             }
-
-
         }
-
-        //return Ok(stats);
-        /*
-        let mut stats: SpentTreeStats = Default::default();
-
-        stats.inputs += 1;
-
-        // cur  will walk through the skip-list, starting from
-        // the previous record
-        let mut cur_idx = seek_idx - 1;
-
-        let seek_filenr_pos = self.filenumber_and_pos();
-        let seek_output_index = self.output_index();
-
-        // all filenr_pos we've passed are at least this high
-        let mut minimal_filenr_pos = seek_filenr_pos;
-
-        // these are the pointers that will be stored in rec. By default, they just point to the
-        // previous
-        let mut seek_skips: [i32; params::SKIP_FIELDS] = [-1; params::SKIP_FIELDS];
-        let mut seek_skip_blocks = [0_u8,0_u8, 0_u8];
-
-        // for lack of a better name, `skip_r` traces which of the four skips of seek_rec are still
-        // "following" the jumps. Initially all are (which will cause seek_rec.skips to be all set
-        // to -1 again), and once seek_minus[0] is cur_filenr_pos is too small, skip_r will increase
-        let mut skip_r = 0;
-        let mut skip_blocks = 0_u8;
-
-
-        let seek_plus:  Vec<i64> = params::DELTA.iter().map(|n| seek_filenr_pos + n).collect();
-        let seek_minus: Vec<i64> = params::DELTA.iter().map(|n| seek_filenr_pos - n).collect();
-
-        loop {
-            let cur_rec: Record = records[cur_idx];
-            stats.seeks += 1;
-            trace!(logger, format!("FL# Seek now at {:?} ", cur_idx));
-
-            if skip_blocks > 3 {
-
-                let output_hash = self.hash();
-                let tx_hash = self.to_transaction().hash();
-
-                if spent_index.exists(output_hash) {
-                    trace!(logger, format!("FL# Hash exists! {:?} == {:?}", output_hash,self));
-
-                    return Err(SpendingError::OutputAlreadySpent);
-                }
-
-                if !spent_index.exists(tx_hash) {
-                    return Err(SpendingError::OutputNotFound);
-                }
-
-                return Ok(stats);
-            }
-            // deduces that the wrong seek-val is set @ 106868
-            //if seek_idx ==109401 { info!(logger, "FL# Seek now at {:?} ", cur_idx); }
-
-            // See if there are skip-values we need to update in the record were seeking
-            while skip_r < params::SKIP_FIELDS && seek_minus[skip_r] >= minimal_filenr_pos {
-                skip_r += 1;
-            }
-
-            let diff: i64 = cur_idx as i64 - seek_idx as i64;
-
-            if skip_r < 1 && diff > i8::min_value()  as i64 && diff < i8::max_value()  as i64 { seek_skips[0] = diff as i32;  seek_skip_blocks[0] = skip_blocks; }
-            if skip_r < 2 && diff > i16::min_value()  as i64 && diff < i16::max_value()  as i64 { seek_skips[1] = diff as i32;  seek_skip_blocks[1] = skip_blocks;  }
-            if skip_r < 3 && diff > i16::min_value() as i64 && diff < i16::max_value() as i64 { seek_skips[2] = diff as i32;  seek_skip_blocks[2] = skip_blocks;  }
-            //if skip_r < 4 && diff > i32::min_value() as i64 && diff < i32::max_value() as i64 { seek_skips[3] = diff as i32 }
-
-
-            match cur_rec {
-                Record::OrphanBlock { .. } => {
-                    // this must mean we've reached the end of the line as we wouldn't find an orphan
-                    // block while connecting somewhere in the middle
-                    return Err(SpendingError::OutputNotFound);
-                },
-
-                Record::Block { prev: p, .. } => {
-                    stats.jumps += 1;
-                    skip_blocks = skip_blocks.saturating_add(1);
-
-                    cur_idx = p as usize;
-                }
-
-                Record::Transaction { file_number: f, file_offset: o, .. } => {
-                    let cur_filenr_pos = ((f as i64) << 32) | o as i64;
-
-                    if cur_filenr_pos == seek_filenr_pos {
-
-                        /*if seek_output_index <= u8::max_value() as u32 {
-                            *self = Record::Output {
-                                file_number: f,
-                                file_offset: o,
-                                output_index: seek_output_index as u8,
-                                skips: Skips {
-                                    s1: seek_skips[0] as i8,
-                                    s2: seek_skips[1] as i16,
-                                    s3: seek_skips[2] as i16,
-                                    b1: seek_skip_blocks[0],
-                                    b2: seek_skip_blocks[1],
-                                    b3: seek_skip_blocks[2]
-                                }
-                            };
-                        }*/
-
-                        // we've found the transaction of the output before we
-                        // found the same output. So we're all good
-                        stats.total_diff = cur_idx as i64 - seek_idx as i64;
-                        return Ok(stats);
-                    } else {
-
-                        if minimal_filenr_pos > cur_filenr_pos {
-                            minimal_filenr_pos = cur_filenr_pos;
-                        }
-                        cur_idx -= 1;
-                        stats.total_move += 1;
-                    }
-                },
-
-                Record::Output { file_number: f, file_offset: o, output_index: x, skips: s } => {
-                    let cur_filenr_pos = ((f as i64) << 32) | o as i64;
-
-                    if cur_filenr_pos == seek_filenr_pos  && x as u32 == seek_output_index {
-                        trace!(logger, format!("FL# Already spent {:?} {:?}={:?}", cur_idx, x, seek_output_index));
-
-                        return Err(SpendingError::OutputAlreadySpent);
-                    }
-                    let mut skip: i64 = -1;
-                    for n in (0..params::SKIP_FIELDS).rev() {
-                        if seek_plus[n] < cur_filenr_pos {
-                            if n == 2 { skip = s.s3 as i64; skip_blocks = skip_blocks.saturating_add(s.b3); };
-                            if n == 1 { skip = s.s2 as i64; skip_blocks = skip_blocks.saturating_add(s.b2); };
-                            if n == 0 { skip = s.s1 as i64; skip_blocks = skip_blocks.saturating_add(s.b1); };
-
-                            if minimal_filenr_pos > cur_filenr_pos - params::DELTA[n] {
-                                minimal_filenr_pos = cur_filenr_pos - params::DELTA[n];
-                            }
-                            break;
-                        }
-                    }
-
-                    stats.total_move += skip;
-                    cur_idx = (cur_idx as i64 + skip) as usize;
-
-                    if minimal_filenr_pos > cur_filenr_pos {
-                        minimal_filenr_pos = cur_filenr_pos;
-                    }
-                },
-
-                Record::OutputLarge { file_number: f, file_offset: o, output_index: x } => {
-                    let cur_filenr_pos = ((f as i64) << 32) | o as i64;
-
-                    if cur_filenr_pos == seek_filenr_pos  && x as u32 == seek_output_index {
-                        trace!(logger, format!("FL# Already spent {:?} {:?}={:?}", cur_idx, x, seek_output_index));
-
-                        return Err(SpendingError::OutputAlreadySpent);
-                    }
-
-                    if minimal_filenr_pos > cur_filenr_pos {
-                        minimal_filenr_pos = cur_filenr_pos;
-                    }
-                    cur_idx -= 1;
-                    stats.total_move += 1;
-
-                },
-
-                _ => {
-                    panic!("Unexpected record type {:?} during set_seek", cur_rec);
-                }
-            }
-
-*/
-            /*
-            let mut skip = -1;
-            for n in (0..params::SKIP_FIELDS).rev() {
-                if seek_plus[n] < cur_filenr_pos {
-                    skip = cur_rec.skips[n];
-
-                    if minimal_filenr_pos > cur_filenr_pos - params::DELTA[n] {
-                        minimal_filenr_pos = cur_filenr_pos - params::DELTA[n];
-                    }
-                    break;
-                }
-            }*/
-
 
     }
 }

@@ -224,7 +224,7 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
 
 
     if block.to_raw().len() > ::block::MAX_BLOCK_SIZE {
-        panic!("Block too large");
+
         return Err(BlockError::BlockTooLarge);
     }
 
@@ -341,7 +341,6 @@ mod tests {
     use super::*;
 
 
-    use rayon::prelude::*;
     #[test]
     fn test_clone_into_thread() {
 
@@ -349,7 +348,7 @@ mod tests {
         impl Clone for X {
             fn clone(&self) -> X { X { data: self.data.clone() } }
         }
-        let mut x = X { data: vec![1,2,3,4,5,6,7,8,9,10]};
+        let x = X { data: vec![1,2,3,4,5,6,7,8,9,10]};
 
         let y = vec![10,11,12,13,14,15,16,17,18,19,20];
 

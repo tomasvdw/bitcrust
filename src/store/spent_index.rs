@@ -14,10 +14,8 @@ use std::sync::atomic::{AtomicU64,Ordering};
 
 
 use config;
-use hash::*;
 
 use store::hash_index::IndexPtr;
-use store::FlatFilePtr;
 use store::flatfileset::FlatFileSet;
 
 use store::{RecordPtr, Record};
