@@ -2,7 +2,7 @@
 //!
 
 // minimum number of hashes to use parallel hashing
-const PARALLEL_HASHING_THRESHOLD: usize: 60;
+const PARALLEL_HASHING_THRESHOLD: usize = 60;
 
 use rayon::prelude::*;
 use hash::*;
