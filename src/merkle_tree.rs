@@ -1,6 +1,9 @@
 //! Merkle tree implementation
 //!
 
+// minimum number of hashes to use parallel hashing
+const PARALLEL_HASHING_THRESHOLD: usize: 60;
+
 use rayon::prelude::*;
 use hash::*;
 
@@ -16,6 +19,7 @@ fn shrink_merkle_tree(hashes: Vec<Hash32Buf>) -> Vec<Hash32Buf> {
     // the result is half the size rounded up
     let count = (hashes.len() + 1 ) / 2;
 
+    // closure to hash n*2 and n*2+1
     let reduce = |n| {
         let ref first: Hash32Buf = hashes[n * 2];
 
@@ -29,7 +33,7 @@ fn shrink_merkle_tree(hashes: Vec<Hash32Buf>) -> Vec<Hash32Buf> {
         )
     };
 
-    let result = if count > 20
+    let result = if count > PARALLEL_HASHING_THRESHOLD
         { (0..count).into_par_iter().map(reduce).collect() }
     else
         { (0..count).into_iter().map(reduce).collect() };
