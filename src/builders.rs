@@ -163,14 +163,14 @@ macro_rules! blk {
         block.extend(hash.as_ref().0.iter());
 
         // calculate merkle root
-        let mut merkle = ::merkle_tree::MerkleTree::new();
+        let mut merkle = Vec::new();
         let mut count = 0_u8;
         $(
-            merkle.add_hash(::hash::Hash32Buf::double_sha256(& $txvec).as_ref() );
+            merkle.push(::hash::Hash32Buf::double_sha256(& $txvec) );
             count += 1;
         )*
 
-        block.extend(merkle.get_merkle_root().as_ref().0.iter());
+        block.extend(::merkle_tree::get_merkle_root(merkle).as_ref().0.iter());
 
         block.extend([0u8;4].iter()); // time = 0 for now
         block.extend([0u8;4].iter()); // bits = 0 for now

@@ -20,7 +20,7 @@ fn shrink_merkle_tree(hashes: Vec<Hash32Buf>) -> Vec<Hash32Buf> {
     let count = (hashes.len() + 1 ) / 2;
     let mut result = Vec::with_capacity(count);
 
-
+    // TODO use par_iter
     for n in 0..count {
         let ref first = hashes[n*2];
 
@@ -43,28 +43,8 @@ pub fn get_merkle_root(hashes: Vec<Hash32Buf>) -> Hash32Buf {
     shrink_merkle_tree(hashes)[0]
 }
 
-impl MerkleTree {
-    pub fn new() -> MerkleTree {
-
-        MerkleTree {
-            hashes: vec![]
-        }
-    }
-
-    pub fn add_hash(&mut self, hash: Hash32) {
-
-        self.hashes.push(Hash32Buf::from_slice(hash.0));
-    }
 
 
-    pub fn get_merkle_root(&self) -> Hash32Buf {
-
-        assert!(!self.hashes.is_empty());
-
-        shrink_merkle_tree(self.hashes.clone())[0]
-
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -85,12 +65,12 @@ mod tests {
         let hash2 = Hash32Buf::from_slice(&from_hex_rev(HASH2));
         let exp_merkle = Hash32Buf::from_slice(&from_hex_rev(EXP_MERKLE));
 
-        let mut merkle = MerkleTree::new();
-        merkle.add_hash(hash1.as_ref());
-        merkle.add_hash(hash2.as_ref());
+        let mut merkle = Vec::new();
+        merkle.push(hash1);
+        merkle.push(hash2);
 
 
-        let merkle_root = merkle.get_merkle_root();
+        let merkle_root = get_merkle_root(merkle);
 
         assert_eq!(exp_merkle, merkle_root);
 
@@ -120,13 +100,13 @@ mod tests {
 
         let exp_merkle = Hash32Buf::from_slice(&from_hex_rev(HASH_SET_MERKLE));
 
-        let mut merkle = MerkleTree::new();
+        let mut merkle = Vec::new();
         for tx in HASH_SET.iter() {
             let txh = Hash32Buf::from_slice(&from_hex_rev(tx));
-            merkle.add_hash(txh.as_ref());
+            merkle.push(txh);
         }
 
-        let merkle_root = merkle.get_merkle_root();
+        let merkle_root = get_merkle_root(merkle);
 
         assert_eq!(exp_merkle, merkle_root);
 
