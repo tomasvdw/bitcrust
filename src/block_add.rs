@@ -298,7 +298,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
 
     let block_ptr       = store.spent_tree.store_block(block_header_ptr, spent_tree_ptrs);
 
-
+/*
     if is_genesis_block(block_hash.as_ref()) {
 
         info ! (block_logger, "add_block - storing genesis block");
@@ -324,7 +324,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
         }
 
     }
-
+*/
     // TODO verify amounts
     // TODO verify PoW
     // TODO verify header-syntax

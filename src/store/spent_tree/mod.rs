@@ -15,10 +15,6 @@
 /// Often this is the previous records, but blocks can also be added in different order.
 /// The [start-of-block] then point to NULL until the previous block comes in.
 ///
-///
-///
-///
-///
 
 use std::time;
 
@@ -120,9 +116,7 @@ impl BlockPtr {
 
 pub struct SpentTree {
 
-    fileset:    FlatFileSet<RecordPtr>,
-
-    stats: SpentTreeStats
+    fileset:    FlatFileSet<RecordPtr>
 }
 
 
@@ -193,9 +187,7 @@ fn seek_and_set_inputs(
                        logger: &slog::Logger) -> Result<usize, SpendingError>
 {
 
-    let block_timer = time::Instant::now();
-
-    // length of block minus start and end records (thus outputs and transactions only
+    // we use the block minus the first and last record (which are just markers
     let len = block.len()-1;
     let results: Vec<Result<usize, SpendingError>> = block[1..len]
 
@@ -211,7 +203,6 @@ fn seek_and_set_inputs(
         })
         .collect();
 
-
     // Return the input_count, or an error if any
     results.into_iter().fold_results(Default::default(), |a,b| { a+b } )
 
@@ -223,15 +214,9 @@ impl SpentTree {
 
         let dir = &cfg.root.clone().join(SUBPATH);
 
-        let stats: SpentTreeStats = Default::default();
-
-
-
         SpentTree {
             fileset: FlatFileSet::new(
-                dir, PREFIX, FILE_SIZE, MAX_CONTENT_SIZE),
-
-            stats: stats
+                dir, PREFIX, FILE_SIZE, MAX_CONTENT_SIZE)
         }
     }
 

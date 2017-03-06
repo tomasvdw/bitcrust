@@ -1,12 +1,8 @@
 //! Merkle tree implementation
 //!
 
+use rayon::prelude::*;
 use hash::*;
-
-pub struct MerkleTree {
-
-    hashes: Vec<Hash32Buf>
-}
 
 /// This halves the merkle tree leaves, taking it one level up
 ///
@@ -17,22 +13,21 @@ fn shrink_merkle_tree(hashes: Vec<Hash32Buf>) -> Vec<Hash32Buf> {
         return hashes;
     }
 
+    // the result is half the size rounded up
     let count = (hashes.len() + 1 ) / 2;
-    let mut result = Vec::with_capacity(count);
 
-    // TODO use par_iter
-    for n in 0..count {
+    let result = (0..count).into_iter().map(|n| {
         let ref first = hashes[n*2];
 
         // we double the first one if we have an odd number of hashes
         // in this layer
         let ref second = hashes.get(n*2+1).unwrap_or(&first);
 
-        result.push(Hash32Buf::double_sha256_from_pair(
+        Hash32Buf::double_sha256_from_pair(
             first.as_ref(),
-            second.as_ref())
-        );
-    }
+            second.as_ref()
+        )
+    }).collect();
 
     shrink_merkle_tree(result)
 }

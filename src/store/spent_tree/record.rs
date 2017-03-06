@@ -22,12 +22,16 @@ use super::params;
 // 10 => end of block
 // 00 => transaction
 // 01 => spent-output
+
 const RECORD_TYPE:u64    = 0xC000_0000_0000_0000;
 const START_OF_BLOCK:u64 = 0xC000_0000_0000_0000;
 const END_OF_BLOCK:u64   = 0x8000_0000_0000_0000;
 const TRANSACTION:u64    = 0x0000_0000_0000_0000;
 const OUTPUT:u64         = 0x4000_0000_0000_0000;
 
+// Record layout
+// -------------
+//
 // START_OF_BLOCK;
 // bits 0-61   fileoffset end of the previous block (in spent-tree)
 //
@@ -156,17 +160,20 @@ impl Record {
         self.0 == 0
     }
 
-    /// This creates a non-cryptographic but perfect hash of the transaction or output
+    /// This creates a non-cryptographic but perfect "hash" of the transaction or output
     pub fn hash(self) -> u64 {
 
         debug_assert!(self.is_transaction() || self.is_output());
 
-        // We drop 4 bits from the filenumber and, for an output  add 1 + the output-index
+        // We drop 4 bits from the filen offset and, for an output  add 1 + the output-index
         // The result is just as unique but smaller; we just drop the info to find the transaction
-        // or the transaction from an output
-        ((self.0 & 0xFFFF_FFFF_FFFF) >> 4)
-        + (self.0 >> 62) // the bit that indicates its an output
-        + ((self.0 & 0x1FFF_0000_0000_0000) >> 48)
+        // or to find the transaction from an output
+        // The resulting number is used for the spent-index
+
+
+        ((self.0 & 0xFFFF_FFFF_FFFF) >> 4)          // file-offset and file-number
+        + (self.0 >> 62)                            // the bit that indicates its an output
+        + ((self.0 & 0x1FFF_0000_0000_0000) >> 48)  // output-index
     }
 
 
@@ -181,8 +188,8 @@ impl Record {
         unreachable!()
     }
 
-    // test only as normally it makes no sense to treat file_offsets from different record-types
-    // as the same expression
+    // Test only as normally it makes no sense to mix up file_offsets from different record-types
+    // in the same expression
     #[cfg(test)]
     pub fn get_file_offset(self) -> u32 {
 
@@ -269,8 +276,8 @@ impl Record {
 
         if self.is_transaction() { return Ok(0) }
 
-        let seek_output      = *self;
-        let seek_transaction = self.to_transaction();
+        let seek_output      = *self; // this may not be found
+        let seek_transaction = self.to_transaction(); // this must be found
 
         debug_assert!(seek_output.is_output());
         debug_assert!(self.0 == records[seek_idx].0);
@@ -286,7 +293,7 @@ impl Record {
 
             // TODO: we need to be aware here of the chances of forking.
             // On initial load, the spent-index is always up-to-date after one block
-            // so we use that after one jump
+            // so we should use 1 here
             if blocks >= 3 {
 
                 return self.verify_spent_in_index(spent_index)
