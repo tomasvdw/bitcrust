@@ -16,18 +16,23 @@ fn shrink_merkle_tree(hashes: Vec<Hash32Buf>) -> Vec<Hash32Buf> {
     // the result is half the size rounded up
     let count = (hashes.len() + 1 ) / 2;
 
-    let result = (0..count).into_iter().map(|n| {
-        let ref first = hashes[n*2];
+    let reduce = |n| {
+        let ref first: Hash32Buf = hashes[n * 2];
 
         // we double the first one if we have an odd number of hashes
         // in this layer
-        let ref second = hashes.get(n*2+1).unwrap_or(&first);
+        let ref second = hashes.get(n * 2 + 1).unwrap_or(first);
 
         Hash32Buf::double_sha256_from_pair(
             first.as_ref(),
             second.as_ref()
         )
-    }).collect();
+    };
+
+    let result = if count > 20
+        { (0..count).into_par_iter().map(reduce).collect() }
+    else
+        { (0..count).into_iter().map(reduce).collect() };
 
     shrink_merkle_tree(result)
 }
