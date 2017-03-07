@@ -15,22 +15,28 @@ Each file starts with a 16 byte header:
 (both in native endian)
 8 bytes reserved.
 
-In normal operation the files are append-only and writes and reads occur lock-free. Writes will first increase the 
+In most operation the files are append-only and writes and reads occur lock-free. Writes will first increase the 
 write-pointer (using atomic compare-and-swap) and then write the record at the location of the previous write pointer.
 
-Data in the files can be identified with 46-bit pointers (16-bit fileno and 30-bit filepos) [(src)](fileptr.rs)
+Data in the files can be identified with pointer that implements the *flatfileptr* Trait. 
 
-## Block_Content
-
-
-Transactions and blockheaders are stored in flatfiles `block_content/bc-XXXX`  [(src)](block_content.rs) 
-Transanctions are prefixed with a 4-byte length and written in network format. Blockheaders are not length-prefixed, and also stored in network format.
+This provides a file number (max 16-bit) and a file offset (max 32 bit).
 
 
-## Hash_Index
+## Block Content
 
-The hash index is used to lookup fileptrs from hashes of both blocks and transactions. 
-It is stored in flat_files `hash_index/ht-XXXX` [(src)](hash_index.rs). The first 64mb of the flatfileset is 
+
+Transactions and blockheaders are stored in flatfiles `transactions/tx-XXXX` 
+and `headers/bh-0000`. 
+
+Both are prefixed with a 4-byte length and written in network format. 
+Blockheaders are not length-prefixed, and also stored in network format.
+
+
+## Hash Index
+
+Hashes of blocks and transactions are looked in two hash-indexes [(src)](hash_index.rs). 
+It is stored in flat_files `hash_index/ht-XXXX` . The first 64mb of the flatfileset is 
 the root node; it is a hash-table to resolve the first 24-bits of a hash. This points to a append-only unbalanced 
 binary tree.
  

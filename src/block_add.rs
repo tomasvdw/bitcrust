@@ -231,45 +231,49 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
         return Err(BlockError::BlockTooLarge);
     }
 
-    // hash all transactions (in parallel)
-    let hashes: Vec<Hash32Buf> = if block.txs.len() > PARALLEL_HASHING_THRESHOLD {
-        block.txs.par_iter().map(|tx| {
-            Hash32Buf::double_sha256(tx.to_raw())
-        }).collect()
-    }
-    else // or sequential
-    {
-        block.txs.iter().map(|tx| {
-            Hash32Buf::double_sha256(tx.to_raw())
-        }).collect()
-    };
+    let chunks: Vec<_> = block.txs.par_chunks(PARALLEL_HASHING_THRESHOLD).map(|chunk_tx| {
+
+        let len = chunk_tx.len();
+
+        let mut hashes:  Vec<Hash32Buf> = Vec::with_capacity(len); // accurate
+        let mut records: Vec<Record>    = Vec::with_capacity(len * 3); // estimate
+
+        let ref mut tx_index = &mut store.tx_index.clone();
+        let ref mut tx_store = &mut store.transactions.clone();
+
+        for tx in chunk_tx {
+
+            let hash = Hash32Buf::double_sha256(tx.to_raw());
+            hashes.push(hash);
+
+            let res = tx.verify_and_store(tx_index, tx_store, hash.as_ref()).unwrap();
+
+            // AlreadyExists and VerifiedAndStored are both ok here
+            let ptr = match res {
+                transaction::TransactionOk::AlreadyExists(ptr) => ptr,
+                transaction::TransactionOk::VerifiedAndStored(ptr) => ptr
+            };
+
+            records.push(Record::new_transaction(ptr));
+        }
+        (hashes,records)
+    }).collect();
 
 
-    // here we verify and store
-    let mut records: Vec<Record> = Vec::new();
-    for (n,tx) in block.txs.iter().enumerate() {
+    // split
+    let (hashes,records): (Vec<_>, Vec<_>) = chunks.into_iter().unzip();
 
-        let hash = hashes[n].as_ref();
+    // flatten
+    let hashes  = hashes.into_iter().flat_map(|x| x);
+    let records = records.into_iter().flat_map(|x| x);
 
-        let res = tx.verify_and_store(&mut store.tx_index, &mut store.transactions, hash).unwrap();
-
-        // AlreadyExists and VerifiedAndStored are both ok here
-        let ptr = match res {
-            transaction::TransactionOk::AlreadyExists(ptr) => ptr,
-            transaction::TransactionOk::VerifiedAndStored(ptr) => ptr
-        };
-
-        records.push(Record::new_transaction(ptr));
-        records.append(&mut tx.get_output_records(store));
-
-    }
 
     // check merkle roots
-    let calculated_merkle_root = merkle_tree::get_merkle_root(hashes);
+    let calculated_merkle_root = merkle_tree::get_merkle_root(hashes.collect());
     block.verify_merkle_root(calculated_merkle_root.as_ref()).unwrap();
 
 
-    Ok(records)
+    Ok(records.collect())
 }
 
 
