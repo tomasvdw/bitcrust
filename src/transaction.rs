@@ -160,14 +160,14 @@ impl<'a> Transaction<'a> {
     /// Gets the output records referenced by the inputs of this tx
     ///
     /// Uses Record placeholder for outputs not found
-    pub fn get_output_records(&self, store: &mut Store) -> Vec<Record> {
+    pub fn get_output_records(&self, tx_index: &mut TxIndex) -> Vec<Record> {
 
         self.txs_in.iter()
 
             .filter(|tx_in| !tx_in.prev_tx_out.is_null())
             .map(|input| {
 
-                store.tx_index
+                tx_index
                     .get(input.prev_tx_out)
                     .iter()
                     .find(|ptr| !ptr.is_guard())

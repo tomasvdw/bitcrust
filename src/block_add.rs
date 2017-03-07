@@ -82,7 +82,7 @@ use store::HashIndexGuard;
 type BlockResult<T> = Result<T, BlockError>;
 
 // minimum number of hashes to use parallel hashing
-const PARALLEL_HASHING_THRESHOLD: usize = 60;
+const PARALLEL_HASHING_THRESHOLD: usize = 3;
 
 
 /// Returns true if the given hash is the hash of a genesis block
@@ -255,6 +255,9 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
             };
 
             records.push(Record::new_transaction(ptr));
+            for rec in tx.get_output_records(tx_index) {
+                records.push(rec);
+            }
         }
         (hashes,records)
     }).collect();
