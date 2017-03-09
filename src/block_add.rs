@@ -285,13 +285,13 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
 pub fn add_block(store: &mut Store, buffer: &[u8]) {
 
 
-
+    info!(block_logger, "add_block - start"));
     // parse
     let block      = Block::new(buffer) .unwrap();
     let block_hash = Hash32Buf::double_sha256( block.header.to_raw());
 
     let block_logger = slog::Logger::new(&store.logger, o!());
-    info!(block_logger, "add_block - start"; "hash" => format!("{:?}", block_hash));
+    info!(block_logger, "add_block - hashed"; "hash" => format!("{:?}", block_hash));
 
     // already done?
     if block_exists(store, block_hash.as_ref()) {

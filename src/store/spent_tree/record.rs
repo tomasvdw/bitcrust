@@ -170,7 +170,7 @@ impl Record {
 
         ((self.0 & 0xFFFF_FFFF_FFFF) >> 4)          // file-offset and file-number
         + (self.0 >> 62)                            // the bit that indicates its an output
-        + ((self.0 & 0x1FFF_0000_0000_0000) >> 48)  // output-index
+        + ((self.0 & 0x3FFF_0000_0000_0000) >> 48)  // output-index
     }
 
 
