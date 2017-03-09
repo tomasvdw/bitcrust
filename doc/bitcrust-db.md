@@ -28,7 +28,7 @@ are verified and transactions are relayed, the transaction contents is only rare
 Blockheaders are stored in the same data-files (to ensure rough ordering), and both transactions
  and blocks are referenced by 48-bit file-pointers.
 
-For more details, check the [store](src/store/) documentation
+For more details, check the [store](../src/store/) documentation
  
 
 ## Spent tree
