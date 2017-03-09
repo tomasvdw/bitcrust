@@ -28,8 +28,7 @@ before_script:
 script:
   - |
     travis-cargo build &&
-    travis-cargo test &&
-    travis-cargo bench
+    travis-cargo test
 
 after_success:
   # upload the documentation from the build with stable (automatically only actually
@@ -38,7 +37,7 @@ after_success:
   # argument mitigates kcov crashes due to malformed debuginfo, at the
   # cost of some speed <https://github.com/huonw/travis-cargo/issues/12>)
   #- travis-cargo coveralls --no-sudo --verify
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then travis-cargo coveralls --no-sudo --verify; fi
+  # - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then travis-cargo coveralls --no-sudo --verify; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./kcov/build/src/kcov --verify --coveralls-id=$TRAVIS_JOB_ID --exclude-pattern=/.cargo,.c,.tcc,usr/include,.cpp,.h target/kcov target/debug/bitcrust_lib-*; fi
 
 env:
