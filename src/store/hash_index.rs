@@ -21,6 +21,9 @@
 //!  they are "expecting" this block, and should be appended when this block comes in
 //!
 //!
+//!  TODO There is probably quite some gain to be made by moving to HAMT instead unbalanced binary trees
+//!  for the branches
+
 
 use std::{mem};
 use std::sync::atomic;
@@ -62,6 +65,7 @@ pub struct HashIndex<T : HashIndexGuard + Copy + Clone> {
 
 impl<T : HashIndexGuard + Copy + Clone> Clone for HashIndex<T> {
 
+    // Explicit cloning can be used to allow concurrent access.
     fn clone(&self) -> HashIndex<T> {
 
         let mut fileset = self.fileset.clone();
@@ -112,9 +116,7 @@ impl IndexPtr {
     /// fails if the current value is no longer the value supplied
     pub fn atomic_replace(&self, current_value: IndexPtr, new_value: IndexPtr) -> bool {
 
-
         let atomic_self: *mut atomic::AtomicU64 = unsafe { mem::transmute( self ) };
-
 
         let prev = unsafe {
             (*atomic_self).compare_and_swap(

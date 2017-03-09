@@ -1,26 +1,44 @@
 //!
 //!
-//! The store consists of three filesets.
+//! The store consists of 6 filesets.
 //!
-//! # block_content
+//! # transactions
 //!
-//! This contains transactions & blockheaders.
+//! This contains raw transactions
 //! These are directly written to their flatfileset
 //!
-//! # hash_index
+//! # block_headers
 //!
-//! This maps hashes to transaction and blockheaders
+//! This contains raw block-headers
+//! These are directly written to their flatfileset
+//!
+//!
+//! # tx_index
+//!
+//! This maps hashes to transactions
 //! A tx-hash can point to a transaction or to a set of inputs;
 //! in the latter case, the inputs are guards: these must be verified
 //! before the transaction can be inserted
 //!
+//! # block_index
+//!
+//! This maps hashes to blocks
+//! A block-pointer of a connected block is inserted at its own hash
+//! A block-pointer of an orphan block is inserted at the previous-block hash
+//! and serves as a *guard*. This ensures that the connection is made when the previous block comes
+//! in.
+//!
 //! # spent_tree
 //!
+//! The tree that links transactions to blocks. See [[spent_tree]]
+//!
+//! # spent_index
+//!
+//! A bit-index that is used as a "broom-wagon" for the spent_tree to prevent deep-tree searching
 //!
 
 
 use slog ;
-
 use slog_term;
 use slog::DrainExt;
 
@@ -79,11 +97,12 @@ pub struct Store {
     pub spent_tree: spent_tree::SpentTree,
     pub spent_index: spent_index::SpentIndex,
 
+    // todo; this needs to go; structured logging is superior
     pub metrics: Metrics,
-    // todo; this needs to go; structured logging is su
 
     pub logger: slog::Logger,
 
+    // needed for cloning
     cfg: config::Config
 }
 
@@ -93,8 +112,6 @@ impl Store {
     pub fn new(cfg: &config::Config) -> Store {
 
         Store {
-            //index: index::Index::new(cfg),
-
             transactions:  FlatFileSet::new(
                 &cfg.root.clone().join("transactions"),
                 "tx",
@@ -123,7 +140,10 @@ impl Store {
 
 
 
-
+    /// Gets the block hash from a block-ptr;
+    /// This follows the indirection through the spent-tree
+    ///
+    /// Note: This might be not the best spot for this...
     pub fn get_block_hash(&mut self, block_ptr: BlockPtr) -> Hash32Buf {
 
         // follow indirection through spent-tree
@@ -139,6 +159,9 @@ impl Store {
 }
 
 impl Clone for Store {
+
+    // Clones the store to allow for concurrent access. Not quite cheap
+    // so threads should reuse there own store (for instance, with par_chunks)
     fn clone(&self) -> Store {
 
         Store::new(&self.cfg)

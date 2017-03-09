@@ -13,7 +13,7 @@ extern {
                                                  unsigned int nIn, unsigned int flags, bitcoinconsensus_error* err);
 */
 
-    #[allow(dead_code)]
+    #[cfg(feature = "verify_scripts")]
     pub fn bitcoinconsensus_verify_script(
         prevout_script:      *const u8,
         prevout_script_size: u32,

@@ -371,6 +371,7 @@ impl<P: FlatFilePtr + Copy + Clone> FlatFileSet<P> {
 
     }
 
+    /// Reads a vector of `count` length-prefixed blobs
     pub fn read_set(&mut self, pos: P, count: usize) -> (Vec<&'static [u8]>, P) {
 
         let mut result = Vec::with_capacity(count);

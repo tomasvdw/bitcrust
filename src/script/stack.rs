@@ -1,4 +1,7 @@
-
+///
+/// Currently unused
+///
+///
 use super::ScriptError;
 
 pub struct Stack(Vec<Box<[u8]>>);

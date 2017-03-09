@@ -225,11 +225,7 @@ fn block_exists(store: & mut Store, block_hash: Hash32) -> bool {
 ///
 fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResult<Vec<Record>> {
 
-    // check block-size
-    if block.to_raw().len() > ::block::MAX_BLOCK_SIZE {
 
-        return Err(BlockError::BlockTooLarge);
-    }
 
     let chunks: Vec<_> = block.txs.par_chunks(PARALLEL_HASHING_THRESHOLD).map(|chunk_tx| {
 
@@ -299,6 +295,8 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
         info!(store.logger, "add_block - Block already exists");
         return;
     }
+
+    block.verify_block_size().unwrap();
 
     // check and store the transactions in block_content and check the merkle_root
     let spent_tree_ptrs = verify_and_store_transactions(store, &block).unwrap();

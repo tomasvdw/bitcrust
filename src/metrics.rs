@@ -1,5 +1,8 @@
 //! Small metrics library
 //! Probably obsolete; we now use structured logging which seems sufficient
+//!
+//! Besides; the lib is now hyper-fast anyways :)
+//!
 
 use std::collections::HashMap;
 use std::time::{Instant,Duration};
