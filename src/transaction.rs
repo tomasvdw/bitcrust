@@ -201,7 +201,7 @@ impl<'a> Transaction<'a> {
             // they need to be verified
             self.verify_backtracking_outputs(tx_store, &existing_ptrs);
 
-            // store & verify
+            // store
             let ptr      = tx_store.write(self.to_raw());
 
 
@@ -212,6 +212,7 @@ impl<'a> Transaction<'a> {
             // Store reference in the hash_index.
             // This may fail if since ^^ get_ptr new dependent txs were added,
             // in which case we must try again.
+            // The rewriting in the store is then redundant, but this is extremely rare.
             if tx_index.set(hash, ptr, &existing_ptrs) {
 
                 return Ok(TransactionOk::VerifiedAndStored(ptr))
