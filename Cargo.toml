@@ -36,4 +36,4 @@ opt-level = 3
 
 [features]
 default = []
-dump_tree = []
+verify_scripts = []

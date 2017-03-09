@@ -16,7 +16,6 @@
 /// The [start-of-block] then point to NULL until the previous block comes in.
 ///
 
-use std::time;
 
 use itertools::Itertools;
 use buffer::*;
@@ -33,8 +32,6 @@ use store::hash_index::{HashIndex,HashIndexGuard};
 use store::spent_index::SpentIndex;
 
 use transaction::Transaction;
-
-mod params;
 
 pub mod record;
 pub use self::record::{Record,RecordPtr};
@@ -89,29 +86,6 @@ impl BlockPtr {
         RecordPtr::new(self.start.to_index() + self.length -1)
     }
 
-    // Jumps back a block-record to the previous block
-    fn scan_back(&self, records: &[Record], count: usize) -> BlockPtr {
-
-        // Seek back
-        let mut rec = records[self.start.to_index() as usize];
-        let mut n=0;
-
-        loop {
-            let (i,s) = rec.previous_block();
-            n = n+1;
-            if n == count {
-                return BlockPtr {
-                    start   : RecordPtr::new(i as u64),
-                    length  : s as u64,
-                    is_guard: false
-                }
-            } else {
-                rec = records[i];
-            }
-        };
-        unreachable!()
-
-    }
 }
 
 pub struct SpentTree {
@@ -129,7 +103,6 @@ pub struct SpentTreeStats {
     pub total_move: i64,
     pub total_diff: i64,
     pub jumps:      i64,
-    pub use_diff:   [i64; params::SKIP_FIELDS]
 }
 
 // Make stats additive
@@ -137,9 +110,6 @@ impl ::std::ops::Add for SpentTreeStats {
     type Output = SpentTreeStats;
 
     fn add(self, other: SpentTreeStats) -> SpentTreeStats {
-        // sum use_diff array
-        let mut use_diff: [i64; params::SKIP_FIELDS] = Default::default();
-        for n in 0..use_diff.len() { use_diff[n] = self.use_diff[n] + other.use_diff[n] };
 
         SpentTreeStats {
             blocks: self.blocks + other.blocks,
@@ -148,33 +118,10 @@ impl ::std::ops::Add for SpentTreeStats {
             total_move: self.total_move + other.total_move,
             total_diff: self.total_diff+ other.total_diff,
             jumps: self.jumps   + other.jumps,
-            use_diff: use_diff
         }
     }
 }
 
-
-#[cfg(feature = "dump_tree")]
-fn trace_record(index: usize,
-                record: &Record,
-                stats: &Result<SpentTreeStats, SpendingError>,
-                duration: & time::Duration)
-{
-    let us: u32 = duration.as_secs() as u32 * 1_000_000 + duration.subsec_nanos() / 1000;
-    let stats = match *stats {
-        Err(ref e)   => format!("{:?}", e),
-        Ok(ref  s)   =>  format!("@ {0:<10}={1:<10},st={2:<6},j={3:<5}", s.total_move, s.total_diff, s.seeks, s.jumps)
-    };
-    println!("## {0: >10} | {1:?} | st={2}, [{3} us]", index, record, stats, us);
-}
-
-#[cfg(not(feature = "dump_tree"))]
-fn trace_record(_: usize,
-                _: &Record,
-                _: &Result<SpentTreeStats, SpendingError>,
-                _: & time::Duration)
-{
-}
 
 
 

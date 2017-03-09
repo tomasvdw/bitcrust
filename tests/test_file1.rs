@@ -11,7 +11,6 @@ mod blk_file;
 
 use std::time::{Instant};
 extern crate rayon;
-use rayon::prelude::*;
 
 
 #[test]

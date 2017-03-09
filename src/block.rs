@@ -253,9 +253,6 @@ mod tests {
 
     }
 
-    fn test_spenttree() {
-
-    }
 
 
 

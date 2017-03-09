@@ -196,7 +196,6 @@ mod tests {
     use config::Config;
     use std::fs;
 
-    use rayon::prelude::*;
     //use block::BlockHeader;
 
     ///

@@ -387,7 +387,7 @@ impl<P: FlatFilePtr + Copy + Clone> FlatFileSet<P> {
 
     /// This is a special reader used for the reindex benchmark
     /// It reads and returns all blockheaders+txcount
-    #[test]
+    #[cfg(test)]
     pub fn read_block_headers(&mut self) -> Vec<(&'static [u8], usize)> {
         let mut result = Vec::new();
         let mut pos = P::new(0, super::flatfile::INITIAL_WRITEPOS);

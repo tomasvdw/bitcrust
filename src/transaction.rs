@@ -8,7 +8,6 @@ use itertools::Itertools;
 use buffer::*;
 use hash::*;
 use script::context;
-use store::Store;
 use ffi;
 
 use store::TxPtr;

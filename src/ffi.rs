@@ -13,7 +13,7 @@ extern {
                                                  unsigned int nIn, unsigned int flags, bitcoinconsensus_error* err);
 */
 
-
+    #[allow(dead_code)]
     pub fn bitcoinconsensus_verify_script(
         prevout_script:      *const u8,
         prevout_script_size: u32,
@@ -28,14 +28,16 @@ extern {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum VerifyScriptError {
     UnknownError
 }
 
 /// Verifies whether the given `input` of the transaction spents the given `output`
 /// using libbitcoin-consensus
+
+#[cfg(feature = "verify_scripts")]
 pub fn verify_script(previous_tx_out: &[u8], transaction: &[u8], input: u32) -> Result<(), VerifyScriptError> {
-    return Ok(());
     let flags = 0;
     let mut err: i32 = 0;
     let result = unsafe { bitcoinconsensus_verify_script(
@@ -54,6 +56,12 @@ pub fn verify_script(previous_tx_out: &[u8], transaction: &[u8], input: u32) -> 
     else {
         Err(VerifyScriptError::UnknownError)
     }
+}
+
+#[cfg(not(feature = "verify_scripts"))]
+pub fn verify_script(_: &[u8], _: &[u8], _: u32) -> Result<(), VerifyScriptError> {
+    Ok(())
+
 }
 
 

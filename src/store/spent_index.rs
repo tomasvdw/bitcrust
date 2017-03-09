@@ -9,16 +9,13 @@
 //! a large root hash-table with each element pointing to an unbalanced binary tree
 //!
 
-use std::{mem};
 use std::sync::atomic::{AtomicU64,Ordering};
 
 
 use config;
 
-use store::hash_index::IndexPtr;
 use store::flatfileset::FlatFileSet;
-
-use store::{RecordPtr, Record};
+use store::RecordPtr;
 
 
 const MB:                 u64 = 1024 * 1024;
@@ -32,6 +29,7 @@ const VEC_SIZE:         usize = 500_000_000;
 /// Internally uses fileset
 pub struct SpentIndex {
 
+    #[allow(dead_code)]
     fileset:      FlatFileSet<RecordPtr>,
 
     bitvector:    &'static [AtomicU64]
@@ -89,28 +87,15 @@ impl SpentIndex
 
 #[cfg(test)]
 mod tests {
-    use std::mem;
 
     extern crate rand;
-    use std::path::PathBuf;
     use std::collections::HashSet;
 
-    use std::thread;
-
     use super::*;
-    use self::rand::Rng;
-    use config;
-    use hash::Hash32Buf;
-    use store::TxPtr;
-    use store::flatfileset::FlatFilePtr;
 
 
     #[test]
     fn test_seq() {
-
-        const DATA_SIZE: u32 = 100000;
-        const THREADS: usize = 1;
-        const LOOPS: usize = 10000;
 
         let mut idx: SpentIndex = SpentIndex::new(& test_cfg!() );
 

@@ -1,4 +1,3 @@
-#[macro_use]
 use slog;
 
 use std::mem;
@@ -13,9 +12,7 @@ use store::spent_tree::BlockPtr;
 use store::spent_index::SpentIndex;
 
 use store::flatfile::INITIAL_WRITEPOS;
-use super::SpentTreeStats;
 
-use super::params;
 
 // highest 2 bits are record-type
 // 11 => start of block
@@ -184,9 +181,6 @@ impl Record {
         Record(self.0 & 0x0000_FFFF_FFFF_FFFF)
     }
 
-    fn output_index(self) -> u32 {
-        unreachable!()
-    }
 
     // Test only as normally it makes no sense to mix up file_offsets from different record-types
     // in the same expression

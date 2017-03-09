@@ -91,7 +91,7 @@ impl FlatFilePtr for IndexPtr {
         IndexPtr {
             file_offset: file_offset as u32,
             file_number: file_number,
-            zero: 0  // we must pad with zero to ensure atomic transmutes work
+            zero: 0  // we must pad with zero to ensure atomic CAS works
         }
     }
 
@@ -406,7 +406,7 @@ impl<T :'static> HashIndex<T>
 
 #[cfg(test)]
 mod tests {
-    use super::{Node,Leaf};
+    use super::Node;
     use std::mem;
 
     extern crate tempdir;
@@ -513,10 +513,5 @@ mod tests {
             h.join().unwrap();
 
         }
-
-
-
-
-
     }
 }

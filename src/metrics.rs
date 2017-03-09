@@ -148,10 +148,10 @@ mod tests {
     use std::time;
     #[test]
     fn test_metric() {
-        let mut m = Metrics::new();
+        let m = Metrics::new();
 
         {
-            let q = m.start("test");
+            let _q = m.start("test");
             thread::sleep(time::Duration::from_millis(5));
         }
         assert!(m.metrics.borrow().get("test").unwrap().count == 1);
