@@ -21,6 +21,9 @@ install:
 # load travis-cargo
 before_script:
   - |
+      git clone https://github.com/tomasvdw/cargo-travis.git &&
+      cd cargo-travis/ &&
+      git checkout exclude-pattern
       cargo install cargo-travis &&
       export PATH=$HOME/.local/bin:$PATH
 
@@ -31,6 +34,6 @@ script:
     cargo test
 
 after_success:
-  - cargo coveralls
+  - cargo coveralls --exclude-pattern tests/,script/
 
 
