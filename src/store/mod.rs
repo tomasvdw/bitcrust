@@ -102,8 +102,12 @@ pub struct Store {
 
     pub logger: slog::Logger,
 
+    pub initial_sync: bool,
+
     // needed for cloning
-    cfg: config::Config
+    cfg: config::Config,
+
+
 }
 
 
@@ -133,7 +137,9 @@ impl Store {
 
             metrics:       Metrics::new(),
             logger:        slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!()),
-            cfg:           cfg.clone()
+            cfg:           cfg.clone(),
+
+            initial_sync:  true,
         }
     }
 

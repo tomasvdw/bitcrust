@@ -289,8 +289,10 @@ impl<T :'static> HashIndex<T>
     /// This way, inputs stores at a hash serve as guards that need to be verified before
     /// the transaction can be stored.
     ///
+    /// The force_store flag can be used to overrule this behaviour and store anyway
+    ///
     /// Similarly, blockheader_guards need to be connected before a block can be stored
-    pub fn set(&mut self, hash: Hash32, store_ptr: T, verified_ptrs: &[T]) -> bool {
+    pub fn set(&mut self, hash: Hash32, store_ptr: T, verified_ptrs: &[T], force_store: bool) -> bool {
 
         assert!(! store_ptr.is_guard());
         assert!(verified_ptrs.iter().all(|p| p.is_guard()));
@@ -319,7 +321,8 @@ impl<T :'static> HashIndex<T>
                     let first_value_ptr = node.leaf;
 
                     // check if there is anything waiting that is not supplied in `verified_ptrs`
-                    if !self
+                    if !force_store &&
+                        !self
                         .collect_node_values(node)
                         .into_iter()
                         .any(|val| verified_ptrs.contains(&val)) {
@@ -355,8 +358,6 @@ impl<T :'static> HashIndex<T>
             match self.find_node(hash) {
 
                 FindNodeResult::NotFound(ptr) => {
-
-                    debug_assert!(ptr.is_null());
 
                     // The transaction doesn't exist; we insert guard_ptr instead
 
@@ -497,11 +498,11 @@ mod tests {
                                 // script validation goes here
                             }
 
-                            idx.set(tx_hash.as_ref(), tx, &[input_ptr]);
+                            idx.set(tx_hash.as_ref(), tx, &[input_ptr], false);
 
                         }
                         else {
-                            idx.set(tx_hash.as_ref(), tx, &[]);
+                            idx.set(tx_hash.as_ref(), tx, &[], false);
                         }
                     }
 

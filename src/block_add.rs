@@ -148,7 +148,7 @@ fn connect_block(
             "conn"  => format!("{:?}",   conn));
 
         // if we can store this hash we can move to the next one
-        if store.block_index.set(conn.block_hash.as_ref(), conn.block.to_non_guard(), &conn.solved_guards) {
+        if store.block_index.set(conn.block_hash.as_ref(), conn.block.to_non_guard(), &conn.solved_guards, false) {
             trace!(store.logger, "Connect block - set-hash-loop - ok");
             continue;
         }
@@ -242,7 +242,7 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
             let hash = Hash32Buf::double_sha256(tx.to_raw());
             hashes.push(hash);
 
-            let res = tx.verify_and_store(tx_index, tx_store, hash.as_ref()).unwrap();
+            let res = tx.verify_and_store(tx_index, tx_store, store.initial_sync, hash.as_ref()).unwrap();
 
             // AlreadyExists and VerifiedAndStored are both ok here
             let ptr = match res {

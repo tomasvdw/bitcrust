@@ -177,12 +177,23 @@ impl<'a> Transaction<'a> {
 
     /// Verifies and stores the transaction in the transaction_store and index
     pub fn verify_and_store(&self,
-                            tx_index: &mut TxIndex,
-                            tx_store: &mut FlatFileSet<TxPtr>,
-                            hash: Hash32) -> TransactionResult<TransactionOk> {
+                            tx_index:     &mut TxIndex,
+                            tx_store:     &mut FlatFileSet<TxPtr>,
+                            initial_sync: bool,
+                            hash:         Hash32) -> TransactionResult<TransactionOk> {
 
         self.verify_syntax()?;
 
+        if initial_sync {
+
+            // store without checking scripts
+            let ptr      = tx_store.write(self.to_raw());
+
+            assert!(tx_index.set(hash, ptr, &[], true));
+
+            return Ok(TransactionOk::VerifiedAndStored(ptr))
+
+        }
         loop {
 
             // First see if it already exists
@@ -213,7 +224,7 @@ impl<'a> Transaction<'a> {
             // This may fail if since ^^ get_ptr new dependent txs were added,
             // in which case we must try again.
             // The rewriting in the store is then redundant, but this is extremely rare.
-            if tx_index.set(hash, ptr, &existing_ptrs) {
+            if tx_index.set(hash, ptr, &existing_ptrs, false) {
 
                 return Ok(TransactionOk::VerifiedAndStored(ptr))
             }
