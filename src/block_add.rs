@@ -82,7 +82,7 @@ use store::HashIndexGuard;
 type BlockResult<T> = Result<T, BlockError>;
 
 // minimum number of hashes to use parallel hashing
-const PARALLEL_HASHING_THRESHOLD: usize = 3;
+const PARALLEL_HASHING_THRESHOLD: usize = 40;
 
 
 /// Returns true if the given hash is the hash of a genesis block

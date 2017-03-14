@@ -59,12 +59,12 @@ fn load_file1() {
 #[ignore]
 fn load_file_large() {
     let start = Instant::now();
-    const BLOCK_COUNT: u64 = 350000;
+    const BLOCK_COUNT: u64 = 450000;
 
     let mut blocks = 0;
 
     let mut store = bitcrust_lib::init();
-    
+
 
     for fileno in 0..999 {
         let name = format!("./data/blk{:05}.dat", fileno);

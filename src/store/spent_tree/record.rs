@@ -288,7 +288,7 @@ impl Record {
             // TODO: we need to be aware here of the chances of forking.
             // On initial load, the spent-index is always up-to-date after one block
             // so we should use 1 here
-            if blocks >= 3 {
+            if blocks >= 1 {
 
                 return self.verify_spent_in_index(spent_index)
             }
