@@ -46,9 +46,20 @@ fn compare_core() {
         if blk.is_none() {
             name = format!("./data/blk{:05}.dat", fileno+1);
 
-            fileno += 1;
+
             println!("Processing file {}", name);
-            file = File::open(name).unwrap();
+            let open_result = File::open(name);
+            match open_result {
+                Ok(f) => file = f,
+                Err(_) => {
+                    synced = true;
+                    store.initial_sync = false;
+                    ::std::thread::sleep_ms(5000);
+                    println!("No more initial sync; polling files");
+                    continue;
+                }
+            };
+            fileno += 1;
             rdr = BufReader::new(file);
 
 
