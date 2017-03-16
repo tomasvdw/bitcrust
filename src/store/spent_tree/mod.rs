@@ -45,7 +45,7 @@ const PREFIX:  &'static str   = "st-";
 
 
 // temporarily we use a vec instead of the memmap
-const VEC_SIZE: usize = 500_000_000;
+const VEC_SIZE: usize = 800_000_000;
 
 #[derive(Debug, PartialEq)]
 pub enum SpendingError {
