@@ -3,9 +3,9 @@
 
 /// Tool to compare the block processing time of core with bitcrust
 ///
-/// Initialization consists of 2 phases
-/// - Run core until progress=1 (core=up-to-date)
-/// - Sync bitcrust from blk files to add_block
+/// Will run in two phases
+/// - Sync bitcrust from blk files to add_block with initial_sync=true until no more blocks are in
+/// - Then poll the blk files every 5 sec to see if a block came in and add it with initial_sync=false
 ///
 /// Then we wait for incoming blocks in core, add them to bitcrust and compare the result
 /// from log
@@ -20,25 +20,37 @@ use std::io::Seek;
 
 
 mod blk_file;
-use std::time::{Instant};
 
-#[derive(Debug,Copy,Clone)]
-struct ReadPos {
-    file_number: usize,
-    file_position: u64
+/// can be used for fast startup in combination with the no_clear_data feature
+const SKIP_FILES: usize = 0;
+
+fn blk_file_name(file_number: usize) -> String {
+    format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", file_number)
 }
 
+/// A reference to a position in a blk file
+#[derive(Debug,Copy,Clone)]
+struct ReadPos {
+    pub file_number: usize,
+    pub file_position: u64
+}
+
+/// Reads a block from the blk file position
+/// This is used on live reading, as we need to reopen the file to come out of EOF position.
 fn read_next(pos: ReadPos) -> Option<(ReadPos,Vec<u8>)> {
 
-    // next file available
-    if fs::metadata(format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", pos.file_number + 1)).is_ok() {
+    // next file available?
+    if fs::metadata(blk_file_name(pos.file_number + 1)).is_ok() {
         return read_next(ReadPos { file_number: pos.file_number +  1, file_position: 0 });
     }
 
-    let mut name = format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", pos.file_number);
+    let name = blk_file_name(pos.file_number);
 
-    let mut file = File::open(name).unwrap();
+    let file = File::open(name).unwrap();
     let mut rdr = BufReader::new(file);
+
+    let _ = rdr.seek(std::io::SeekFrom::Start(pos.file_position)).unwrap();
+
 
     let blk = blk_file::read_block(&mut rdr).unwrap();
     match blk {
@@ -75,7 +87,7 @@ fn compare_core() {
     loop {
         match read_next(pos) {
             None => {
-                std::thread::sleep_ms(5000);
+                std::thread::sleep(std::time::Duration::new(5,0));
                 continue;
             },
             Some((p, blk)) => {
@@ -95,9 +107,13 @@ fn sync_initial(store: &mut bitcrust_lib::Store) -> ReadPos {
 
 
     // Step one; load existing data from blk files
-    let mut fileno = 0;
-    let mut name = format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", fileno);
-    println!("Processing {}", name);
+    let mut read_pos = ReadPos {
+        file_number: SKIP_FILES,
+        file_position: 0
+    };
+
+    let mut name = blk_file_name(read_pos.file_number);
+
     let mut file = File::open(name).unwrap();
     let mut rdr = BufReader::new(file);
 
@@ -107,7 +123,8 @@ fn sync_initial(store: &mut bitcrust_lib::Store) -> ReadPos {
 
         if blk.is_none() {
 
-            name = format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", fileno+1);
+            // next file?
+            name = blk_file_name(read_pos.file_number + 1);
             let open_result = File::open(name.clone());
 
             match open_result {
@@ -117,25 +134,25 @@ fn sync_initial(store: &mut bitcrust_lib::Store) -> ReadPos {
                 },
                 Err(_) => {
 
-                    return ReadPos {
-                        file_number: fileno,
-                        file_position: rdr.seek(std::io::SeekFrom::Current(0)).unwrap() };
+                    // no? then we're done initial syncing
+                    return read_pos;
 
                 }
             };
-            fileno += 1;
+            // next file
+            read_pos.file_number = read_pos.file_number + 1;
+            read_pos.file_position  = 0;
             rdr = BufReader::new(file);
 
 
         } else {
             bitcrust_lib::add_block(store, &blk.unwrap());
+            read_pos.file_position += rdr.seek(std::io::SeekFrom::Current(0)).unwrap();
 
             blocks += 1;
             println!("Processing block {}", blocks);
         }
     }
 
-    unreachable!()
 
-    //bitcoind -blocksonly -printtoconsole -debug=bench
 }

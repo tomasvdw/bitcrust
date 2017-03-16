@@ -287,7 +287,9 @@ impl Record {
 
             // TODO: we need to be aware here of the chances of forking.
             // On initial load, the spent-index is always up-to-date after one block
-            // so we should use 1 here
+            // so we should use 1 here which will make it faster;
+            // After the initial load we should probably use 4; and check the parent-block hash
+            // to ensures fall back on large reorgs
             if blocks >= 3 {
 
                 return self.verify_spent_in_index(spent_index)
@@ -298,7 +300,7 @@ impl Record {
 
             if seek_rec.0 == ORPHAN_START_OF_BLOCK {
 
-                // Looks like we reached genesis
+                // We reached genesis. Not a spendable outout
                 return Err(SpendingError::OutputNotFound);
             }
             else if (seek_rec.0 & START_OF_BLOCK) == START_OF_BLOCK {

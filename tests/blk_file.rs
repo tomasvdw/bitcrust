@@ -24,11 +24,12 @@ pub fn read_block(rdr: &mut io::Read) -> Result<Option<Vec<u8>>, io::Error> {
             Err(_)     => return Ok(None), // assume EOF
             Ok(m) => match m {
 
-                // TODO investigate.
-                // this happens on bitcrust-1 at blcok  451327
+                // TODO investigate; // Can't really find it in the cpp.
+                // this happens on bitcrust-1 at block  451327
                 // file blk000760, file pos 54391594
                 // first 8 zero-bytes before magicnr
-                // for now we skip them
+                // for now we skip them; not too important as we
+                // might not want to support this type of import anyway
                 0     => continue,
 
                 MAGIC => break,
@@ -48,10 +49,6 @@ pub fn read_block(rdr: &mut io::Read) -> Result<Option<Vec<u8>>, io::Error> {
 
     Ok(Some(buffer))
 
-
-
-    //bitcrust_lib::decode(&buffer)
-    //    .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Incorrect length"))
 
 }
 
