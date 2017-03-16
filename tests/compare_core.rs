@@ -36,20 +36,26 @@ fn read_next(pos: ReadPos) -> Option<(ReadPos,Vec<u8>)> {
     }
 
     let mut name = format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", pos.file_number);
-    if fs::metadata(name.clone()).unwrap().len() <= pos.file_position {
-        return None;
-    }
 
     let mut file = File::open(name).unwrap();
     let mut rdr = BufReader::new(file);
 
-    let blk = blk_file::read_block(&mut rdr).unwrap().unwrap();
-
-    Some( (ReadPos {
+    let blk = blk_file::read_block(&mut rdr).unwrap();
+    match blk {
+        None => {
+            println!("No block");
+            None
+        },
+        Some(blk) => {
+            Some( (ReadPos {
                 file_number: pos.file_number,
                 file_position: rdr.seek(std::io::SeekFrom::Current(0)).unwrap()
-            }
-          , blk))
+
+                }, blk))
+
+        }
+
+    }
 
 }
 
@@ -101,7 +107,7 @@ fn sync_initial(store: &mut bitcrust_lib::Store) -> ReadPos {
 
         if blk.is_none() {
 
-            name = format!("./data/blk{:05}.dat", fileno+1);
+            name = format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", fileno+1);
             let open_result = File::open(name.clone());
 
             match open_result {
