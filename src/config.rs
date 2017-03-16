@@ -33,7 +33,9 @@ impl Config {
             .replace("bitcrust-lib/","")
             .replace("/", "-");
         path.push(name);
-        let _ =  fs::remove_dir_all(path.clone());
+        if !cfg!(feature = "no_clear_data") {
+            let _ =  fs::remove_dir_all(path.clone());
+        }
         Config { root: path }
     }
 

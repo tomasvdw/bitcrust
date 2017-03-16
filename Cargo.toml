@@ -36,4 +36,4 @@ opt-level = 3
 
 [features]
 default = []
-verify_scripts = []
+no_clear_data = []
