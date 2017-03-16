@@ -56,7 +56,11 @@ pub struct FlatFileSet<P: FlatFilePtr + Copy + Clone> {
 impl<P : FlatFilePtr + Copy + Clone> Clone for FlatFileSet<P> {
 
     fn clone(&self) -> FlatFileSet<P> {
-        let f = self.files.clone();
+        let len = self.files.len();
+        let mut f = vec![None; len];
+        if len > 0 {
+            f[len-1] = self.files[len-1].clone();
+        }
 
         FlatFileSet {
             path:       self.path.clone(),

@@ -232,7 +232,7 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
         let len = chunk_tx.len();
 
         let mut hashes:  Vec<Hash32Buf> = Vec::with_capacity(len); // accurate
-        let mut records: Vec<Record>    = Vec::with_capacity(len * 3); // estimate
+        let mut records: Vec<Record>    = Vec::with_capacity(len * 3); // estimate (guessing 2 in per tx)
 
         let ref mut tx_index = &mut store.tx_index.clone();
         let ref mut tx_store = &mut store.transactions.clone();
