@@ -5,15 +5,12 @@
 //! and when outputs aren't found in the spent tree for X blocks,
 //! they are searched here.
 //!
-//! The data-structure here is similar to hash-index:
-//! a large root hash-table with each element pointing to an unbalanced binary tree
-//!
+//! The data-structure here is a simple bit-index where each transaction and each spent-output
+//! are given a unique bit which is set if the given transaction or spent exists
 
 use std::sync::atomic::{AtomicU64,Ordering};
 
-
 use config;
-
 use store::flatfileset::FlatFileSet;
 use store::RecordPtr;
 
@@ -22,11 +19,13 @@ const MB:                 u64 = 1024 * 1024;
 const FILE_SIZE:          u64 = 16 * 1024 * MB ;
 const MAX_CONTENT_SIZE:   u64 = FILE_SIZE - 10 * MB ;
 
+// TODO; make this dynamic
 const VEC_SIZE:         usize = 500_000_000;
 
 /// Index to lookup fileptr's from hashes
 ///
 /// Internally uses fileset
+///
 pub struct SpentIndex {
 
     #[allow(dead_code)]
@@ -40,7 +39,7 @@ unsafe impl Sync for SpentIndex {}
 
 impl SpentIndex
 {
-    /// Opens the hash_index at the location given in the config
+    /// Opens the spent_index at the location given in the config
     ///
     /// Creates a new fileset if needed
     pub fn new(cfg: &config::Config) -> SpentIndex {
@@ -66,8 +65,7 @@ impl SpentIndex
     }
 
 
-
-    /// Stores a recordhash
+    /// Stores a recordhash; this should uniquely identify an output or a transaction
     pub fn set(&mut self, hash: u64)  {
         loop {
             let idx = (hash >> 6) as usize;
@@ -80,9 +78,6 @@ impl SpentIndex
         }
     }
 }
-
-
-
 
 
 #[cfg(test)]

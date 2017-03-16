@@ -44,7 +44,7 @@ const SUBPATH: &'static str   = "spent_tree";
 const PREFIX:  &'static str   = "st-";
 
 
-// temporarily we use a vec instead of the memmap
+// temporarily we use a vec instead of the dynamic growing flatfileset
 const VEC_SIZE: usize = 800_000_000;
 
 #[derive(Debug, PartialEq)]
@@ -53,10 +53,15 @@ pub enum SpendingError {
     OutputAlreadySpent,
 }
 
+/// A pointer into the spent-tree.
+/// This always points to a `start-of-block` record
+/// These objects are stored in the block-index, to lookup blocks
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct BlockPtr {
     pub start:    RecordPtr,
     pub length:   u64,
+
+    // A guard is used for wrongly ordered block-insertion. See [hash_index.rs] for details
     pub is_guard: bool
 }
 
@@ -95,6 +100,7 @@ pub struct SpentTree {
 
 
 
+/// Stats are passed around on success for performance monitoring
 #[derive(Debug, Default)]
 pub struct SpentTreeStats {
     pub blocks:     i64,
@@ -125,7 +131,8 @@ impl ::std::ops::Add for SpentTreeStats {
 
 
 
-/// This is the primary algorithm to check double-spents and the existence of outputs
+/// This is the algorithm to check double-spents and the existence of outputs
+/// It will call the verify_spent function on Record in parallel for each output
 fn seek_and_set_inputs(
                        records: &[Record],
                        block: &mut [Record],
@@ -141,7 +148,6 @@ fn seek_and_set_inputs(
         .par_iter_mut()
         .enumerate()
         .map(|(i,rec)| {
-
 
             debug_assert!(rec.is_transaction() || rec.is_output());
 
@@ -255,9 +261,6 @@ impl SpentTree {
         }
 
     }
-
-
-
 
 
     /// Verifies of each output in the block at target_start

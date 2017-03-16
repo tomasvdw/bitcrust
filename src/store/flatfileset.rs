@@ -8,8 +8,8 @@
 //! The other bytes of the header are reserved
 //!
 //! The flatfiles are suffixed with 4 hex-digits indicating the filenumber
-//! An index to a file consists of a 16-bits signed filenumber followed by 30-bit filepos
-//! This is passed around as a u64 [`FilePtr`]
+//! An index to a file consists is usually 48 bits but depends on the filesize
+//! A FlatFileSet is generalized with a FlatFilePtr that provides an index
 //!
 
 use std::path::{Path,PathBuf};
@@ -55,6 +55,7 @@ pub struct FlatFileSet<P: FlatFilePtr + Copy + Clone> {
 
 impl<P : FlatFilePtr + Copy + Clone> Clone for FlatFileSet<P> {
 
+    // A fileset can be explicitly cloned
     fn clone(&self) -> FlatFileSet<P> {
         let len = self.files.len();
         let mut f = vec![None; len];
