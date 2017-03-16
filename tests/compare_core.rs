@@ -36,7 +36,7 @@ fn read_next(pos: ReadPos) -> Option<(ReadPos,Vec<u8>)> {
     }
 
     let mut name = format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", pos.file_number);
-    if fs::metadata("/some/file/path.txt").unwrap().len() <= pos.file_position {
+    if fs::metadata(name.clone()).unwrap().len() <= pos.file_position {
         return None;
     }
 
