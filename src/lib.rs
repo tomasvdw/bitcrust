@@ -44,7 +44,7 @@ mod merkle_tree;
 mod block_add;
 
 
-use store::Store;
+pub use store::Store;
 
 // Creates a store; mock interface
 pub fn init() -> Store {
