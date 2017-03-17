@@ -277,8 +277,8 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
 
     if rec_count > 0 && rec_count-tx_count > 0 {
         info!(store.logger, "add_block - transactions done";
-            "input_avg_ms" => elapsed / (rec_count - tx_count),
-            "tx_avg_ms" => elapsed / tx_count);
+            "input_avg_ms" => elapsed as f64 / (rec_count - tx_count) as f64,
+            "tx_avg_ms" => elapsed as f64 / tx_count as f64);
     }
     Ok(records)
 }

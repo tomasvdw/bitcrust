@@ -194,10 +194,29 @@ impl<'a> Transaction<'a> {
             return Ok(TransactionOk::VerifiedAndStored(ptr))
 
         }
+
+        // store
+        let ptr      = tx_store.write(self.to_raw());
+
+        if !self.is_coinbase() {
+            self.verify_input_scripts(tx_index, tx_store, ptr)?;
+        }
+
+        let mut existing_ptrs = vec![];
+
         loop {
 
+
+            // Store reference in the hash_index.
+            // This may fail if the tx is already in or if there are dependent transactions in
+            // that are "guarding" this one.
+            if tx_index.set(hash, ptr, &existing_ptrs, false) {
+
+                return Ok(TransactionOk::VerifiedAndStored(ptr))
+            }
+
             // First see if it already exists
-            let existing_ptrs = tx_index.get(hash);
+            existing_ptrs = tx_index.get(hash);
 
             if existing_ptrs
                 .iter()
@@ -212,22 +231,6 @@ impl<'a> Transaction<'a> {
             // they need to be verified
             self.verify_backtracking_outputs(tx_store, &existing_ptrs);
 
-            // store
-            let ptr      = tx_store.write(self.to_raw());
-
-
-            if !self.is_coinbase() {
-                self.verify_input_scripts(tx_index, tx_store, ptr)?;
-            }
-
-            // Store reference in the hash_index.
-            // This may fail if since ^^ get_ptr new dependent txs were added,
-            // in which case we must try again.
-            // The rewriting in the store is then redundant, but this is extremely rare.
-            if tx_index.set(hash, ptr, &existing_ptrs, false) {
-
-                return Ok(TransactionOk::VerifiedAndStored(ptr))
-            }
         }
 
     }
