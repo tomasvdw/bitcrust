@@ -62,4 +62,45 @@ impl TxPtr {
             input_index: input_index
         }
     }
+
+    pub fn first() -> TxPtr {
+        TxPtr {
+            file_number: 0,
+            file_offset: super::flatfile::INITIAL_WRITEPOS as u32,
+            input_index: INPUT_INDEX_NULL
+        }
+    }
+
+    pub fn offset(self, offset: u32) -> TxPtr {
+        if self.file_offset + offset > super::MAX_CONTENT_SIZE as u32 {
+            println!("Next file!");
+            TxPtr {
+                file_number: self.file_number + 1,
+                file_offset: super::flatfile::INITIAL_WRITEPOS as u32,
+                input_index: INPUT_INDEX_NULL
+            }
+        } else {
+            TxPtr {
+                file_number: self.file_number,
+                file_offset: self.file_offset + offset,
+                input_index: INPUT_INDEX_NULL
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use super::super::flatfile::INITIAL_WRITEPOS;
+    #[test]
+    fn test_skip()
+    {
+        let x = TxPtr::first();
+        let y = x.offset(1000);
+        assert_eq!(x.file_number, 0);
+        assert_eq!(y.file_offset, 1000 + INITIAL_WRITEPOS as u32);
+
+    }
 }

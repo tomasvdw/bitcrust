@@ -55,6 +55,8 @@ mod spent_index;
 
 mod spent_tree;
 
+mod prune;
+
 pub use self::spent_tree::SpendingError;
 pub use self::spent_tree::BlockPtr;
 pub use self::spent_tree::record::{RecordPtr,Record};
@@ -78,7 +80,7 @@ use metrics::Metrics;
 
 const MB:                 u64 = 1024 * 1024;
 const FILE_SIZE:          u64 = 2 * 1024 * MB;
-const MAX_CONTENT_SIZE:   u64 = FILE_SIZE - 10 * MB as u64 ;
+pub const MAX_CONTENT_SIZE:   u64 = FILE_SIZE - 10 * MB as u64 ;
 
 
 

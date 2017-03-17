@@ -65,7 +65,7 @@ fn load_file_large() {
 
     let mut store = bitcrust_lib::init();
 
-
+    store.initial_sync = true;
     for fileno in 0..999 {
         let name = format!("./data/blk{:05}.dat", fileno);
         println!("Processing {}", name);
