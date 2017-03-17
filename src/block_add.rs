@@ -225,7 +225,7 @@ fn block_exists(store: & mut Store, block_hash: Hash32) -> bool {
 ///
 fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResult<Vec<Record>> {
 
-
+    let timer = ::std::time::Instant::now();
 
     let chunks: Vec<_> = block.txs.par_chunks(PARALLEL_HASHING_THRESHOLD).map(|chunk_tx| {
 
@@ -263,16 +263,24 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
     let (hashes,records): (Vec<_>, Vec<_>) = chunks.into_iter().unzip();
 
     // flatten
-    let hashes  = hashes.into_iter().flat_map(|x| x);
-    let records = records.into_iter().flat_map(|x| x);
-
+    let hashes:  Vec<Hash32Buf> = hashes.into_iter().flat_map(|x| x).collect();
+    let records: Vec<Record>    = records.into_iter().flat_map(|x| x).collect();
+    let rec_count: usize = records.len();
+    let tx_count: usize  = hashes.len();
 
     // check merkle roots
-    let calculated_merkle_root = merkle_tree::get_merkle_root(hashes.collect());
+    let calculated_merkle_root = merkle_tree::get_merkle_root(hashes);
     block.verify_merkle_root(calculated_merkle_root.as_ref()).unwrap();
 
+    let elapsed : usize = timer.elapsed().as_secs() as usize * 1000 +
+        timer.elapsed().subsec_nanos() as usize / 1_000_000 as usize;
 
-    Ok(records.collect())
+    if rec_count > 0 && rec_count-tx_count > 0 {
+        info!(store.logger, "add_block - transactions done";
+            "input_avg_ms" => elapsed / (rec_count - tx_count),
+            "tx_avg_ms" => elapsed / tx_count);
+    }
+    Ok(records)
 }
 
 
@@ -326,7 +334,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
         // if it is not yet in, this hash will be inserted as a guard-block
         let previous_block = store.block_index.get_or_set( block.header.prev_hash, block_ptr.to_guard());
 
-        info! (block_logger, "add_block - tranactions done";
+        info! (block_logger, "add_block - block-index done";
             "previous" => format!("{:?}", block.header.prev_hash),
             "ptr" => format!("{:?}", previous_block));
 
