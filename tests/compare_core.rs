@@ -55,7 +55,6 @@ fn read_next(pos: ReadPos) -> Option<(ReadPos,Vec<u8>)> {
     let blk = blk_file::read_block(&mut rdr).unwrap();
     match blk {
         None => {
-            println!("No block");
             None
         },
         Some(blk) => {
@@ -147,7 +146,7 @@ fn sync_initial(store: &mut bitcrust_lib::Store) -> ReadPos {
 
         } else {
             bitcrust_lib::add_block(store, &blk.unwrap());
-            read_pos.file_position += rdr.seek(std::io::SeekFrom::Current(0)).unwrap();
+            read_pos.file_position = rdr.seek(std::io::SeekFrom::Current(0)).unwrap();
 
             blocks += 1;
             println!("Processing block {}", blocks);
