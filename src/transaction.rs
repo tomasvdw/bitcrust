@@ -3,6 +3,8 @@
 //!
 
 use std::fmt;
+use std::time::{Instant,Duration};
+
 use itertools::Itertools;
 
 use buffer::*;
@@ -35,9 +37,14 @@ pub enum TransactionError {
 
 #[derive(Debug)]
 pub enum TransactionOk {
-    AlreadyExists(TxPtr),
+    AlreadyExists {
+        ptr: TxPtr
+    },
 
-    VerifiedAndStored(TxPtr),
+    VerifiedAndStored {
+        ptr: TxPtr,
+        stats: TransactionStats
+    },
 
 }
 
@@ -65,6 +72,56 @@ pub struct Transaction<'a> {
 
 }
 
+#[derive(Default)]
+pub struct TransactionStats {
+    pub store_tx:     Duration,
+    pub store_tx_idx: Duration,
+    pub backtracking: Duration,
+    pub read_tx:      Duration,
+    pub read_tx_idx:  Duration,
+    pub script:       Duration
+}
+
+// Make stats additive (this could use a derive)
+impl ::std::ops::Add for TransactionStats {
+    type Output = TransactionStats;
+
+    fn add(self, other: TransactionStats) -> TransactionStats {
+
+        TransactionStats {
+            store_tx: self.store_tx + other.store_tx,
+            store_tx_idx: self.store_tx_idx + other.store_tx_idx,
+            backtracking: self.backtracking + other.backtracking,
+            read_tx: self.read_tx + other.read_tx,
+            read_tx_idx: self.read_tx_idx + other.read_tx_idx,
+            script: self.script + other.script
+        }
+    }
+}
+impl ::std::iter::Sum for TransactionStats {
+    fn sum<I>(iter: I) -> TransactionStats
+        where I: Iterator<Item=TransactionStats> {
+
+        let mut r = Default::default();
+        for i in iter {
+            r = r + i;
+        }
+        r
+    }
+}
+
+impl ::std::fmt::Debug for TransactionStats {
+    fn fmt(&self, fmt: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+
+        fn disp(d: Duration) -> u64 { d.as_secs() * 1_000_000 + d.subsec_nanos() as u64 / 1_000};
+
+        write!(fmt, "wr:{},{} | rd:{},{} | s:{}, bt:{}",
+            disp(self.store_tx), disp(self.store_tx_idx),
+            disp(self.read_tx), disp(self.read_tx_idx),
+            disp(self.script), disp(self.backtracking))
+    }
+
+}
 
 
 impl<'a> Parse<'a> for Transaction<'a> {
@@ -158,7 +215,7 @@ impl<'a> Transaction<'a> {
 
     /// Gets the output records referenced by the inputs of this tx
     ///
-    /// Uses Record placeholder for outputs not found
+    /// Uses Record new_unmatched_input placeholder for outputs not found
     pub fn get_output_records(&self, tx_index: &mut TxIndex) -> Vec<Record> {
 
         self.txs_in.iter()
@@ -182,6 +239,10 @@ impl<'a> Transaction<'a> {
                             initial_sync: bool,
                             hash:         Hash32) -> TransactionResult<TransactionOk> {
 
+        let mut stats: TransactionStats = Default::default();
+
+        let p0 = Instant::now();
+
         self.verify_syntax()?;
 
         if initial_sync {
@@ -191,46 +252,61 @@ impl<'a> Transaction<'a> {
 
             assert!(tx_index.set(hash, ptr, &[], true));
 
-            return Ok(TransactionOk::VerifiedAndStored(ptr))
+            return Ok(TransactionOk::VerifiedAndStored {ptr: ptr, stats: stats })
 
         }
 
         // store
         let ptr      = tx_store.write(self.to_raw());
 
+        let p1 = Instant::now();
+        stats.store_tx = p1 - p0;
+
+
         if !self.is_coinbase() {
-            self.verify_input_scripts(tx_index, tx_store, ptr)?;
+            self.verify_input_scripts(tx_index, tx_store, ptr, &mut stats)?;
         }
 
         let mut existing_ptrs = vec![];
 
         loop {
 
+            let p2 = Instant::now();
 
             // Store reference in the hash_index.
             // This may fail if the tx is already in or if there are dependent transactions in
             // that are "guarding" this one.
             if tx_index.set(hash, ptr, &existing_ptrs, false) {
 
-                return Ok(TransactionOk::VerifiedAndStored(ptr))
+                let p3 = Instant::now();
+                stats.store_tx_idx = p3 - p2;
+
+                return Ok(TransactionOk::VerifiedAndStored {ptr: ptr, stats: stats })
             }
+            else {
 
-            // First see if it already exists
-            existing_ptrs = tx_index.get(hash);
+                let p3 = Instant::now();
+                stats.store_tx_idx = p3 - p2;
 
-            if existing_ptrs
-                .iter()
-                .any(|p| !p.is_guard()) {
+                // First see if it already exists
+                existing_ptrs = tx_index.get(hash);
 
-                assert_eq!(existing_ptrs.len(), 1);
+                if existing_ptrs
+                    .iter()
+                    .any(|p| !p.is_guard()) {
+                    assert_eq!(existing_ptrs.len(), 1);
 
-                return Ok(TransactionOk::AlreadyExists(existing_ptrs[0]))
+                    return Ok(TransactionOk::AlreadyExists { ptr: existing_ptrs[0] })
+                }
+
+                // existing_ptrs (if any) are now inputs that are waiting for this transactions
+                // they need to be verified
+                self.verify_backtracking_outputs(tx_store, &existing_ptrs);
+
+                let p4 = Instant::now();
+                stats.backtracking = p4 - p3;
+
             }
-
-            // existing_ptrs (if any) are now inputs that are waiting for this transactions
-            // they need to be verified
-            self.verify_backtracking_outputs(tx_store, &existing_ptrs);
-
         }
 
     }
@@ -240,13 +316,20 @@ impl<'a> Transaction<'a> {
     pub fn verify_input_scripts(&self,
                                 tx_index: &mut TxIndex,
                                 tx_store: &mut FlatFileSet<TxPtr>,
-                                tx_ptr: TxPtr) -> TransactionResult<()> {
+                                tx_ptr:   TxPtr,
+                                stats:    &mut TransactionStats) -> TransactionResult<()> {
+
 
         for (index, input) in self.txs_in.iter().enumerate() {
 
+            let p0 = Instant::now();
 
             let output = tx_index.get_or_set(input.prev_tx_out,
                                                      tx_ptr.to_input(index as u16 ));
+
+            let p1 = Instant::now();
+            stats.read_tx_idx = p1 - p0;
+
             let output = match output {
                 None => {
 
@@ -268,9 +351,14 @@ impl<'a> Transaction<'a> {
             let previous_tx_out = previous_tx.txs_out.get(input.prev_tx_out_idx as usize)
                 .ok_or(TransactionError::OutputIndexNotFound)?;
 
+            let p2 = Instant::now();
+            stats.read_tx = p2 - p1;
 
             ffi::verify_script(previous_tx_out.pk_script, self.to_raw(), index as u32)
                 .expect("TODO: Handle script error more gracefully");
+
+            let p3 = Instant::now();
+            stats.script = p3 - p2;
 
             // TODO: verify_amount here
         }

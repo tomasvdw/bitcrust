@@ -72,6 +72,7 @@ use slog ;
 
 use store::Store;
 use transaction;
+use transaction::TransactionStats;
 use merkle_tree;
 use block::*;
 use store::Record;
@@ -227,10 +228,12 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
 
     let timer = ::std::time::Instant::now();
 
-    let chunks: Vec<_> = block.txs.par_chunks(PARALLEL_HASHING_THRESHOLD).map(|chunk_tx| {
+    let chunks: Vec<_> =
+        block.txs.par_chunks(PARALLEL_HASHING_THRESHOLD).map(|chunk_tx| {
 
         let len = chunk_tx.len();
 
+        let mut chunk_stats:   TransactionStats = Default::default();
         let mut hashes:  Vec<Hash32Buf> = Vec::with_capacity(len); // accurate
         let mut records: Vec<Record>    = Vec::with_capacity(len * 3); // estimate (guessing 2 in per tx)
 
@@ -245,26 +248,31 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
             let res = tx.verify_and_store(tx_index, tx_store, store.initial_sync, hash.as_ref()).unwrap();
 
             // AlreadyExists and VerifiedAndStored are both ok here
-            let ptr = match res {
-                transaction::TransactionOk::AlreadyExists(ptr) => ptr,
-                transaction::TransactionOk::VerifiedAndStored(ptr) => ptr
+            let (ptr,stats) = match res {
+                transaction::TransactionOk::VerifiedAndStored {ptr, stats}  => (ptr, stats),
+                transaction::TransactionOk::AlreadyExists     {ptr } => (ptr, Default::default())
             };
 
             records.push(Record::new_transaction(ptr));
             for rec in tx.get_output_records(tx_index) {
                 records.push(rec);
             }
+
+            chunk_stats = chunk_stats + stats;
         }
-        (hashes,records)
+        (chunk_stats, (hashes, records))
     }).collect();
 
 
     // split
-    let (hashes,records): (Vec<_>, Vec<_>) = chunks.into_iter().unzip();
+    let (stats, hashes_records): (Vec<_>, Vec<_>) = chunks.into_iter().unzip();
+    let (hashes, records):       (Vec<_>, Vec<_>) = hashes_records.into_iter().unzip();
 
     // flatten
     let hashes:  Vec<Hash32Buf> = hashes.into_iter().flat_map(|x| x).collect();
     let records: Vec<Record>    = records.into_iter().flat_map(|x| x).collect();
+    let stats: TransactionStats = stats.into_iter().sum();
+
     let rec_count: usize = records.len();
     let tx_count: usize  = hashes.len();
 
@@ -278,7 +286,8 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
     if rec_count > 0 && rec_count-tx_count > 0 {
         info!(store.logger, "add_block - transactions done";
             "input_avg_ms" => elapsed as f64 / (rec_count - tx_count) as f64,
-            "tx_avg_ms" => elapsed as f64 / tx_count as f64);
+            "tx_avg_ms"    => elapsed as f64 / tx_count as f64,
+            "tx_stats"     => format!("{:?}", stats));
     }
     Ok(records)
 }
