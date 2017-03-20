@@ -74,6 +74,9 @@ pub struct Transaction<'a> {
 
 #[derive(Default)]
 pub struct TransactionStats {
+    pub merkle:       Duration,
+    pub cloning:      Duration,
+    pub hashing:      Duration,
     pub store_tx:     Duration,
     pub store_tx_idx: Duration,
     pub backtracking: Duration,
@@ -89,6 +92,9 @@ impl ::std::ops::Add for TransactionStats {
     fn add(self, other: TransactionStats) -> TransactionStats {
 
         TransactionStats {
+            merkle:  self.merkle + other.merkle,
+            cloning: self.cloning + other.cloning,
+            hashing: self.hashing + other.hashing,
             store_tx: self.store_tx + other.store_tx,
             store_tx_idx: self.store_tx_idx + other.store_tx_idx,
             backtracking: self.backtracking + other.backtracking,
@@ -115,7 +121,8 @@ impl ::std::fmt::Debug for TransactionStats {
 
         fn disp(d: Duration) -> u64 { d.as_secs() * 1_000_000 + d.subsec_nanos() as u64 / 1_000};
 
-        write!(fmt, "wr:{},{} | rd:{},{} | s:{}, bt:{}",
+        write!(fmt, "m,c,h: {},{},{} | wr:{},{} | rd:{},{} | s:{}, bt:{}",
+            disp(self.merkle), disp(self.cloning), disp(self.hashing),
             disp(self.store_tx), disp(self.store_tx_idx),
             disp(self.read_tx), disp(self.read_tx_idx),
             disp(self.script), disp(self.backtracking))

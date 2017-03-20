@@ -64,6 +64,7 @@ Block storing is a tricky part; blocks are stored in the spent-tree and referenc
 
 */
 
+use std::time::Instant;
 use hash::*;
 use util::*;
 use buffer::*;
@@ -232,18 +233,23 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
         block.txs.par_chunks(PARALLEL_HASHING_THRESHOLD).map(|chunk_tx| {
 
         let len = chunk_tx.len();
+        let p0  = Instant::now();
 
-        let mut chunk_stats:   TransactionStats = Default::default();
         let mut hashes:  Vec<Hash32Buf> = Vec::with_capacity(len); // accurate
         let mut records: Vec<Record>    = Vec::with_capacity(len * 3); // estimate (guessing 2 in per tx)
 
         let ref mut tx_index = &mut store.tx_index.clone();
         let ref mut tx_store = &mut store.transactions.clone();
 
+        let cloning = Instant::now() - p0;
+        let mut chunk_stats =   TransactionStats { cloning: cloning, ..Default::default() };
+
         for tx in chunk_tx {
 
+            let p1  = Instant::now();
             let hash = Hash32Buf::double_sha256(tx.to_raw());
             hashes.push(hash);
+            let p2  = Instant::now();
 
             let res = tx.verify_and_store(tx_index, tx_store, store.initial_sync, hash.as_ref()).unwrap();
 
@@ -259,6 +265,7 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
             }
 
             chunk_stats = chunk_stats + stats;
+            chunk_stats.hashing = chunk_stats.hashing + (p2 - p1);
         }
         (chunk_stats, (hashes, records))
     }).collect();
@@ -271,14 +278,17 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
     // flatten
     let hashes:  Vec<Hash32Buf> = hashes.into_iter().flat_map(|x| x).collect();
     let records: Vec<Record>    = records.into_iter().flat_map(|x| x).collect();
-    let stats: TransactionStats = stats.into_iter().sum();
+    let mut stats: TransactionStats = stats.into_iter().sum();
 
     let rec_count: usize = records.len();
     let tx_count: usize  = hashes.len();
 
+
     // check merkle roots
+    let p3 = Instant::now();
     let calculated_merkle_root = merkle_tree::get_merkle_root(hashes);
     block.verify_merkle_root(calculated_merkle_root.as_ref()).unwrap();
+    stats.merkle = Instant::now() - p3;
 
     let elapsed : usize = timer.elapsed().as_secs() as usize * 1000 +
         timer.elapsed().subsec_nanos() as usize / 1_000_000 as usize;
