@@ -271,6 +271,8 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
     }).collect();
 
 
+    let p3 = Instant::now();
+
     // split
     let (stats, hashes_records): (Vec<_>, Vec<_>) = chunks.into_iter().unzip();
     let (hashes, records):       (Vec<_>, Vec<_>) = hashes_records.into_iter().unzip();
@@ -285,7 +287,6 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
 
 
     // check merkle roots
-    let p3 = Instant::now();
     let calculated_merkle_root = merkle_tree::get_merkle_root(hashes);
     block.verify_merkle_root(calculated_merkle_root.as_ref()).unwrap();
     stats.merkle = Instant::now() - p3;

@@ -100,7 +100,7 @@ impl ::std::ops::Add for TransactionStats {
             backtracking: self.backtracking + other.backtracking,
             read_tx: self.read_tx + other.read_tx,
             read_tx_idx: self.read_tx_idx + other.read_tx_idx,
-            script: self.script + other.script
+            script: self.script + other.script,
         }
     }
 }
@@ -267,7 +267,7 @@ impl<'a> Transaction<'a> {
         let ptr      = tx_store.write(self.to_raw());
 
         let p1 = Instant::now();
-        stats.store_tx = p1 - p0;
+        stats.store_tx += p1 - p0;
 
 
         if !self.is_coinbase() {
@@ -286,14 +286,14 @@ impl<'a> Transaction<'a> {
             if tx_index.set(hash, ptr, &existing_ptrs, false) {
 
                 let p3 = Instant::now();
-                stats.store_tx_idx = p3 - p2;
+                stats.store_tx_idx += p3 - p2;
 
                 return Ok(TransactionOk::VerifiedAndStored {ptr: ptr, stats: stats })
             }
             else {
 
                 let p3 = Instant::now();
-                stats.store_tx_idx = p3 - p2;
+                stats.store_tx_idx += p3 - p2;
 
                 // First see if it already exists
                 existing_ptrs = tx_index.get(hash);
@@ -311,7 +311,7 @@ impl<'a> Transaction<'a> {
                 self.verify_backtracking_outputs(tx_store, &existing_ptrs);
 
                 let p4 = Instant::now();
-                stats.backtracking = p4 - p3;
+                stats.backtracking += p4 - p3;
 
             }
         }
@@ -335,7 +335,7 @@ impl<'a> Transaction<'a> {
                                                      tx_ptr.to_input(index as u16 ));
 
             let p1 = Instant::now();
-            stats.read_tx_idx = p1 - p0;
+            stats.read_tx_idx += p1 - p0;
 
             let output = match output {
                 None => {
@@ -359,13 +359,13 @@ impl<'a> Transaction<'a> {
                 .ok_or(TransactionError::OutputIndexNotFound)?;
 
             let p2 = Instant::now();
-            stats.read_tx = p2 - p1;
+            stats.read_tx += p2 - p1;
 
             ffi::verify_script(previous_tx_out.pk_script, self.to_raw(), index as u32)
                 .expect("TODO: Handle script error more gracefully");
 
             let p3 = Instant::now();
-            stats.script = p3 - p2;
+            stats.script += p3 - p2;
 
             // TODO: verify_amount here
         }
