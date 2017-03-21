@@ -10,9 +10,9 @@ import pystache
 from dateutil.parser import parse
 
 CORE_LOG = "/home/tomas/.bitcoin/debug.log"
-BC_LOG   = "/home/tomas/src/bitcrust/cmp1"
+BC_LOG   = "/home/tomas/bitcrust/cmp1"
 
-RE_CORE_CONNECT   = re.compile(r'- Connect block: (?P<blocktime>[0-9.]*)ms')
+RE_CORE_CONNECT   = re.compile(r'^(?P<time>.*) - Connect block: (?P<blocktime>[0-9.]*)ms')
 RE_CORE_UPDATETIP = re.compile(r"UpdateTip: new best=(?P<hash>[0-9a-f]*) height=(?P<height>[0-9]*)")
 RE_CORE_TXCOUNT   = re.compile(r"Connect (?P<txcount>[0-9]*) transactions")
 RE_CORE_TXINCOUNT = re.compile(r"Verify (?P<txincount>[0-9]*) txins")
@@ -25,7 +25,6 @@ RE_BC_END_BE    = re.compile(r'^(?P<bc_connect_end>.+) INFO connected')
 
 # reads core  
 def read_core():
-    print("Reading core");
 
     log = reversed(tailer.tail(open(CORE_LOG), 1000))
 
@@ -33,7 +32,6 @@ def read_core():
 
 # reads bc logfile  
 def read_bc():
-    print("Reading bitcrust");
 
     log = reversed(tailer.tail(open(BC_LOG), 1000))
 
@@ -56,6 +54,7 @@ def parse_core_log(log):
         add_regex_result(block, RE_CORE_TXINCOUNT, n)
 
         if "txcount" in block:
+            block['blocktime'] = int(float(block['blocktime']))
             yield block
 
             block = {}
@@ -79,6 +78,8 @@ def parse_bc_log(log):
             block['bc_dur'] = dur.total_seconds()*1000
             cdur = parse(block['bc_connect_end']) - parse(block['bc_connect_start'])
             block['bc_cdur'] = cdur.total_seconds()*1000
+            block['bc_cdur'] = int(float(block['bc_cdur']))
+            block['bc_dur'] = int(float(block['bc_dur']))
             del block['bc_done']
             del block['bc_start']
             del block['bc_connect_start']
@@ -88,18 +89,47 @@ def parse_bc_log(log):
 
             block = {}
 
+def render_block(block):
+    return pystache.render("""
+    <li>
+        <dl>
+            <dt class="time">time
+            <dd class="time">{{time}}
 
+            <dt class="hash">hash
+            <dd class="hash">{{hash}}
+
+            <dt class="transactions">transactions
+            <dd class="transactions">{{txcount}}
+
+            <dt class="inputs">transactions
+            <dd class="inputs">{{txincount}}
+        
+        
+        </dl>
+        <table>
+            <tr>
+                <td style="border-color:green; >{{blocktime}} ms
+            <tr>
+                <td style="border-color:green; >{{bc_dur}} ms
+            <tr>
+                <td style="border-color:green; >{{bc_cdur}} ms
+        </table>
+    </li>
+    """, block)
 
 bc_blocks = list(parse_bc_log(read_bc()))
 
 
+print "<ul class='graph'>"
 for block in parse_core_log(read_core()):
     #print "processing", block
     for bc in bc_blocks:
         #print " with ", bc
         if bc['hash'] == block['hash']:
             block.update(bc)
-            print block
+            print render_block(block)
 
-print pystache.render('Hi {{person}}!', {'person': 'Jad'})
+
+print "</ul>"
 
