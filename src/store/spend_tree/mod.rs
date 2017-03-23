@@ -45,6 +45,7 @@ const PREFIX:  &'static str   = "st-";
 
 
 // temporarily we use a vec instead of the dynamic growing flatfileset
+// this isn't a big problem because the OS will not allocate the trailing zeros
 const VEC_SIZE: usize = 800_000_000;
 
 #[derive(Debug, PartialEq)]
@@ -173,12 +174,13 @@ impl SpendTree {
         }
     }
 
-
+    // Returns the full spend-tree as record-slice.
     pub fn get_all_records(&mut self) -> &[Record] {
 
         self.fileset.read_mut_slice(RecordPtr::new(0), VEC_SIZE)
     }
 
+    // Returns the given block as a mutable slice
     pub fn get_block_mut(&mut self, block_ptr: BlockPtr) -> &mut [Record] {
 
         self.fileset.read_mut_slice(block_ptr.start, block_ptr.length as usize)
@@ -214,7 +216,7 @@ impl SpendTree {
 
 
     /// If an orphan block is stored in the spend-tree, some transaction-inputs might not be resolved
-    /// to their outputs. These will still be null-pointers instead of output-pointers
+    /// to their outputs. These will still be unmatched_output records instead of output-pointers
     ///
     /// This looks up the corresponding outputs; needs to be called before connect_block
     pub fn revolve_orphan_pointers(&mut self,
@@ -240,7 +242,7 @@ impl SpendTree {
                     .get(input.prev_tx_out)
                     .iter()
                     .find(|ptr| !ptr.is_guard())
-                    .expect("Could not find input; this should have been resolved before connecting the block!");
+                    .expect("Could not find input; this must have been resolved before connecting the block!");
 
                 let output_record = Record::new_output(tx_ptr, input.prev_tx_out_idx);
 
@@ -283,7 +285,7 @@ impl SpendTree {
 
 
         // Update the spend-index
-        // TODO this should jump 10 blocks back; and register its parent-requirement.
+        // TODO this should jump more blocks back; and register its parent-requirement.
         // This is important once we allow forks
         let s = previous_block.start.to_index() as usize;
         let l = previous_block.length as usize;

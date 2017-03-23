@@ -1,22 +1,19 @@
 
 
 //! Preliminairy pruning of tx-index
-//! This is prbably less needed when using HAMT
+//! This is probably less needed when using HAMT
 
 
 use std::env;
-use std::path;
 use std::fs;
+use std::path;
 
 use hash::*;
 use buffer::*;
-use store::Store;
 use config::Config;
-use store::TxPtr;
 use store::hash_index;
+use store::{Store,TxPtr,Record};
 use transaction::Transaction;
-
-use store::Record;
 
 #[ignore]
 #[test]
