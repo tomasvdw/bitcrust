@@ -20,9 +20,10 @@
 //!  The block cannot be found, but the blocks pointed to by these ptrs are having the given hash as previous block;
 //!  they are "expecting" this block, and should be appended when this block comes in
 //!
+//! The implementation is a large root hash table, with colliding keys added to an unbalanced binary tree.
 //!
 //!  TODO There is probably quite some gain to be made by moving to HAMT instead unbalanced binary trees
-//!  for the branches
+//!  for the branches; especially for low-resource uses.
 
 
 use std::{mem};

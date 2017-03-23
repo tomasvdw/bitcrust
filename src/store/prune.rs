@@ -63,6 +63,7 @@ fn prune_tx_index() {
             .count() as u32;
 
         if spend_outputs  < input_count {
+
             // we still need this one
             let hash = Hash32Buf::double_sha256(tx.to_raw());
 
@@ -71,13 +72,14 @@ fn prune_tx_index() {
             new_tx_index.set(hash.as_ref(), tx_ptr, &[], true);
         }
         else {
+            // all inputs are spend; don't add it to the new-index
             count_purged += 1;
         }
 
 
         count = count + 1;
         if count % 1000 == 0 {
-            println!("Done: {}; purged {} %",count, count_purged * 100 / count);
+            println!("Done: {}; purged {} %",count, count_purged as u64 * 100 / count as u64);
         }
 
         tx_ptr = tx_ptr.offset(tx_raw.len() as u32 + 4);
@@ -85,7 +87,7 @@ fn prune_tx_index() {
 
     println!("Done");
     println!("  {} transactions", count);
-    println!("  {} purged ({} %)", count_purged , count_purged * 100 /count);
+    println!("  {} purged ({} %)", count_purged , count_purged as u64 * 100 / count as u64);
     println!("  {} remain", count - count_purged ,);
 
 }

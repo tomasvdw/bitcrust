@@ -62,6 +62,7 @@ Block storing is a tricky part; blocks are stored in the spend-tree and referenc
         }
 
 
+    If this ^^ is only confusing; please ignore and check the code at connect_block below
 */
 
 use std::time::Instant;
@@ -103,7 +104,7 @@ fn is_genesis_block(hash: Hash32) -> bool {
 // It can be that another block C is also waiting for B; this will trigger their connection (B,C) too
 // and maybe (C,D)... etcetera
 //
-// This would be neat to do recursively, but this could exhaust the stack , we use a loop with
+// This would be much cleaner to do recursively, but this can exhaust the stack , we use a loop with
 // a to_do for connections.
 fn connect_block(
     store:           &mut Store,
@@ -120,7 +121,7 @@ fn connect_block(
     );
 
     // we lay connections between the end of one block and the start of this_block
-    // prev_end is None only for genesis
+    // previous_block is None only for genesis
     #[derive(Debug)]
     struct Connection {
         block:         BlockPtr,
@@ -128,12 +129,10 @@ fn connect_block(
         solved_guards: Vec<BlockPtr>
     }
 
-    // connect first block ...
+    // connect this block if not genesis...
     if let Some(previous_block) = previous_block {
         store.spend_tree.connect_block( &mut store.spend_index, & store.logger, previous_block, this_block) ?;
     }
-
-
 
     // The to_do list contains blocks that are connected to their previous but not yet added to the
     // block-index.
@@ -155,24 +154,24 @@ fn connect_block(
             continue;
         }
 
+        // we couldn't add this block to the index, which means some block is awaiting connection
         let guards = store.block_index.get(conn.block_hash.as_ref());
 
         if guards.iter().any(|ptr| !ptr.is_guard()) {
-            // this is not a guard, this is _this_ block. It seems the block
-            // was added by a concurrent user; will do fine.
+            // this is not a guard, this is _this_ block. This means the block
+            // was added by a concurrent user; will do just fine.
             trace!(store.logger, "Connect block - set-hash-loop - concurrent add");
             continue;
         }
 
-        //let guards = store.hash_index.get(conn.this_hash);
+        // we'll try this on the next iteration
         todo.push(Connection {
             block: conn.block,
             block_hash: conn.block_hash,
             solved_guards: guards.clone()
         });
 
-        //let guards = store.hash_index.get(conn.this_hash.as_buf());
-
+        // and connect pending blocks first
         for ptr in guards {
             if conn.solved_guards.contains(&ptr) {
                 continue;
@@ -221,6 +220,7 @@ fn block_exists(store: & mut Store, block_hash: Hash32) -> bool {
 
 
 /// Verifies and stores the transactions in the block.
+/// This does not yet check the order
 /// Also verifies the merkle_root & the amounts
 ///
 /// Returns a list fileptrs to the transactions
@@ -229,6 +229,8 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
 
     let timer = ::std::time::Instant::now();
 
+    // We use chunked parallelization because otherwise we need to clone() the stores on each
+    // iteration
     let chunks: Vec<_> =
         block.txs.par_chunks(PARALLEL_HASHING_THRESHOLD).map(|chunk_tx| {
 
@@ -247,13 +249,16 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
         for tx in chunk_tx {
 
             let p1  = Instant::now();
+
             let hash = Hash32Buf::double_sha256(tx.to_raw());
             hashes.push(hash);
+
             let p2  = Instant::now();
 
             let res = tx.verify_and_store(tx_index, tx_store, store.initial_sync, hash.as_ref()).unwrap();
 
-            // AlreadyExists and VerifiedAndStored are both ok here
+            // AlreadyExists and VerifiedAndStored are both ok here;
+            // Extract the TxPtr and the stats
             let (ptr,stats) = match res {
                 transaction::TransactionOk::VerifiedAndStored {ptr, stats}  => (ptr, stats),
                 transaction::TransactionOk::AlreadyExists     {ptr } => (ptr, Default::default())
@@ -306,6 +311,8 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
 
 /// Validates and stores a block;
 ///
+/// For now; this panics on invalids; but all underlying functions
+/// propagate problems to jere
 pub fn add_block(store: &mut Store, buffer: &[u8]) {
 
 
@@ -384,6 +391,8 @@ mod tests {
 
     #[test]
     fn test_clone_into_thread() {
+
+        // some rust experimenting; ignore
 
         struct X { data: Vec<u32> };
         impl Clone for X {

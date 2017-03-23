@@ -45,7 +45,7 @@ impl SpendIndex
     ///
     /// Creates a new fileset if needed
     pub fn new(cfg: &config::Config) -> SpendIndex {
-        let dir = &cfg.root.clone().join("spend_index");
+        let dir = &cfg.root.clone().join("spend-index");
 
         let mut fileset = FlatFileSet::new(
             dir, "si-", FILE_SIZE, MAX_CONTENT_SIZE);

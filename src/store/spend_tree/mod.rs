@@ -40,7 +40,7 @@ const MB:                 u64 = 1024 * 1024;
 const FILE_SIZE:          u64 = 16 * 1024 * MB ;
 const MAX_CONTENT_SIZE:   u64 = FILE_SIZE - 10 * MB ;
 
-const SUBPATH: &'static str   = "spend_tree";
+const SUBPATH: &'static str   = "spend-tree";
 const PREFIX:  &'static str   = "st-";
 
 

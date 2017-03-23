@@ -20,7 +20,9 @@ write-pointer (using atomic compare-and-swap) and then write the record at the l
 
 Data in the files can be identified with pointer that implements the *flatfileptr* Trait. 
 
-This provides a file number (max 16-bit) and a file offset (max 32 bit).
+This provides a file number (max 16-bit) and a file offset (max 64 bit),
+but the different filesets use different semantics as seen in [TxPtr](txptr.rs) 
+and [BlockHeaderPtr](blockheaderptr.rs).
 
 
 ## Block Content
@@ -36,33 +38,30 @@ Blockheaders are not length-prefixed, and also stored in network format.
 ## Hash Index
 
 Hashes of blocks and transactions are looked in two hash-indexes [(src)](hash_index.rs). 
-It is stored in flat_files `hash_index/ht-XXXX` . The first 64mb of the flatfileset is 
+They are stored in flat_files `tx-index/ti-XXXX` and `block-index/bi-XXXX`. The first 64mb of the flatfileset is 
 the root node; it is a hash-table to resolve the first 24-bits of a hash. This points to a append-only unbalanced 
 binary tree.
  
 This set-up ensures a nice temporal locality of reference, as only the 64mb root node and recent tree-branches are 
 needed in RAM.
 
-## Spendtree
+## Spend-tree
 
-Files with the name 'spend_tree/st-XXXX' (src in progress) contain the spend-tree; Records are 16 byte long.
+Files with the name `spend-tree/st-XXXX` [(src)](spend_tree/mod.rs) contain the spend-tree; Records are 16 byte long.
 
-Three types of records exist:
 
-* blockheader:   (with a 48-bit pointer to a blockheader record)
-* transanction:  (with a 48-bit pointer to a transaction record)
-* output-spend:  (with a 48-bit pointer to transaction record and the index to the output within the tx.)
-
-The remaining space of the record is used for pointers to other spendtree records. Each record points at least to a 
-parent: either implicitely the previous record, or an explicit pointer.
-
-A block is added to the stree by first adding a blockheader record, then for each transanction a transaction record
-and for each input of the transaction an output-spend record.
+A block is added to the spend_tree by first adding a start-of-block record, then for each transanction a transaction record
+and for each input of the transaction an output-spend record. At the end an end-of-block record is added.
    
 Each output-spend is verified by scanning backwards using the parent pointers, to ensure that the same output-spend is 
 not found before the spend transaction record is found. 
   
 This ensures that 
   
-A. the transaction that is being spend exists on this branch of the tree and 
-B. the output of the transaction was not yet spend.
+* the transaction that is being spent exists on this branch of the tree and
+* the output of the transaction was not yet spent.
+
+## Spend-index
+
+The spend index `spend-index/si-XXXX`  [(src)](spend_index.rs) catches seeks earlier in the chain
+and uses a simple concurrent bit-index to look them up.

@@ -48,14 +48,14 @@ pub struct FlatFileSet<P: FlatFilePtr + Copy + Clone> {
     start_size: u64,
     max_size:   u64,
 
-    // We tie the FlatFilePtr to the structure to ensure one ptr type is used
+    // We tie the type of FlatFilePtr to the structure to ensure one ptr type is used
     // for one flatfileset
     phantom:    ::std::marker::PhantomData<P>
 }
 
 impl<P : FlatFilePtr + Copy + Clone> Clone for FlatFileSet<P> {
 
-    // A fileset can be explicitly cloned
+    // A fileset can be explicitly cloned for concurrent access
     fn clone(&self) -> FlatFileSet<P> {
         let len = self.files.len();
         let mut f = vec![None; len];
