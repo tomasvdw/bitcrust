@@ -56,13 +56,13 @@ fn prune_tx_index() {
         let input_count = tx.txs_out.len() as u32;
 
         let tx_ptr_copy = tx_ptr;
-        let spent_outputs = (0..input_count)
+        let spend_outputs = (0..input_count)
             .map(|n|   Record::new_output(tx_ptr_copy, n))
             .map(|rec| rec.hash())
-            .filter(|hash| store.spent_index.exists(*hash))
+            .filter(|hash| store.spend_index.exists(*hash))
             .count() as u32;
 
-        if spent_outputs  < input_count {
+        if spend_outputs  < input_count {
             // we still need this one
             let hash = Hash32Buf::double_sha256(tx.to_raw());
 

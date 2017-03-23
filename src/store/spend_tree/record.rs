@@ -7,9 +7,9 @@ use store::{TxPtr, BlockHeaderPtr};
 use store::FlatFilePtr;
 
 
-use store::spent_tree::SpendingError;
-use store::spent_tree::BlockPtr;
-use store::spent_index::SpentIndex;
+use store::spend_tree::SpendingError;
+use store::spend_tree::BlockPtr;
+use store::spend_index::SpendIndex;
 
 use store::flatfile::INITIAL_WRITEPOS;
 
@@ -18,7 +18,7 @@ use store::flatfile::INITIAL_WRITEPOS;
 // 11 => start of block
 // 10 => end of block
 // 00 => transaction
-// 01 => spent-output
+// 01 => spend-output
 
 const RECORD_TYPE:u64    = 0xC000_0000_0000_0000;
 const START_OF_BLOCK:u64 = 0xC000_0000_0000_0000;
@@ -30,7 +30,7 @@ const OUTPUT:u64         = 0x4000_0000_0000_0000;
 // -------------
 //
 // START_OF_BLOCK;
-// bits 0-61   fileoffset end of the previous block (in spent-tree)
+// bits 0-61   fileoffset end of the previous block (in spend-tree)
 //
 // END_OF_BLOCK:
 // bits 0 -31   fileoffset of blockheader
@@ -165,7 +165,7 @@ impl Record {
         // We drop 4 bits from the filen offset and, for an output  add 1 + the output-index
         // The result is just as unique but smaller; we just drop the info to find the transaction
         // or to find the transaction from an output
-        // The resulting number is used for the spent-index
+        // The resulting number is used for the spend-index
 
 
         ((self.0 & 0xFFFF_FFFF_FFFF) >> 4)          // file-offset and file-number
@@ -191,13 +191,13 @@ impl Record {
     }
 }
 
-/// A filepointer that points to a record in the SpentTree
+/// A filepointer that points to a record in the SpendTree
 #[derive(PartialEq, Copy, Clone)]
 pub struct RecordPtr(u64);
 
 impl FlatFilePtr for RecordPtr {
     fn new(file_number: i16, file_offset: u64) -> RecordPtr {
-        assert_eq!(file_number, 0); // can only have one spent-tree file
+        assert_eq!(file_number, 0); // can only have one spend-tree file
 
         RecordPtr((file_offset as u64 - INITIAL_WRITEPOS)
                       / mem::size_of::<Record>() as u64)
@@ -232,18 +232,18 @@ impl RecordPtr {
 
 impl Record {
 
-    /// Checks if the output is not double-spent in the bit-index
-    fn verify_spent_in_index(&mut self,
-                             spent_index: &SpentIndex) -> Result<usize, SpendingError>
+    /// Checks if the output is not double-spend in the bit-index
+    fn verify_spend_in_index(&mut self,
+                             spend_index: &SpendIndex) -> Result<usize, SpendingError>
     {
         let seek_output      = *self;
         let seek_transaction = self.to_transaction();
 
-        if spent_index.exists(seek_output.hash()) {
+        if spend_index.exists(seek_output.hash()) {
 
-            return Err(SpendingError::OutputAlreadySpent);
+            return Err(SpendingError::OutputAlreadySpend);
         }
-        else if !spent_index.exists(seek_transaction.hash()) {
+        else if !spend_index.exists(seek_transaction.hash()) {
 
             return Err(SpendingError::OutputNotFound);
         }
@@ -255,11 +255,11 @@ impl Record {
     }
 
 
-    /// Verifies whether this this output is not already spent,
+    /// Verifies whether this this output is not already spend,
     /// and whether it is stored before self in the blockchain
-    pub fn verify_spent(
+    pub fn verify_spend(
         &mut self,
-        spent_index: &SpentIndex,
+        spend_index: &SpendIndex,
         seek_idx: usize,
         records: &[Record],
         logger: &slog::Logger) -> Result<usize, SpendingError>
@@ -286,13 +286,13 @@ impl Record {
 
 
             // TODO: we need to be aware here of the chances of forking.
-            // On initial load, the spent-index is always up-to-date after one block
+            // On initial load, the spend-index is always up-to-date after one block
             // so we should use 1 here which will make it faster;
             // After the initial load we should probably use 4; and check the parent-block hash
             // to ensures fall back on large reorgs
             if blocks >= 3 {
 
-                return self.verify_spent_in_index(spent_index)
+                return self.verify_spend_in_index(spend_index)
             }
 
 
@@ -313,12 +313,12 @@ impl Record {
 
             } else if seek_rec == seek_transaction {
 
-                // Found tx before spent => all ok
+                // Found tx before spend => all ok
                 return Ok(1);
             }
             else if seek_rec == seek_output {
 
-                return Err(SpendingError::OutputAlreadySpent);
+                return Err(SpendingError::OutputAlreadySpend);
             }
             else {
 

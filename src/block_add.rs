@@ -3,13 +3,13 @@
 
 /*
 
-Block storing is a tricky part; blocks are stored in the spent-tree and referenced in the
+Block storing is a tricky part; blocks are stored in the spend-tree and referenced in the
  hash-index
 
  This can go out of order:  For instance consider 5 blocks added in the order A, B, D, E, C
  (for this pseudocode, each block has the previous letter as prev_block_hash)
 
- We show the some pseudocode for actions on hashindex (hi) and spent-tree (st),
+ We show the some pseudocode for actions on hashindex (hi) and spend-tree (st),
  for the insertion of this sequence
 
  insert A:
@@ -97,8 +97,8 @@ fn is_genesis_block(hash: Hash32) -> bool {
     genesis.as_ref() == hash
 }
 
-// Connects two blocks (A,B) in the spent-tree and then stores the hash of B in the hash-index
-// Connecting the blocks will verify double-spents
+// Connects two blocks (A,B) in the spend-tree and then stores the hash of B in the hash-index
+// Connecting the blocks will verify double-spends
 //
 // It can be that another block C is also waiting for B; this will trigger their connection (B,C) too
 // and maybe (C,D)... etcetera
@@ -130,7 +130,7 @@ fn connect_block(
 
     // connect first block ...
     if let Some(previous_block) = previous_block {
-        store.spent_tree.connect_block( &mut store.spent_index, & store.logger, previous_block, this_block) ?;
+        store.spend_tree.connect_block( &mut store.spend_index, & store.logger, previous_block, this_block) ?;
     }
 
 
@@ -186,13 +186,13 @@ fn connect_block(
                 "conn"  => format!("{:?}",   conn));
 
 
-            store.spent_tree.revolve_orphan_pointers(
+            store.spend_tree.revolve_orphan_pointers(
                 &mut store.transactions,
                 &mut store.tx_index,
                 ptr
             );
 
-            store.spent_tree.connect_block(&mut store.spent_index, &store.logger, conn.block, ptr)?;
+            store.spend_tree.connect_block(&mut store.spend_index, &store.logger, conn.block, ptr)?;
 
 
             todo.push(Connection {
@@ -327,7 +327,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
     block.verify_block_size().unwrap();
 
     // check and store the transactions in block_content and check the merkle_root
-    let spent_tree_ptrs = verify_and_store_transactions(store, &block).unwrap();
+    let spend_tree_ptrs = verify_and_store_transactions(store, &block).unwrap();
 
     // store the blockheader in block_content
     let block_header_ptr = store.block_headers.write( &block.header.to_raw());
@@ -335,9 +335,9 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
     // we also store the txcount, although we only use it for a reindex benchmark
     let _ = store.block_headers.write_fixed( &block.txs.len());
 
-    // store the block in the spent_tree
+    // store the block in the spend_tree
 
-    let block_ptr       = store.spent_tree.store_block(block_header_ptr, spent_tree_ptrs);
+    let block_ptr       = store.spend_tree.store_block(block_header_ptr, spend_tree_ptrs);
 
 
     if is_genesis_block(block_hash.as_ref()) {

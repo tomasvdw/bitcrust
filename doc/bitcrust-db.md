@@ -3,7 +3,7 @@
 
 - [Introduction](#introduction)
 - [Block content](#block-content)
-- [Spent tree instead of a UTXO-set](#spent-tree)
+- [Spend tree instead of a UTXO-set](#spend-tree)
 - [Concurrent block validation](#concurrent-validation)
 
 ## Introduction
@@ -11,7 +11,7 @@
 Bitcoin-core uses a linearized model of the block tree. On-disk, only a main chain 
 is stored to ensure that there is always one authorative UTXO set.
 
-Bitcrust uses a tree-structure and indexes spents instead of unspents. This has several key
+Bitcrust uses a tree-structure and indexes spends instead of unspends. This has several key
 advantages in terms of performance, minimal memory requirement, simplicity and most importantly, concurrency. 
 
 The first results are very positive and show that this approach addresses Core's major bottlenecks in
@@ -31,34 +31,34 @@ Blockheaders are stored in the same data-files (to ensure rough ordering), and b
 For more details, check the [store](../src/store/) documentation
  
 
-## Spent tree
+## Spend tree
 
 When transactions are stored, only their scripts are validated. When blocks come in,
-we need to verify for each input of each transaction whether the referenced output exists and is unspent before
-this one. Instead of a UTXO-set we use the spent-tree.
+we need to verify for each input of each transaction whether the referenced output exists and is unspend before
+this one. Instead of a UTXO-set we use the spend-tree.
 
-This is a table (stored in a flatfileset) consisting of three types of records: blocks, transactions and spents.
+This is a table (stored in a flatfileset) consisting of four types of records: block-start, block-end, transactions and spends.
 
-Here we see a spent-tree with two blocks, where the third transaction has one input referencing the output of the first transaction (purple).
+Here we see a spend-tree with two blocks, where the third transaction has one input referencing the output of the first transaction (purple).
 
 
-![Spent tree example 1](https://cdn.rawgit.com/tomasvdw/bitcrust/master/doc/spent-tree1.svg "Spent-tree example")
+![Spend tree example 1](https://cdn.rawgit.com/tomasvdw/bitcrust/master/doc/spend-tree1.svg "Spend-tree example")
 
 If another block (2b) comes with the same block 1 as parent this can be simply appended with the proper pointer:  
 
-![Spent tree example 2](https://cdn.rawgit.com/tomasvdw/bitcrust/master/doc/spent-tree2.svg "Spent-tree example 2")
+![Spend tree example 2](https://cdn.rawgit.com/tomasvdw/bitcrust/master/doc/spend-tree2.svg "Spend-tree example 2")
 
-The rule for verification is simple: A spent (purple) record can only be added if, when browsing back through the 
-records, we will find the corresponding transaction before we find the same spent. This ensures both the existence 
-of the referenced transaction, and it being unspent.
+The rule for verification is simple: A spend (purple) record can only be added if, when browsing back through the 
+records, we will find the corresponding transaction before we find the same spend. This ensures both the existence 
+of the referenced transaction, and it being unspend.
     
 Obviously, with hundreds of millions transactions, simply scanning won't do. This is where we 
 take advantage of the fact that these records are filepointers to the [block content](#block-content) fileset, and therefore *roughly* ordered. This allows us to create
 a *loose skip tree*. Similarly to a skip list, each record contains a set of "highway" pointers that skip over records depending on the value searched for:
    
-![Spent tree example 3](https://cdn.rawgit.com/tomasvdw/bitcrust/master/doc/spent-tree3.svg "Spent-tree example 3")
+![Spend tree example 3](https://cdn.rawgit.com/tomasvdw/bitcrust/master/doc/spend-tree3.svg "Spend-tree example 3")
       
-As the vast majority of spents refer to recent transactions, such skip tree can reduce the average number of nodes traversed per lookup to  about 100.
+As the vast majority of spends refer to recent transactions, such skip tree can reduce the average number of nodes traversed per lookup to  about 100.
 
 Developers with knowledge about B-Trees and hash-tables may start to giggle at such high number of nodes per lookup, but they would be forgetting the major gains, which makes this 
 approach outperform other structures:

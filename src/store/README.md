@@ -43,26 +43,26 @@ binary tree.
 This set-up ensures a nice temporal locality of reference, as only the 64mb root node and recent tree-branches are 
 needed in RAM.
 
-## Spenttree
+## Spendtree
 
-Files with the name 'spent_tree/st-XXXX' (src in progress) contain the spent-tree; Records are 16 byte long.
+Files with the name 'spend_tree/st-XXXX' (src in progress) contain the spend-tree; Records are 16 byte long.
 
 Three types of records exist:
 
 * blockheader:   (with a 48-bit pointer to a blockheader record)
 * transanction:  (with a 48-bit pointer to a transaction record)
-* output-spent:  (with a 48-bit pointer to transaction record and the index to the output within the tx.)
+* output-spend:  (with a 48-bit pointer to transaction record and the index to the output within the tx.)
 
-The remaining space of the record is used for pointers to other spenttree records. Each record points at least to a 
+The remaining space of the record is used for pointers to other spendtree records. Each record points at least to a 
 parent: either implicitely the previous record, or an explicit pointer.
 
 A block is added to the stree by first adding a blockheader record, then for each transanction a transaction record
-and for each input of the transaction an output-spent record.
+and for each input of the transaction an output-spend record.
    
-Each output-spent is verified by scanning backwards using the parent pointers, to ensure that the same output-spent is 
-not found before the spent transaction record is found. 
+Each output-spend is verified by scanning backwards using the parent pointers, to ensure that the same output-spend is 
+not found before the spend transaction record is found. 
   
 This ensures that 
   
-A. the transaction that is being spent exists on this branch of the tree and 
-B. the output of the transaction was not yet spent.
+A. the transaction that is being spend exists on this branch of the tree and 
+B. the output of the transaction was not yet spend.

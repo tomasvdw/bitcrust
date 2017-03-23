@@ -5,7 +5,7 @@
 
 //!
 //! It is not stored directly, but can be extracted from the Record structure, that is stored
-//! in the Spent-Tree
+//! in the Spend-Tree
 
 
 use super::flatfileset::FlatFilePtr;

@@ -31,7 +31,7 @@ pub enum VerifyScriptError {
     UnknownError
 }
 
-/// Verifies whether the given `input` of the transaction spents the given `output`
+/// Verifies whether the given `input` of the transaction spends the given `output`
 /// using libbitcoin-consensus
 
 pub fn verify_script(previous_tx_out: &[u8], transaction: &[u8], input: u32) -> Result<(), VerifyScriptError> {

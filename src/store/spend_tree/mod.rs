@@ -1,15 +1,15 @@
 
 
-/// The spent tree stores the location of transactions in the block-tree
+/// The spend tree stores the location of transactions in the block-tree
 ///
 /// It is tracks the tree of blocks and is used to verify whether a block can be inserted at a
 /// certain location in the tree
 ///
 /// A block consists of the chain of records:
 ///
-/// [start-of-block] <- [transaction] <- [spent-output] <- [spent-output] <- [transaction] <- [end-of-block]...
+/// [start-of-block] <- [transaction] <- [spend-output] <- [spend-output] <- [transaction] <- [end-of-block]...
 ///
-/// One [spent-output] record is added per input of a transaction.
+/// One [spend-output] record is added per input of a transaction.
 ///
 /// Blocks are connected with the [start-of-block] record which points to the [end-of-block] of previous block.
 /// Often this is the previous records, but blocks can also be added in different order.
@@ -29,7 +29,7 @@ use store::{TxPtr,BlockHeaderPtr};
 use store::flatfileset::FlatFileSet;
 
 use store::hash_index::{HashIndex,HashIndexGuard};
-use store::spent_index::SpentIndex;
+use store::spend_index::SpendIndex;
 
 use transaction::Transaction;
 
@@ -40,7 +40,7 @@ const MB:                 u64 = 1024 * 1024;
 const FILE_SIZE:          u64 = 16 * 1024 * MB ;
 const MAX_CONTENT_SIZE:   u64 = FILE_SIZE - 10 * MB ;
 
-const SUBPATH: &'static str   = "spent_tree";
+const SUBPATH: &'static str   = "spend_tree";
 const PREFIX:  &'static str   = "st-";
 
 
@@ -50,10 +50,10 @@ const VEC_SIZE: usize = 800_000_000;
 #[derive(Debug, PartialEq)]
 pub enum SpendingError {
     OutputNotFound,
-    OutputAlreadySpent,
+    OutputAlreadySpend,
 }
 
-/// A pointer into the spent-tree.
+/// A pointer into the spend-tree.
 /// This always points to a `start-of-block` record
 /// These objects are stored in the block-index, to lookup blocks
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -93,7 +93,7 @@ impl BlockPtr {
 
 }
 
-pub struct SpentTree {
+pub struct SpendTree {
 
     fileset:    FlatFileSet<RecordPtr>
 }
@@ -102,7 +102,7 @@ pub struct SpentTree {
 
 /// Stats are passed around on success for performance monitoring
 #[derive(Debug, Default)]
-pub struct SpentTreeStats {
+pub struct SpendTreeStats {
     pub blocks:     i64,
     pub inputs:     i64,
     pub seeks:      i64,
@@ -112,12 +112,12 @@ pub struct SpentTreeStats {
 }
 
 // Make stats additive
-impl ::std::ops::Add for SpentTreeStats {
-    type Output = SpentTreeStats;
+impl ::std::ops::Add for SpendTreeStats {
+    type Output = SpendTreeStats;
 
-    fn add(self, other: SpentTreeStats) -> SpentTreeStats {
+    fn add(self, other: SpendTreeStats) -> SpendTreeStats {
 
-        SpentTreeStats {
+        SpendTreeStats {
             blocks: self.blocks + other.blocks,
             inputs: self.inputs + other.inputs,
             seeks:  self.seeks  + other.seeks,
@@ -131,13 +131,13 @@ impl ::std::ops::Add for SpentTreeStats {
 
 
 
-/// This is the algorithm to check double-spents and the existence of outputs
-/// It will call the verify_spent function on Record in parallel for each output
+/// This is the algorithm to check double-spends and the existence of outputs
+/// It will call the verify_spend function on Record in parallel for each output
 fn seek_and_set_inputs(
                        records: &[Record],
                        block: &mut [Record],
                        block_idx: usize,
-                       spent_index: &SpentIndex,
+                       spend_index: &SpendIndex,
                        logger: &slog::Logger) -> Result<usize, SpendingError>
 {
 
@@ -151,7 +151,7 @@ fn seek_and_set_inputs(
 
             debug_assert!(rec.is_transaction() || rec.is_output());
 
-            rec.verify_spent(spent_index, block_idx+i+1, records, logger)
+            rec.verify_spend(spend_index, block_idx+i+1, records, logger)
 
         })
         .collect();
@@ -162,12 +162,12 @@ fn seek_and_set_inputs(
 }
 
 
-impl SpentTree {
-    pub fn new(cfg: &config::Config) -> SpentTree {
+impl SpendTree {
+    pub fn new(cfg: &config::Config) -> SpendTree {
 
         let dir = &cfg.root.clone().join(SUBPATH);
 
-        SpentTree {
+        SpendTree {
             fileset: FlatFileSet::new(
                 dir, PREFIX, FILE_SIZE, MAX_CONTENT_SIZE)
         }
@@ -184,13 +184,13 @@ impl SpentTree {
         self.fileset.read_mut_slice(block_ptr.start, block_ptr.length as usize)
     }
 
-    /// Retrieves a single record from the spent-tree
+    /// Retrieves a single record from the spend-tree
     pub fn get_record(&mut self, ptr: RecordPtr) -> Record {
 
         * self.fileset.read_fixed(ptr)
     }
 
-    /// Stores a block in the spent_tree. The block will be initially orphan.
+    /// Stores a block in the spend_tree. The block will be initially orphan.
     ///
     /// The result is a BlockPtr that can be stored in the hash-index
     pub fn store_block(&mut self, block_header_ptr: BlockHeaderPtr, file_ptrs: Vec<Record>) -> BlockPtr {
@@ -213,7 +213,7 @@ impl SpentTree {
     }
 
 
-    /// If an orphan block is stored in the spent-tree, some transaction-inputs might not be resolved
+    /// If an orphan block is stored in the spend-tree, some transaction-inputs might not be resolved
     /// to their outputs. These will still be null-pointers instead of output-pointers
     ///
     /// This looks up the corresponding outputs; needs to be called before connect_block
@@ -266,7 +266,7 @@ impl SpentTree {
     /// Verifies of each output in the block at target_start
     /// Then lays the connection between previous_end and target_start
     pub fn connect_block(&mut self,
-                         spent_index:    &mut SpentIndex,
+                         spend_index:    &mut SpendIndex,
                          logger:         &slog::Logger,
                          previous_block: BlockPtr,
                          target_block:   BlockPtr) -> Result<(), SpendingError> {
@@ -282,7 +282,7 @@ impl SpentTree {
         block[0] = Record::new_block_start(previous_block);
 
 
-        // Update the spent-index
+        // Update the spend-index
         // TODO this should jump 10 blocks back; and register its parent-requirement.
         // This is important once we allow forks
         let s = previous_block.start.to_index() as usize;
@@ -290,11 +290,11 @@ impl SpentTree {
         let immutable_block: &[Record] = &records[s+1..s+l-1];
         for rec in immutable_block.iter() {
 
-            spent_index.set(rec.hash());
+            spend_index.set(rec.hash());
         }
 
-        // verify all inputs in the spent tree and spent-index
-        let input_count = seek_and_set_inputs(records, block, block_idx as usize, spent_index, logger)?;
+        // verify all inputs in the spend tree and spend-index
+        let input_count = seek_and_set_inputs(records, block, block_idx as usize, spend_index, logger)?;
 
         let elapsed : isize = timer.elapsed().as_secs() as isize * 1000 +
             timer.elapsed().subsec_nanos() as isize / 1_000_000 as isize;
@@ -325,12 +325,12 @@ mod tests {
     use slog::DrainExt;
     use store::flatfileset::FlatFilePtr;
     use super::*;
-    use store::spent_index::SpentIndex;
+    use store::spend_index::SpendIndex;
     use store::{BlockHeaderPtr, TxPtr};
 
-    /// Macro to create a block for the spent_tree tests
+    /// Macro to create a block for the spend_tree tests
     /// blockheaders and txs are unqiue numbers (fileptrs but where they point to doesn't matter
-    /// for the spent_tree).
+    /// for the spend_tree).
     ///
     /// Construct a block as
     ///
@@ -354,7 +354,7 @@ mod tests {
 
     }
 
-    impl SpentTree {
+    impl SpendTree {
         // wrapper around store_block that accepts a tuple instead of two params
         // for easier testing with block! macros
         fn store(&mut self, tuple: (BlockHeaderPtr, Vec<Record>)) -> BlockPtr {
@@ -363,11 +363,11 @@ mod tests {
     }
 
     #[test]
-    fn test_spent_tree_connect() {
+    fn test_spend_tree_connect() {
         let log = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
 
-        let mut st  = SpentTree::new(& test_cfg!());
-        let mut si  = SpentIndex::new(& test_cfg!());
+        let mut st  = SpendTree::new(& test_cfg!());
+        let mut si  = SpendIndex::new(& test_cfg!());
 
         let block1 = st.store(block!(blk 1 =>
             [tx 2]
@@ -403,14 +403,14 @@ mod tests {
         ));
         st.connect_block(&mut si, &log, block2b, block3b).unwrap();
 
-        // now this should only fir on 2a and not on 3b as at 3b it is already spent
+        // now this should only fir on 2a and not on 3b as at 3b it is already spend
         let block4a = st.store(block!(blk 10 =>
             [tx 11 => (2;1)],
             [tx 12 => (2;2)]
         ));
         assert_eq!(
             st.connect_block(&mut si, &log, block3b, block4a).unwrap_err(),
-            SpendingError::OutputAlreadySpent);
+            SpendingError::OutputAlreadySpend);
 
         let block4a = st.store(block!(blk 10 =>
             [tx 11 => (2;1)],
@@ -421,7 +421,7 @@ mod tests {
     }
 
     #[test]
-    fn test_spent_tree1() {
+    fn test_spend_tree1() {
         let log = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
 
 
@@ -431,8 +431,8 @@ mod tests {
         );
 
 
-        let mut st  = SpentTree::new(& test_cfg!() );
-        let mut si  = SpentIndex::new(& test_cfg!());
+        let mut st  = SpendTree::new(& test_cfg!() );
+        let mut si  = SpendIndex::new(& test_cfg!());
 
         let block_ptr = st.store_block(block1.0, block1.1);
 
@@ -469,9 +469,9 @@ mod tests {
 
     #[test]
     fn test_orphan_block() {
-        // care must be taken that when a block is added to the spent-tree before one of its
+        // care must be taken that when a block is added to the spend-tree before one of its
         // predecessors, it may not be complete.
-        // This because in the spent tree, the inputs are stored as the outputs they reference,
+        // This because in the spend tree, the inputs are stored as the outputs they reference,
         // but these inputs may not have been available.
 
         // The resolve orphan block checks and fixes these "left-out" references.

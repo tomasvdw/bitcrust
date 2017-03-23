@@ -1,12 +1,12 @@
-//! Index that stores transactions and spent outputs
+//! Index that stores transactions and spend outputs
 //!
-//! This serves as a broom-wagon for the spent-tree.
+//! This serves as a broom-wagon for the spend-tree.
 //! After X blocks, outputs and transactions are stored here,
-//! and when outputs aren't found in the spent tree for X blocks,
+//! and when outputs aren't found in the spend tree for X blocks,
 //! they are searched here.
 //!
-//! The data-structure here is a simple bit-index where each transaction and each spent-output
-//! are given a unique bit which is set if the given transaction or spent exists
+//! The data-structure here is a simple bit-index where each transaction and each spend-output
+//! are given a unique bit which is set if the given transaction or spend exists
 
 use std::sync::atomic::{AtomicU64,Ordering};
 
@@ -26,7 +26,7 @@ const VEC_SIZE:         usize = 500_000_000;
 ///
 /// Internally uses fileset
 ///
-pub struct SpentIndex {
+pub struct SpendIndex {
 
     #[allow(dead_code)]
     fileset:      FlatFileSet<RecordPtr>,
@@ -35,21 +35,21 @@ pub struct SpentIndex {
 
 }
 
-unsafe impl Sync for SpentIndex {}
+unsafe impl Sync for SpendIndex {}
 
-impl SpentIndex
+impl SpendIndex
 {
-    /// Opens the spent_index at the location given in the config
+    /// Opens the spend_index at the location given in the config
     ///
     /// Creates a new fileset if needed
-    pub fn new(cfg: &config::Config) -> SpentIndex {
-        let dir = &cfg.root.clone().join("spent_index");
+    pub fn new(cfg: &config::Config) -> SpendIndex {
+        let dir = &cfg.root.clone().join("spend_index");
 
         let mut fileset = FlatFileSet::new(
             dir, "si-", FILE_SIZE, MAX_CONTENT_SIZE);
 
         let bitvector = fileset.read_mut_slice(RecordPtr::new(0), VEC_SIZE);
-        SpentIndex {
+        SpendIndex {
             fileset: fileset,
             bitvector: bitvector
         }
@@ -92,7 +92,7 @@ mod tests {
     #[test]
     fn test_seq() {
 
-        let mut idx: SpentIndex = SpentIndex::new(& test_cfg!() );
+        let mut idx: SpendIndex = SpendIndex::new(& test_cfg!() );
 
 
         let mut set = HashSet::new();

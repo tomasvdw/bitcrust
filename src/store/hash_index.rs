@@ -13,7 +13,7 @@
 //!  scripts are checked
 //!
 //!  * a single fileptr pointing to a pointer to blockheader
-//!  The block is found. The pointer points to a record in the spent-tree; _that_ pointer points to the blockheader
+//!  The block is found. The pointer points to a record in the spend-tree; _that_ pointer points to the blockheader
 //!  in block_content
 //!
 //! * a set of fileptr pointing to guard blocks
