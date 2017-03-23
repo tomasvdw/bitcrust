@@ -46,7 +46,7 @@ const OUTPUT:u64         = 0x4000_0000_0000_0000;
 // bits 48-61   output-index
 
 // a orphan start of block is a start of block without a previous
-const ORPHAN_START_OF_BLOCK:u64 = 0xC000_0000_0000_0000;
+const ORPHAN_START_OF_BLOCK:u64 = START_OF_BLOCK | 0;
 
 
 #[derive(Clone,Copy,PartialEq)]
@@ -59,6 +59,9 @@ impl fmt::Debug for Record {
 }
 
 impl Record {
+
+    // Various constructors
+
     pub fn new_unmatched_input() -> Record {
         Record (0)
     }
@@ -232,7 +235,7 @@ impl RecordPtr {
 
 impl Record {
 
-    /// Checks if the output is not double-spend in the bit-index
+    /// Checks if the output is not double-spend in the spend-index
     fn verify_spend_in_index(&mut self,
                              spend_index: &SpendIndex) -> Result<usize, SpendingError>
     {
@@ -255,7 +258,7 @@ impl Record {
     }
 
 
-    /// Verifies whether this this output is not already spend,
+    /// Verifies whether this this output is not already spent,
     /// and whether it is stored before self in the blockchain
     pub fn verify_spend(
         &mut self,
@@ -288,7 +291,7 @@ impl Record {
             // TODO: we need to be aware here of the chances of forking.
             // On initial load, the spend-index is always up-to-date after one block
             // so we should use 1 here which will make it faster;
-            // After the initial load we should probably use 4; and check the parent-block hash
+            // After the initial load we should probably use 4; but verify the parent-block hash
             // to ensures fall back on large reorgs
             if blocks >= 3 {
 

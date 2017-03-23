@@ -19,10 +19,12 @@ const MB:                 u64 = 1024 * 1024;
 const FILE_SIZE:          u64 = 16 * 1024 * MB ;
 const MAX_CONTENT_SIZE:   u64 = FILE_SIZE - 10 * MB ;
 
-// TODO; make this dynamic
+// TODO; make this dynamic using fileset continuation;
+// this isn't hastily needed as the OS does not actually allocate
+// all the space; (compare ls with du).
 const VEC_SIZE:         usize = 500_000_000;
 
-/// Index to lookup fileptr's from hashes
+/// Index to lookup spends
 ///
 /// Internally uses fileset
 ///
@@ -60,13 +62,16 @@ impl SpendIndex
 
     /// Tests if the given hash exists.
     pub fn exists(&self, hash: u64) -> bool {
+
         let idx =  (hash >> 6) as usize;
         (self.bitvector[idx].load(Ordering::Relaxed) & (1 << (hash & 0x3F))) > 0
     }
 
 
-    /// Stores a recordhash; this should uniquely identify an output or a transaction
+    /// Stores a record hash; this should uniquely identify an output or a transaction
     pub fn set(&mut self, hash: u64)  {
+
+        // CAS-loop
         loop {
             let idx = (hash >> 6) as usize;
             let org = self.bitvector[idx].load(Ordering::Acquire);
