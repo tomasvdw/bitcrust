@@ -30,8 +30,10 @@ pub struct FlatFile {
     write_ptr: *mut atomic::AtomicU64
 }
 
+
 impl Clone for FlatFile {
 
+    /// Only explicit cloning is allowed
     fn clone(&self) -> FlatFile {
 
         FlatFile {
@@ -76,6 +78,7 @@ impl FlatFile {
             // initialize file
 
             // we use transmute to ensure we're using native-endianness
+            // (admittedly, a questionable design decision).
             let magic:    &[u8;8] = unsafe { mem::transmute( &MAGIC_FILEID) };
             let writepos: &[u8;8] = unsafe { mem::transmute( &INITIAL_WRITEPOS) };
 

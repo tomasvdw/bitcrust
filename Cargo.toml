@@ -36,4 +36,3 @@ opt-level = 3
 
 [features]
 default = []
-no_clear_data = []
