@@ -7,10 +7,10 @@ use std::path::PathBuf;
 
 
 // Overrides the store directory to use
-const ENV_BITCRUST_STORE: &'static str = "BITCRUST_STORE";
+pub const ENV_BITCRUST_STORE: &'static str = "BITCRUST_STORE";
 
 // Set to "1" will prevent the data-folder to be cleared
-const ENV_BITCRUST_NOCLEAR: &'static str = "BITCRUST_NOCLEAR";
+pub const ENV_BITCRUST_NOCLEAR: &'static str = "BITCRUST_NOCLEAR";
 
 
 

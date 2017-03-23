@@ -3,6 +3,9 @@
 //! Preliminairy pruning of tx-index
 //! This is probably less needed when using HAMT
 
+// this is needed because of #[ignore]
+#![allow(unused_imports)]
+#![allow(dead_code)]
 
 use std::env;
 use std::fs;
@@ -15,31 +18,20 @@ use store::hash_index;
 use store::{Store,TxPtr,Record};
 use transaction::Transaction;
 
-#[ignore]
-#[test]
-fn prune_tx_index() {
 
-    // assume last arg is path
-    let p =  &env::args().last().unwrap();
-    if fs::metadata(p).is_err() {
-        panic!("Path not found {}", p);
-    }
+/// Prunes the tx-index of the store to a separate tx-index-pruned folder
+fn prune_to_new_index() {
 
-    // open data store
-    println!("Pruning {}", p);
-    let cfg   = Config::new(p);
+    let cfg = test_cfg!();
     let mut store = Store::new(&cfg);
 
-    // add pruned txindex
-    let mut path = path::PathBuf::from(p);
-    path.push("tx-index-pruned");
-    let _ =  fs::remove_dir_all(path);
+
     let mut new_tx_index: hash_index::HashIndex<TxPtr>
         = hash_index::HashIndex::new(&cfg, "tx-index-pruned");
 
     let mut tx_ptr = TxPtr::first();
-    let mut count = 0;
-    let mut count_purged = 0;
+    let mut count: u64 = 0;
+    let mut count_purged: u64 = 0;
     loop {
         let tx_raw = store.transactions.read(tx_ptr);
 
@@ -68,10 +60,10 @@ fn prune_tx_index() {
 
             new_tx_index.set(hash.as_ref(), tx_ptr, &[], true);
         }
-        else {
-            // all inputs are spend; don't add it to the new-index
-            count_purged += 1;
-        }
+            else {
+                // all inputs are spend; don't add it to the new-index
+                count_purged += 1;
+            }
 
 
         count = count + 1;
@@ -86,5 +78,26 @@ fn prune_tx_index() {
     println!("  {} transactions", count);
     println!("  {} purged ({} %)", count_purged , count_purged as u64 * 100 / count as u64);
     println!("  {} remain", count - count_purged ,);
+
+}
+
+#[ignore]
+#[test]
+fn prune_tx_index() {
+
+
+    let store_path = env::var(::config::ENV_BITCRUST_STORE).
+        expect(&format!("Use {} env var to specify a store to prune", ::config::ENV_BITCRUST_STORE));
+
+    // add pruned tx-index to store_path
+    let pruned_path   = path::PathBuf::from(&store_path).join("tx-index-pruned");
+    let tx_index_path = path::PathBuf::from(&store_path).join("tx-index");
+    let _ =  fs::remove_dir_all(&pruned_path);
+
+    prune_to_new_index();
+
+    // move the new index into position
+    let _ =  fs::remove_dir_all(&tx_index_path);
+    fs::rename(&pruned_path, &tx_index_path).expect("Failed to move tx-index after pruning")
 
 }
