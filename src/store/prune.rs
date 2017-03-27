@@ -92,12 +92,12 @@ fn prune_tx_index() {
     // add pruned tx-index to store_path
     let pruned_path   = path::PathBuf::from(&store_path).join("tx-index-pruned");
     let tx_index_path = path::PathBuf::from(&store_path).join("tx-index");
-    let _ =  fs::remove_dir_all(&pruned_path);
+    let _ =  fs::remove_dir_all(&pruned_path); // if exists
 
     prune_to_new_index();
 
     // move the new index into position
-    let _ =  fs::remove_dir_all(&tx_index_path);
-    fs::rename(&pruned_path, &tx_index_path).expect("Failed to move tx-index after pruning")
+    fs::remove_dir_all(&tx_index_path).expect("Couldn't remove old tx-index");
+    fs::rename(pruned_path, &tx_index_path).expect("Failed to move tx-index after pruning");
 
 }

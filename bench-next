@@ -1,0 +1,41 @@
+#!/bin/sh
+
+if ! [ -d data-bench ]
+then
+    echo "Run bench-init first"
+    exit 1
+fi
+
+if ! [ -d data-bench2 ]
+then
+    mkdir data-bench2
+
+    # We link the transactions to save space
+    cd data-bench2
+    ln -s ../data-bench/transactions
+    cd ..
+
+fi
+
+echo "Removing"
+rm -rf data-bench2/block-index
+rm -rf data-bench2/headers
+rm -rf data-bench2/spend-tree
+rm -rf data-bench2/spend-index
+rm -rf data-bench2/tx-index
+
+echo "Copying"
+cp -r data-bench/block-index data-bench2/block-index
+cp -r data-bench/headers  data-bench2/headers
+cp -r data-bench/spend-index data-bench2/spend-index
+cp -r data-bench/spend-tree data-bench2/spend-tree
+cp -r data-bench/tx-index data-bench2/tx-index
+
+ln -s ~/.bitcoin/blocks core-blocks
+
+echo "Copy complete. benching"
+
+BITCRUST_NOCLEAR=1 BITCRUST_STORE=data-bench2 \
+    cargo test --release load_bench_next -- --ignored --nocapture
+
+

@@ -85,7 +85,7 @@ use store::HashIndexGuard;
 type BlockResult<T> = Result<T, BlockError>;
 
 // minimum number of hashes to use parallel hashing
-const PARALLEL_HASHING_THRESHOLD: usize = 40;
+const PARALLEL_HASHING_THRESHOLD: usize = 10;
 
 
 /// Returns true if the given hash is the hash of a genesis block
@@ -218,6 +218,23 @@ fn block_exists(store: & mut Store, block_hash: Hash32) -> bool {
 
 }
 
+/// This is the same procedure as below, but trying to split the different steps
+fn verify_and_store_transactions2(store: &mut Store, block: &Block) -> BlockResult<Vec<Record>> {
+
+    // hash in parallel:
+    let hashes: Vec<_> = block.txs.par_iter().map(|tx|
+        Hash32Buf::double_sha256(tx.to_raw())
+    ).collect();
+
+    // store sequentially
+    let ptrs: Vec<_> = block.txs.iter().map(|tx| {
+
+        tx.verify_syntax().unwrap();
+        store.transactions.write(tx.to_raw())
+    }).collect();
+
+    Ok(vec![])
+}
 
 /// Verifies and stores the transactions in the block.
 /// This does not yet check the order
