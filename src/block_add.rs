@@ -218,7 +218,9 @@ fn block_exists(store: & mut Store, block_hash: Hash32) -> bool {
 
 }
 
-/// This is the same procedure as below, but trying to split the different steps
+/// This is the same procedure as below, but trying to split the different steps/ WIP
+#[allow(dead_code)]
+#[allow(unused_variables)]
 fn verify_and_store_transactions2(store: &mut Store, block: &Block) -> BlockResult<Vec<Record>> {
 
     // hash in parallel:
@@ -230,7 +232,7 @@ fn verify_and_store_transactions2(store: &mut Store, block: &Block) -> BlockResu
     let ptrs: Vec<_> = block.txs.iter().map(|tx| {
 
         tx.verify_syntax().unwrap();
-        store.transactions.write(tx.to_raw())
+        store.transactions.write(tx)
     }).collect();
 
     Ok(vec![])
@@ -248,6 +250,7 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
 
     // We use chunked parallelization because otherwise we need to clone() the stores on each
     // iteration
+    // The main procedure here is to call verify_and_store for each transaction
     let chunks: Vec<_> =
         block.txs.par_chunks(PARALLEL_HASHING_THRESHOLD).map(|chunk_tx| {
 

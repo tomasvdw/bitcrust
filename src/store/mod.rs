@@ -57,6 +57,8 @@ mod spend_tree;
 
 mod prune;
 
+mod transactions;
+
 pub use self::spend_tree::SpendingError;
 pub use self::spend_tree::BlockPtr;
 pub use self::spend_tree::record::{RecordPtr,Record};
@@ -67,6 +69,7 @@ pub use self::blockheaderptr::BlockHeaderPtr;
 
 pub use self::flatfileset::{FlatFilePtr,FlatFileSet};
 
+pub use self::transactions::Transactions;
 pub type TxIndex = HashIndex<TxPtr>;
 
 use config;
@@ -90,7 +93,8 @@ pub const MAX_CONTENT_SIZE:   u64 = FILE_SIZE - 10 * MB as u64 ;
 /// files concurrently
 pub struct Store {
     // Flat files contain transactions and blockheaders
-    pub transactions: flatfileset::FlatFileSet<TxPtr>,
+    pub transactions: transactions::Transactions,
+
     pub block_headers: flatfileset::FlatFileSet<BlockHeaderPtr>,
 
     pub tx_index:      TxIndex,
@@ -118,11 +122,8 @@ impl Store {
     pub fn new(cfg: &config::Config) -> Store {
 
         Store {
-            transactions:  FlatFileSet::new(
-                &cfg.root.clone().join("transactions"),
-                "tx",
-                FILE_SIZE,
-                MAX_CONTENT_SIZE),
+            transactions:  transactions::Transactions::new(&cfg),
+
 
             block_headers:  FlatFileSet::new(
                 &cfg.root.clone().join("headers"),
@@ -224,35 +225,5 @@ mod tests {
 
     }*/
 
-    use config::Config;
-    use std::fs;
-
-    //use block::BlockHeader;
-
-    ///
-    #[test]
-    #[ignore]
-    fn reindex() {
-        let _ = fs::remove_dir_all("rindex/spend-tree");
-        let _ = fs::remove_dir_all("rindex/spend-index");
-        let _ = fs::remove_dir_all("rindex/tx-index");
-        let _ = fs::remove_dir_all("rindex/block-index");
-
-        let cfg = Config::new("rindex");
-        let mut store = Store::new(&cfg);
-
-        let mut pos = TxPtr::new(0, super::flatfile::INITIAL_WRITEPOS);
-
-        for (n, (header, tx_count)) in store.block_headers.read_block_headers().into_iter().enumerate() {
-
-            println!("Block {} with {} transactions", n, tx_count);
-            let _ = BlockHeader::parse(&mut Buffer::new(header));
-
-            let (txs,p) = store.transactions.read_set(pos, tx_count);
-            pos = p;
-            println!("Blockheader {:?}", txs[0]);
-        }
-
-    }
 
 }

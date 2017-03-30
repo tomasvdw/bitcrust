@@ -12,6 +12,7 @@ use hash::*;
 use script::context;
 use ffi;
 
+use store;
 use store::TxPtr;
 use store::Record;
 use store::HashIndexGuard;
@@ -68,7 +69,9 @@ pub struct Transaction<'a> {
     pub txs_out:   Vec<TxOutput<'a>>,
     pub lock_time: u32,
 
+    pub txs_out_idx: Vec<u32>,
     raw:           Buffer<'a>,
+
 
 }
 
@@ -138,11 +141,18 @@ impl<'a> Parse<'a> for Transaction<'a> {
     fn parse(buffer: &mut Buffer<'a>) -> Result<Transaction<'a>, EndOfBufferError> {
 
         let org_buffer = *buffer;
+
+        let version         = i32::parse(buffer)?;
+        let txs_in          = Vec::parse(buffer)?;
+        let (txs_out,idxs)  = buffer.parse_vec_with_indices(org_buffer)?;
+        let lock_time       = u32::parse(buffer)?;
+
         Ok(Transaction {
-            version:   i32::parse(buffer)?,
-            txs_in:    Vec::parse(buffer)?,
-            txs_out:   Vec::parse(buffer)?,
-            lock_time: u32::parse(buffer)?,
+            version:   version,
+            txs_in:    txs_in,
+            txs_out:   txs_out,
+            txs_out_idx: idxs,
+            lock_time: lock_time,
             raw:       buffer.consumed_since(org_buffer)
 
         })
@@ -194,7 +204,7 @@ impl<'a> Transaction<'a> {
     ///
     /// This checks the passed input-ptrs are valid against the corresponding output of self
     ///
-    pub fn verify_backtracking_outputs(&self, tx_store: &mut FlatFileSet<TxPtr>, inputs: &Vec<TxPtr>) {
+    pub fn verify_backtracking_outputs(&self, tx_store: &mut store::Transactions, inputs: &Vec<TxPtr>) {
 
 
         for input_ptr in inputs.into_iter() {
@@ -202,7 +212,8 @@ impl<'a> Transaction<'a> {
             debug_assert!(input_ptr.is_guard());
 
             // read tx from disk
-            let mut tx_raw   = Buffer::new(tx_store.read(*input_ptr));
+            let tx_raw_vec   = tx_store.read(*input_ptr);
+            let mut tx_raw   = Buffer::new(tx_raw_vec.as_slice());
 
             let tx           = Transaction::parse(&mut tx_raw).
                     expect("Invalid tx data in database");
@@ -242,7 +253,7 @@ impl<'a> Transaction<'a> {
     /// Verifies and stores the transaction in the transaction_store and index
     pub fn verify_and_store(&self,
                             tx_index:     &mut TxIndex,
-                            tx_store:     &mut FlatFileSet<TxPtr>,
+                            tx_store:     &mut store::Transactions,
                             initial_sync: bool,
                             hash:         Hash32) -> TransactionResult<TransactionOk> {
 
@@ -252,10 +263,10 @@ impl<'a> Transaction<'a> {
 
         self.verify_syntax()?;
 
-        if initial_sync {
+        // store
+        let ptr      = tx_store.write(self);
 
-            // store without checking scripts
-            let ptr      = tx_store.write(self.to_raw());
+        if initial_sync {
 
             assert!(tx_index.set(hash, ptr, &[], true));
 
@@ -263,8 +274,6 @@ impl<'a> Transaction<'a> {
 
         }
 
-        // store
-        let ptr      = tx_store.write(self.to_raw());
 
         let p1 = Instant::now();
         stats.store_tx += p1 - p0;
@@ -322,7 +331,7 @@ impl<'a> Transaction<'a> {
     /// Finds the outputs corresponding to the inputs and verify the scripts
     pub fn verify_input_scripts(&self,
                                 tx_index: &mut TxIndex,
-                                tx_store: &mut FlatFileSet<TxPtr>,
+                                tx_store: &mut store::Transactions,
                                 tx_ptr:   TxPtr,
                                 stats:    &mut TransactionStats) -> TransactionResult<()> {
 
@@ -343,6 +352,8 @@ impl<'a> Transaction<'a> {
                     // We can't find the transaction this input is pointing to
                     // Oddly, this is perfectly fine; we just postpone script validation
                     // until that transaction comes in.
+                    // The spent-tree ensures that this transaction will never be connected
+                    // before this happens
                     //
                     // ^^ get_or_set has placed appropriate guards in the hash_index
 
@@ -352,11 +363,11 @@ impl<'a> Transaction<'a> {
             };
 
 
-            let mut previous_tx_raw = Buffer::new(tx_store.read(output));
-            let previous_tx = Transaction::parse(&mut previous_tx_raw)?;
-
-            let previous_tx_out = previous_tx.txs_out.get(input.prev_tx_out_idx as usize)
+            let previous_out_vec = tx_store.read_output(output, input.prev_tx_out_idx)
                 .ok_or(TransactionError::OutputIndexNotFound)?;
+
+            let previous_tx_out = TxOutput::parse(&mut Buffer::new(&previous_out_vec))
+                .expect("Corrupt output data in store");
 
             let p2 = Instant::now();
             stats.read_tx += p2 - p1;
@@ -400,6 +411,7 @@ impl<'a> Parse<'a> for TxInput<'a> {
 
 }
 
+#[derive(PartialEq)]
 pub struct TxOutput<'a> {
     value:     i64,
     pk_script: &'a[u8]

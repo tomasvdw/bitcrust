@@ -3,8 +3,8 @@
 
 ln -s ~/.bitcoin/blocks core-blocks
 
-#BITCRUST_STORE=data-bench \
-#    cargo test --release load_bench_init -- --ignored --nocapture
+BITCRUST_STORE=data-bench \
+    cargo test --release load_bench_init -- --ignored --nocapture
 
 BITCRUST_NOCLEAR=1 BITCRUST_STORE=data-bench \
     cargo test --release prune_tx_index -- --ignored --nocapture

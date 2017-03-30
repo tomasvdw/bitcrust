@@ -40,7 +40,7 @@ fn prune_to_new_index() {
         }
 
         // we parse it only for the output_count
-        let tx = Transaction::parse(&mut Buffer::new(tx_raw)).unwrap();
+        let tx = Transaction::parse(&mut Buffer::new(tx_raw.as_slice())).unwrap();
 
         let input_count = tx.txs_out.len() as u32;
 

@@ -25,6 +25,7 @@ use rayon::prelude::*;
 
 use slog;
 
+use store;
 use store::{TxPtr,BlockHeaderPtr};
 use store::flatfileset::FlatFileSet;
 
@@ -220,7 +221,7 @@ impl SpendTree {
     ///
     /// This looks up the corresponding outputs; needs to be called before connect_block
     pub fn revolve_orphan_pointers(&mut self,
-                                   transactions:  &mut FlatFileSet<TxPtr>,
+                                   transactions:  &mut store::Transactions,
                                    tx_index:      &mut HashIndex<TxPtr>,
                                    block:  BlockPtr) {
 
@@ -232,7 +233,7 @@ impl SpendTree {
             if record.is_unmatched_input() {
 
                 let bytes   = transactions.read(last_tx_ptr.unwrap());
-                let mut buf = Buffer::new(bytes);
+                let mut buf = Buffer::new(&bytes);
                 let tx      = Transaction::parse(&mut buf).unwrap();
 
                 let input = &tx.txs_in[input_idx];

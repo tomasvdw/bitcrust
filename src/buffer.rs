@@ -59,6 +59,23 @@ impl<'a> Buffer<'a> {
         }
     }
 
+    /// Reads a compact-size prefixed vector (like Vec::parse), but also returns a
+    /// vector if indices since the start of the buffer
+    pub fn parse_vec_with_indices<T>(&mut self, original: Buffer) -> Result<(Vec<T>,Vec<u32>), EndOfBufferError>
+        where T: Parse<'a> {
+
+        let original_len = original.inner.len() as u32;
+        let count = self.parse_compact_size()?;
+        let mut result:     Vec<T>   = Vec::with_capacity(count);
+        let mut result_idx: Vec<u32> = Vec::with_capacity(count);
+        for _ in 0..count {
+            result_idx.push(original_len - self.inner.len() as u32);
+            result.push(try!(T::parse(self)));
+        }
+        Ok((result, result_idx))
+
+    }
+
     /// Parse a compact size
     /// This can be 1-8 bytes; see bitcoin-spec for details
     pub fn parse_compact_size(&mut self) -> Result<usize, EndOfBufferError> {
@@ -107,6 +124,7 @@ impl<'a, T : Parse<'a>> Parse<'a> for Vec<T> {
         Ok(result)
     }
 }
+
 
 
 
