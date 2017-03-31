@@ -115,6 +115,7 @@ impl Transactions
     pub fn next(&mut self, ptr: TxPtr) -> (Vec<u8>, TxPtr) {
 
         let part2 = self.transactions2.read(ptr);
+        let len = part2.len() as u32;
 
         let part1_ptr = TxPtr::new(
             bytes_to_u32(&part2[0..4]) as i16,
@@ -133,7 +134,7 @@ impl Transactions
         let mut tx: Vec<u8> = part1.into_iter().map(|&x| x).collect();
         tx.extend_from_slice(part2);
 
-        (tx, ptr.offset(part2.len() as u32 + 4))
+        (tx, ptr.offset(len + 4))
     }
 
 
