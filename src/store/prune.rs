@@ -33,7 +33,7 @@ fn prune_to_new_index() {
     let mut count: u64 = 0;
     let mut count_purged: u64 = 0;
     loop {
-        let tx_raw = store.transactions.read(tx_ptr);
+        let (tx_raw, next_ptr) = store.transactions.next(tx_ptr);
 
         if tx_raw.len() == 0 {
             break;
@@ -68,10 +68,10 @@ fn prune_to_new_index() {
 
         count = count + 1;
         if count % 1000 == 0 {
-            println!("Done: {}; purged {} %",count, count_purged as u64 * 100 / count as u64);
+            println!("Done: {}; purged {} %", count, count_purged as u64 * 100 / count as u64);
         }
 
-        tx_ptr = tx_ptr.offset(tx_raw.len() as u32 + 4);
+        tx_ptr = next_ptr;
     }
 
     println!("Done");

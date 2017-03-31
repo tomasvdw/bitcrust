@@ -106,6 +106,13 @@ impl Transactions
 
     /// Reads the full transaction from the given pointer
     pub fn read(&mut self, ptr: TxPtr) -> Vec<u8> {
+        let (tx,_) = self.next(ptr);
+        tx
+    }
+
+    /// Reads the full transaction from the given pointer
+    /// Returns the transaction and a pointer to the next one
+    pub fn next(&mut self, ptr: TxPtr) -> (Vec<u8>, TxPtr) {
 
         let part2 = self.transactions2.read(ptr);
 
@@ -126,7 +133,7 @@ impl Transactions
         let mut tx: Vec<u8> = part1.into_iter().map(|&x| x).collect();
         tx.extend_from_slice(part2);
 
-        tx
+        (tx, ptr.offset(part2.len() as u32 + 4))
     }
 
 
