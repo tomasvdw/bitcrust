@@ -33,11 +33,12 @@ fn prune_to_new_index() {
     let mut count: u64 = 0;
     let mut count_purged: u64 = 0;
     loop {
-        let (tx_raw, next_ptr) = store.transactions.next(tx_ptr);
+        let result = store.transactions.next(tx_ptr);
 
-        if tx_raw.len() == 0 {
+        if result == None {
             break;
         }
+        let (tx_raw, next_ptr) = result.unwrap();
 
         // we parse it only for the output_count
         let tx = Transaction::parse(&mut Buffer::new(tx_raw.as_slice())).unwrap();

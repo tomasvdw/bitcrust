@@ -106,16 +106,19 @@ impl Transactions
 
     /// Reads the full transaction from the given pointer
     pub fn read(&mut self, ptr: TxPtr) -> Vec<u8> {
-        let (tx,_) = self.next(ptr);
+        let (tx,_) = self.next(ptr).unwrap();
         tx
     }
 
     /// Reads the full transaction from the given pointer
     /// Returns the transaction and a pointer to the next one
-    pub fn next(&mut self, ptr: TxPtr) -> (Vec<u8>, TxPtr) {
+    pub fn next(&mut self, ptr: TxPtr) -> Option<(Vec<u8>, TxPtr)> {
 
         let part2 = self.transactions2.read(ptr);
         let len = part2.len() as u32;
+        if len == 0 {
+            return None;
+        }
 
         let part1_ptr = TxPtr::new(
             bytes_to_u32(&part2[0..4]) as i16,
@@ -134,7 +137,7 @@ impl Transactions
         let mut tx: Vec<u8> = part1.into_iter().map(|&x| x).collect();
         tx.extend_from_slice(part2);
 
-        (tx, ptr.offset(len + 4))
+        Some((tx, ptr.offset(len + 4)))
     }
 
 
@@ -155,9 +158,7 @@ impl Transactions
 
         let output_offset_from_part2 = output_offset + 12 + 4 * output_count as usize;
 
-        println!("Finding output; full part2={:?}, offset_pos={},offset={}", part2, output_offset_pos, output_offset);
-
-
+        
         Some(part2[output_offset_from_part2..].into_iter().map(|&x| x).collect())
     }
 }
