@@ -52,25 +52,11 @@ The rule for verification is simple: A spend (purple) record can only be added i
 records, we will find the corresponding transaction before we find the same spend. This ensures both the existence 
 of the referenced transaction, and it being unspend.
     
-Obviously, with hundreds of millions transactions, simply scanning won't do. This is where we 
-take advantage of the fact that these records are filepointers to the [block content](#block-content) fileset, and therefore *roughly* ordered. This allows us to create
-a *loose skip tree*. Similarly to a skip list, each record contains a set of "highway" pointers that skip over records depending on the value searched for:
-   
-![Spend tree example 3](https://cdn.rawgit.com/tomasvdw/bitcrust/master/doc/spend-tree3.svg "Spend-tree example 3")
-      
-As the vast majority of spends refer to recent transactions, such skip tree can reduce the average number of nodes traversed per lookup to  about 100.
-
-Developers with knowledge about B-Trees and hash-tables may start to giggle at such high number of nodes per lookup, but they would be forgetting the major gains, which makes this 
-approach outperform other structures:
-
-* Superior locality of reference. As the majority of lookups is in the end of the tree, the accessed memory usually fits in the CPU cache. 
-This in sheer contrast with the UTXO set which is randomly scattered. 
-* The data structure is append-only, absolving the need for transactional adding and removal of UTXO pointers. Adding to the tree 
-is done concurrently using CAS-semantics.
-* The tree structure is maintained on disk. This absolves the need for reorgs and for 
-writing undo-information. A reorg in bitcrust is simply the pointing to a different tip.
-* Parallel block validation. As there is no "main chain" at the storage level, concurrent blocks can
-be verified in parallel.
+Obviously, with hundreds of millions transactions, simply scanning won't do. 
+This is where the spent-index comes in to play. This is a very compact bit-index of spends that
+lags behind the tips and serves as a broom wagon. When scanning the spend-tree reaches the broom-wagon,
+the order can be verifies with two simple lookups.
+ 
 
 ## Concurrent validation
 
