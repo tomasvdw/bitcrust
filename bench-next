@@ -12,7 +12,8 @@ then
 
     # We link the transactions to save space
     cd data-bench2
-    ln -s ../data-bench/transactions
+    ln -s ../data-bench/transactions1
+    ln -s ../data-bench/transactions2
     cd ..
 
 fi
