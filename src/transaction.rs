@@ -7,10 +7,14 @@ use std::time::{Instant,Duration};
 
 use itertools::Itertools;
 
+use rayon::prelude::*;
+
 use buffer::*;
 use hash::*;
 use script::context;
 use ffi;
+
+use merkle_tree;
 
 use store;
 use store::TxPtr;
@@ -130,6 +134,115 @@ impl ::std::fmt::Debug for TransactionStats {
             disp(self.read_tx), disp(self.read_tx_idx),
             disp(self.script), disp(self.backtracking))
     }
+
+}
+
+
+/// This is the same procedure as add_block::verify_and_store_transactions,
+/// but trying to split the different steps/ WIP
+/// Returns the records for the spent-tree and the merkle_root
+#[allow(dead_code)]
+#[allow(unused_variables)]
+fn verify_and_store_block_transactions(store: &mut store::Store, txs: &Vec<Transaction>) -> Result<(Hash32Buf, Vec<Record>), TransactionError> {
+
+
+    // hash in parallel:
+    let hashes: Vec<_> = txs.par_iter().map(|tx|
+        Hash32Buf::double_sha256(tx.to_raw())
+    ).collect();
+
+
+    // store sequentially
+    let ptrs: Result<Vec<_>, TransactionError> = txs.iter().map(|tx| {
+
+        tx.verify_syntax()?;
+        Ok(store.transactions.write(tx))
+
+    }).collect();
+
+    // pass on errors
+    let ptrs: Vec<TxPtr> = ptrs?;
+
+    if store.initial_sync {
+
+        // store in index
+        for (hash,ptr) in hashes.iter().zip(ptrs.iter()) {
+            let _ = store.tx_index.set(hash.as_ref(), *ptr, &[], true);
+        }
+
+        // generate records
+        let records: Vec<_> = txs.iter().zip(ptrs.iter()).map(|(tx,ptr)| {
+
+            vec![Record::new_transaction(*ptr)]
+                .into_iter()
+                .chain(tx.get_output_records(&mut store.tx_index))
+
+        }).flat_map(|x| x).collect();
+
+        let calculated_merkle_root = merkle_tree::get_merkle_root(hashes);
+
+        return Ok((calculated_merkle_root, records));
+
+    }
+
+    // Gather the outputs being spent;
+    // The type is bit long here:
+    // A Vec over for all transactions,
+    // a Vec over for all inputs,
+    // an Option with an output
+    /*
+    let outputs: Vec<Vec<Option<Vec<u8>>>> =
+
+        txs.map(|tx| {
+
+            tx.txs_in.iter().enumerate().map(|(index,input)| {
+                let output = store.tx_index.get_or_set(input.prev_tx_out,
+                                                 tx_ptr.to_input(index as u16 ));
+
+                output.map(|out|
+                    tx_store.read_output(out, input.prev_tx_out_idx).ok_or(TransactionError::OutputIndexNotFound)?;
+
+
+            })
+            .collect()
+        });
+*/
+
+
+        /*
+            // We must handle the re
+            // CAS Loop; we iterate until all reverse verifications are handled
+            loop {
+
+                let output = tx_index.get_or_set(input.prev_tx_out,
+                                                 tx_ptr.to_input(index as u16 ));
+
+                if !initial_sync {
+
+                    // verify scripts in parallel
+                    let _: BlockResult<Vec<()>> = block.txs.par_iter().map(|tx| {
+
+                        self.verify_input_scripts(tx_index, tx_store, ptr, &mut stats)
+
+                    }).collect();
+
+                }
+
+                if initial_sync {
+
+                    assert!(tx_index.set(hash, ptr, &[], true));
+
+                    return Ok(TransactionOk::VerifiedAndStored {ptr: ptr, stats: stats })
+
+                }
+
+            }
+        */
+
+
+    let calculated_merkle_root = merkle_tree::get_merkle_root(hashes);
+
+    Ok((calculated_merkle_root, vec![]))
 
 }
 
@@ -278,10 +391,7 @@ impl<'a> Transaction<'a> {
         let p1 = Instant::now();
         stats.store_tx += p1 - p0;
 
-
-        if !self.is_coinbase() {
-            self.verify_input_scripts(tx_index, tx_store, ptr, &mut stats)?;
-        }
+        self.verify_input_scripts(tx_index, tx_store, ptr, &mut stats)?;
 
         let mut existing_ptrs = vec![];
 
@@ -335,6 +445,9 @@ impl<'a> Transaction<'a> {
                                 tx_ptr:   TxPtr,
                                 stats:    &mut TransactionStats) -> TransactionResult<()> {
 
+        if self.is_coinbase() {
+            return Ok(())
+        }
 
         for (index, input) in self.txs_in.iter().enumerate() {
 

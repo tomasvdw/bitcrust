@@ -104,7 +104,7 @@ fn is_genesis_block(hash: Hash32) -> bool {
 // It can be that another block C is also waiting for B; this will trigger their connection (B,C) too
 // and maybe (C,D)... etcetera
 //
-// This would be much cleaner to do recursively, but this can exhaust the stack , we use a loop with
+// This would be much cleaner to do recursively, but this can exhaust the stack, we use a loop with
 // a to_do for connections.
 fn connect_block(
     store:           &mut Store,
@@ -122,6 +122,8 @@ fn connect_block(
 
     // we lay connections between the end of one block and the start of this_block
     // previous_block is None only for genesis
+
+    // A to_do item
     #[derive(Debug)]
     struct Connection {
         block:         BlockPtr,
@@ -135,7 +137,7 @@ fn connect_block(
     }
 
     // The to_do list contains blocks that are connected to their previous but not yet added to the
-    // block-index.
+    // block-index. Start with the one we just connected;
     let mut todo = vec![Connection {
         block:         this_block,
         block_hash:    this_block_hash.as_buf(),
@@ -164,7 +166,7 @@ fn connect_block(
             continue;
         }
 
-        // we'll try this on the next iteration
+        // we'll try this one again the next iteration
         todo.push(Connection {
             block: conn.block,
             block_hash: conn.block_hash,
@@ -218,25 +220,6 @@ fn block_exists(store: & mut Store, block_hash: Hash32) -> bool {
 
 }
 
-/// This is the same procedure as below, but trying to split the different steps/ WIP
-#[allow(dead_code)]
-#[allow(unused_variables)]
-fn verify_and_store_transactions2(store: &mut Store, block: &Block) -> BlockResult<Vec<Record>> {
-
-    // hash in parallel:
-    let hashes: Vec<_> = block.txs.par_iter().map(|tx|
-        Hash32Buf::double_sha256(tx.to_raw())
-    ).collect();
-
-    // store sequentially
-    let ptrs: Vec<_> = block.txs.iter().map(|tx| {
-
-        tx.verify_syntax().unwrap();
-        store.transactions.write(tx)
-    }).collect();
-
-    Ok(vec![])
-}
 
 /// Verifies and stores the transactions in the block.
 /// This does not yet check the order
