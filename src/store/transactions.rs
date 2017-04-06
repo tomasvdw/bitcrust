@@ -6,7 +6,6 @@
 //! This is a bit messy for now as we're not using typed access to these store
 //! as they are still WIP
 
-use std::mem;
 
 use buffer::*;
 use config;
@@ -14,7 +13,6 @@ use store::flatfileset::FlatFileSet;
 use store::TxPtr;
 
 use transaction::Transaction;
-use transaction::TransactionError;
 use store::flatfileset::FlatFilePtr;
 
 const MB:                 u64 = 1024 * 1024;
@@ -183,11 +181,7 @@ fn u32_to_bytes(x: u32) -> Vec<u8> {
 mod tests {
 
     use super::*;
-    use buffer::*;
-    use buffer::ToRaw;
 
-    #[macro_use]
-    use builders::*;
 
     #[test]
     fn test_read_write() {

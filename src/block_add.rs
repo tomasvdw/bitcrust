@@ -233,7 +233,7 @@ fn verify_and_store_transactions(store: &mut Store, block: &Block) -> BlockResul
 
     // We use chunked parallelization because otherwise we need to clone() the stores on each
     // iteration
-    // The main procedure here is to call verify_and_store for each transaction
+    // The main procedure here is to hash and call verify_and_store for each transaction
     let chunks: Vec<_> =
         block.txs.par_chunks(PARALLEL_HASHING_THRESHOLD).map(|chunk_tx| {
 

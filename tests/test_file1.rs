@@ -67,7 +67,7 @@ fn load_file_large() {
 
     store.initial_sync = true;
     for fileno in 0..999 {
-        let name = format!("./data/blk{:05}.dat", fileno);
+        let name = format!("./core-blocks/blk{:05}.dat", fileno);
         println!("Processing {}", name);
         let f = File::open(name).unwrap();
         let mut rdr = BufReader::new(f);

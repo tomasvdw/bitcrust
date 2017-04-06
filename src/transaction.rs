@@ -7,21 +7,17 @@ use std::time::{Instant,Duration};
 
 use itertools::Itertools;
 
-use rayon::prelude::*;
 
 use buffer::*;
 use hash::*;
 use script::context;
 use ffi;
 
-use merkle_tree;
-
 use store;
 use store::TxPtr;
 use store::Record;
 use store::HashIndexGuard;
 use store::TxIndex;
-use store::FlatFileSet;
 
 const MAX_TRANSACTION_SIZE: usize = 1_000_000;
 
@@ -79,172 +75,6 @@ pub struct Transaction<'a> {
 
 }
 
-#[derive(Default)]
-pub struct TransactionStats {
-    pub merkle:       Duration,
-    pub cloning:      Duration,
-    pub hashing:      Duration,
-    pub store_tx:     Duration,
-    pub store_tx_idx: Duration,
-    pub backtracking: Duration,
-    pub read_tx:      Duration,
-    pub read_tx_idx:  Duration,
-    pub script:       Duration
-}
-
-// Make stats additive (this could use a derive)
-impl ::std::ops::Add for TransactionStats {
-    type Output = TransactionStats;
-
-    fn add(self, other: TransactionStats) -> TransactionStats {
-
-        TransactionStats {
-            merkle:  self.merkle + other.merkle,
-            cloning: self.cloning + other.cloning,
-            hashing: self.hashing + other.hashing,
-            store_tx: self.store_tx + other.store_tx,
-            store_tx_idx: self.store_tx_idx + other.store_tx_idx,
-            backtracking: self.backtracking + other.backtracking,
-            read_tx: self.read_tx + other.read_tx,
-            read_tx_idx: self.read_tx_idx + other.read_tx_idx,
-            script: self.script + other.script,
-        }
-    }
-}
-impl ::std::iter::Sum for TransactionStats {
-    fn sum<I>(iter: I) -> TransactionStats
-        where I: Iterator<Item=TransactionStats> {
-
-        let mut r = Default::default();
-        for i in iter {
-            r = r + i;
-        }
-        r
-    }
-}
-
-impl ::std::fmt::Debug for TransactionStats {
-    fn fmt(&self, fmt: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
-
-        fn disp(d: Duration) -> u64 { d.as_secs() * 1_000_000 + d.subsec_nanos() as u64 / 1_000};
-
-        write!(fmt, "m,c,h: {},{},{} | wr:{},{} | rd:{},{} | s:{}, bt:{}",
-            disp(self.merkle), disp(self.cloning), disp(self.hashing),
-            disp(self.store_tx), disp(self.store_tx_idx),
-            disp(self.read_tx), disp(self.read_tx_idx),
-            disp(self.script), disp(self.backtracking))
-    }
-
-}
-
-
-/// This is the same procedure as add_block::verify_and_store_transactions,
-/// but trying to split the different steps/ WIP
-/// Returns the records for the spent-tree and the merkle_root
-#[allow(dead_code)]
-#[allow(unused_variables)]
-fn verify_and_store_block_transactions(store: &mut store::Store, txs: &Vec<Transaction>) -> Result<(Hash32Buf, Vec<Record>), TransactionError> {
-
-
-    // hash in parallel:
-    let hashes: Vec<_> = txs.par_iter().map(|tx|
-        Hash32Buf::double_sha256(tx.to_raw())
-    ).collect();
-
-
-    // store sequentially
-    let ptrs: Result<Vec<_>, TransactionError> = txs.iter().map(|tx| {
-
-        tx.verify_syntax()?;
-        Ok(store.transactions.write(tx))
-
-    }).collect();
-
-    // pass on errors
-    let ptrs: Vec<TxPtr> = ptrs?;
-
-    if store.initial_sync {
-
-        // store in index
-        for (hash,ptr) in hashes.iter().zip(ptrs.iter()) {
-            let _ = store.tx_index.set(hash.as_ref(), *ptr, &[], true);
-        }
-
-        // generate records
-        let records: Vec<_> = txs.iter().zip(ptrs.iter()).map(|(tx,ptr)| {
-
-            vec![Record::new_transaction(*ptr)]
-                .into_iter()
-                .chain(tx.get_output_records(&mut store.tx_index))
-
-        }).flat_map(|x| x).collect();
-
-        let calculated_merkle_root = merkle_tree::get_merkle_root(hashes);
-
-        return Ok((calculated_merkle_root, records));
-
-    }
-
-    // Gather the outputs being spent;
-    // The type is bit long here:
-    // A Vec over for all transactions,
-    // a Vec over for all inputs,
-    // an Option with an output
-    /*
-    let outputs: Vec<Vec<Option<Vec<u8>>>> =
-
-        txs.map(|tx| {
-
-            tx.txs_in.iter().enumerate().map(|(index,input)| {
-                let output = store.tx_index.get_or_set(input.prev_tx_out,
-                                                 tx_ptr.to_input(index as u16 ));
-
-                output.map(|out|
-                    tx_store.read_output(out, input.prev_tx_out_idx).ok_or(TransactionError::OutputIndexNotFound)?;
-
-
-            })
-            .collect()
-        });
-*/
-
-
-        /*
-            // We must handle the re
-            // CAS Loop; we iterate until all reverse verifications are handled
-            loop {
-
-                let output = tx_index.get_or_set(input.prev_tx_out,
-                                                 tx_ptr.to_input(index as u16 ));
-
-                if !initial_sync {
-
-                    // verify scripts in parallel
-                    let _: BlockResult<Vec<()>> = block.txs.par_iter().map(|tx| {
-
-                        self.verify_input_scripts(tx_index, tx_store, ptr, &mut stats)
-
-                    }).collect();
-
-                }
-
-                if initial_sync {
-
-                    assert!(tx_index.set(hash, ptr, &[], true));
-
-                    return Ok(TransactionOk::VerifiedAndStored {ptr: ptr, stats: stats })
-
-                }
-
-            }
-        */
-
-
-    let calculated_merkle_root = merkle_tree::get_merkle_root(hashes);
-
-    Ok((calculated_merkle_root, vec![]))
-
-}
 
 
 impl<'a> Parse<'a> for Transaction<'a> {
@@ -566,7 +396,67 @@ impl<'a> fmt::Debug for TxOutput<'a> {
         write!(fmt, "{:?}", ctx)
 
     }
+
 }
+
+#[derive(Default)]
+pub struct TransactionStats {
+    pub merkle:       Duration,
+    pub cloning:      Duration,
+    pub hashing:      Duration,
+    pub store_tx:     Duration,
+    pub store_tx_idx: Duration,
+    pub backtracking: Duration,
+    pub read_tx:      Duration,
+    pub read_tx_idx:  Duration,
+    pub script:       Duration
+}
+
+// Make stats additive (this could use a derive)
+impl ::std::ops::Add for TransactionStats {
+    type Output = TransactionStats;
+
+    fn add(self, other: TransactionStats) -> TransactionStats {
+
+        TransactionStats {
+            merkle:  self.merkle + other.merkle,
+            cloning: self.cloning + other.cloning,
+            hashing: self.hashing + other.hashing,
+            store_tx: self.store_tx + other.store_tx,
+            store_tx_idx: self.store_tx_idx + other.store_tx_idx,
+            backtracking: self.backtracking + other.backtracking,
+            read_tx: self.read_tx + other.read_tx,
+            read_tx_idx: self.read_tx_idx + other.read_tx_idx,
+            script: self.script + other.script,
+        }
+    }
+}
+impl ::std::iter::Sum for TransactionStats {
+    fn sum<I>(iter: I) -> TransactionStats
+        where I: Iterator<Item=TransactionStats> {
+
+        let mut r = Default::default();
+        for i in iter {
+            r = r + i;
+        }
+        r
+    }
+}
+
+impl ::std::fmt::Debug for TransactionStats {
+    fn fmt(&self, fmt: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+
+        fn disp(d: Duration) -> u64 { d.as_secs() * 1_000_000 + d.subsec_nanos() as u64 / 1_000};
+
+        write!(fmt, "m,c,h: {},{},{} | wr:{},{} | rd:{},{} | s:{}, bt:{}",
+               disp(self.merkle), disp(self.cloning), disp(self.hashing),
+               disp(self.store_tx), disp(self.store_tx_idx),
+               disp(self.read_tx), disp(self.read_tx_idx),
+               disp(self.script), disp(self.backtracking))
+    }
+
+}
+
 
 
 /// tx-tests are external
