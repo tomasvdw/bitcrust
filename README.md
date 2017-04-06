@@ -9,6 +9,8 @@
 provides a high performance, _lock-free_ concurrent R/W access, and 
 fully parallel block verification.   
 
+More information is available at [bitcrust.org](https://bitcrust.org)
+
 
 ## Table of Contents
 
