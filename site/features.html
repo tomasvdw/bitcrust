@@ -1,0 +1,94 @@
+<!--
+           *
+       *   *   *
+         *   *
+     *  *  *  *  *
+         *   *
+       *   *   *
+           *
+
+   Atelier lasociale
+-->
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><html>
+<head>
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+<!-- social & description -->
+	<!-- <meta name="description"         content="BITCRUST">
+	<meta property="og:title"        content="BITCRUST">
+	<meta property="og:description"  content="BITCRUST">
+	<meta property="og:url"          content="http://bitcrust.org">
+	<meta property="og:site_name"    content="BITCRUST">
+	<meta property="og:type"         content="website">
+	<meta name="twitter:card"        content="summary_large_image">
+	<meta name="twitter:url"         content="http://bitscrust.org">
+	<meta name="twitter:title"       content="BITCRUST">
+	<meta property="og:image"        content="http://todo" />
+	<meta name="twitter:image"       content="http://todo" /> -->
+<!-- end social & description -->
+
+	<link rel="stylesheet" type="text/css" href="css/main.css"/>
+	<link rel="icon"
+	      type="image/png"
+	      href="assets/bitcrust_landing_logo.png" />
+
+	<title>BITCRUST</title>
+</head>
+<body class="features"> <!-- SFG: switch body background color re setting page -->
+
+<header class='main_h rest'>		<div class="row header">
+				<a class="logo" href="/"><img src="assets/bitcrust_top_logo_notype.png"></a>
+				<div class="mobile-toggle">
+						<span></span>
+						<span></span>
+						<span></span>
+				</div>
+
+				<nav>
+					<ul class="">
+					<li class='current'><a href='/features'>features</a></li><li class=''><a href='/results'>test results</a></li><li class=''><a href='/faq'>FAQ</a></li><li class=''><a href='/contact'>contact</a></li>					</ul>
+				</nav>
+		</div> <!-- / row -->
+</header>
+
+	<div class="wrapper">
+		<div class="articles">
+			<div class="feature">
+	<!-- <div class="row content"> -->
+
+<!-- SFG: features page -->
+
+<!-- <h1>features</h1> -->
+<h2>Modular</h2>
+<p>Bitcrust is build using modular approach that makes it easy to write different components for different use cases.
+The wallet, the miner, the full and SPV node all use a the same storage back-end but can use different network behaviour optimized for their case.</p>
+<h2>Parallel verification</h2>
+<p>Blocks can be verified in parallel. If block processing takes a long time because it is made excessively heavy, for example due to quadratic hashing, Bitcrust can accept and verify an incoming lighter block in parallel and use that instead. This way the cost of creating heavy blocks is primarily imposed on the sender instead of the receiver.
+<h2>Minimized peak load</h2>
+<p>The storage engine is optimized from ground up for xthin/compact-block
+synchronization. This ensures that when the majority of transactions are
+already synced, incoming blocks can be verified at minimal resources using
+order-validation only. </p>
+<h2>Reverse syncing</h2>
+<p>Due to the low cost of order validation, block connections are extremely fast. This makes it possible to reverse the synchronization of the chain without much additional overhead. That way the Node could become partially availble very quickly.</p>
+<h2>Efficient SPV node</h2>
+<p>The storage engine is written to handle both full node and SPV node use cases. SPV nodes can use the Merkle tree to run a node with very low resource requirements with only slightly reduced security.</p>
+<h2>Extensible indices</h2>
+<p>By using a concurrently accessable data store, Bitcrust allows external index engines to be added without much overhead. One such might be a map-reduce engine tuned to temporal blockchain data. This would allow for efficient custom queries for blockchain analysis and monitoring.</p>
+</div>
+</div>
+<!-- SFG: footer -->
+
+    </div> <!-- SFG: end of main -->
+
+	<script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+    <script src="script/main.js"/></script>
+
+
+  </body>
+</html>

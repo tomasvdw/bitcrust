@@ -1,0 +1,93 @@
+<!--
+           *
+       *   *   *
+         *   *
+     *  *  *  *  *
+         *   *
+       *   *   *
+           *
+
+   Atelier lasociale
+-->
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><html>
+<head>
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+<!-- social & description -->
+	<!-- <meta name="description"         content="BITCRUST">
+	<meta property="og:title"        content="BITCRUST">
+	<meta property="og:description"  content="BITCRUST">
+	<meta property="og:url"          content="http://bitcrust.org">
+	<meta property="og:site_name"    content="BITCRUST">
+	<meta property="og:type"         content="website">
+	<meta name="twitter:card"        content="summary_large_image">
+	<meta name="twitter:url"         content="http://bitscrust.org">
+	<meta name="twitter:title"       content="BITCRUST">
+	<meta property="og:image"        content="http://todo" />
+	<meta name="twitter:image"       content="http://todo" /> -->
+<!-- end social & description -->
+
+	<link rel="stylesheet" type="text/css" href="css/main.css"/>
+	<link rel="icon"
+	      type="image/png"
+	      href="assets/bitcrust_landing_logo.png" />
+
+	<title>BITCRUST</title>
+</head>
+<body class="faq"> <!-- SFG: switch body background color re setting page -->
+
+<header class='main_h rest'>		<div class="row header">
+				<a class="logo" href="/"><img src="assets/bitcrust_top_logo_notype.png"></a>
+				<div class="mobile-toggle">
+						<span></span>
+						<span></span>
+						<span></span>
+				</div>
+
+				<nav>
+					<ul class="">
+					<li class=''><a href='/features'>features</a></li><li class=''><a href='/results'>test results</a></li><li class='current'><a href='/faq'>FAQ</a></li><li class=''><a href='/contact'>contact</a></li>					</ul>
+				</nav>
+		</div> <!-- / row -->
+</header>
+
+	<div class="wrapper">
+		<div class="articles">
+	<!-- <div class="row content"> -->
+<!-- SFG: faq page -->
+
+<!-- <h1>FAQ</h1> -->
+<h2>What is bitcrust?</h2>
+<p>Bitcrust is a full bitcoin software suite in development. It will feature a full node, a mining server, an SPV node, and various other components.</p>
+<p>Current focus of development has been on a high performance storage and verification engine that will act as a base components for the different products. The next focus will be on developing a compliant full node.</p>
+<h2>Is Bitcrust compatible with the bitcoin network?</h2>
+<p>Bitcrust is developed to be fully compatible with the bitcoin network. </p>
+<p>When different implementations or versions mine on the bitcoin network, there is a risk of accidental incompatibilities causing a split in the chain. </p>
+<p>With this in mind, the Core team has done a great job in separating the consensus rules and distribute them as a library (libbitcoinconsensus). Bitcrust uses this library to mitigate the risks.</p>
+<p>In addition, when a mining software will be developed, we will ensure that the software detects splits caused by accidental difference, and acts in a manner that does not hurt the network.</p>
+<h2>Does Bitcrust support Unlimited/SegWit?</h2>
+<p>Currently, Bitcrust does not support anything as it is just a bare storage engine.</p>
+<p>It will be developed with the <em>current rules</em> of the network. This includes a fixed 1mb limit, and excludes SegWit. This can be adapted when needed.</p>
+<h2>How fast is bitcrust?</h2>
+<p>Bitcrust is focussed on fast <em>order verification</em>. This is the only verification that is needed when a block comes in and all the transactions
+are already in the mempool. </p>
+<p>Although a definite comparison can not be made as Bitcrust is still in development, the storage layer seems to be much faster then Core on all hardware in order verification. In full block verification, when no transactions are pre-synchronized, Bitcrust is also faster then Core on high-end hardware, and approximately the same on low end hardware.</p>
+<h2>When will this be available?</h2>
+<p>Bitcrust still has long road ahead and no planned release date yet. </p>
+<p>For further development, funding is needed. Please <a href="/contact">contact</a> me if you are interested.</p>
+</div>
+<!-- SFG: footer -->
+
+    </div> <!-- SFG: end of main -->
+
+	<script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+    <script src="script/main.js"/></script>
+
+
+  </body>
+</html>
