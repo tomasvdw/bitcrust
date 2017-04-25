@@ -1,0 +1,6 @@
+[package]
+name = "bitcrust-monitor"
+version = "0.1.0"
+authors = ["Tomas van der Wansem <tomas@tomasvdw.nl>"]
+
+[dependencies]

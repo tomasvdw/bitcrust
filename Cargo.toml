@@ -36,3 +36,7 @@ opt-level = 3
 
 [features]
 default = []
+
+[workspace]
+members = [ "net", "monitor"]
+
