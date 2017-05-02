@@ -4,3 +4,6 @@ version = "0.1.0"
 authors = ["Tomas van der Wansem <tomas@tomasvdw.nl>"]
 
 [dependencies]
+byteorder = "1"
+nom = "^2.2"
+sha2 = "0.5"
