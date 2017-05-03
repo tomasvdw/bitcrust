@@ -5,8 +5,222 @@ use nom::{le_u16, le_u32, le_u64, le_i32, le_i64, be_u16, be_u32, IResult};
 use sha2::{Sha256, Digest};
 
 use message::Message;
-use message::VersionMessage;
+use message::{AddrMessage, VersionMessage};
 use net_addr::NetAddr;
+
+fn to_hex_string(bytes: &[u8]) -> String {
+    let strs: Vec<String> = bytes.iter()
+        .map(|b| format!("{:02X}", b))
+        .collect();
+    strs.join(" ")
+}
+
+
+#[derive(Debug)]
+struct RawMessage<'a> {
+    magic: u32,
+    message_type: String,
+    len: u32,
+    checksum: &'a [u8],
+    body: &'a [u8],
+}
+
+impl<'a> RawMessage<'a> {
+    fn valid(&self) -> bool {
+        let mut check: [u8; 4] = [0; 4];
+        // create a Sha256 object
+        let mut hasher = Sha256::default();
+        hasher.input(&self.body);
+        let intermediate = hasher.result();
+        let mut hasher = Sha256::default();
+        hasher.input(&intermediate);
+        let output = hasher.result();
+        // write the checksum
+        for i in 0..4 {
+            // let _ = packet.write_u8(output[i]);
+            check[i] = output[i];
+        }
+        check == self.checksum
+    }
+}
+
+
+
+named!(raw_message<RawMessage>,
+  do_parse!(
+    magic: le_u32 >>
+    message_type: dbg_dmp!(take_str!(12)) >>
+    payload_len: dbg_dmp!(le_u32) >>
+    checksum: take!(4) >>
+    body: dbg_dmp!(take!(payload_len)) >>
+    (
+      RawMessage {
+        magic: magic,
+        message_type: message_type.trim_matches(0x00 as char).into(),
+        len: payload_len,
+        checksum: checksum,
+        body: body
+      }
+    )
+));
+
+pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
+    let raw_message_result = raw_message(&i);
+    match raw_message_result {
+        IResult::Done(i, raw_message) => {
+            if !raw_message.valid() {
+                return IResult::Error(nom::ErrorKind::Custom(0));
+            }
+            match &raw_message.message_type[..] {
+                "version" => version(raw_message.body),
+                "verack" => IResult::Done(i, Message::Verack),
+                "sendheaders" => IResult::Done(i, Message::SendHeaders),
+                _ => {
+                    println!("Raw message: {:?}\n\n{:}", raw_message.message_type, to_hex_string(raw_message.body));
+                    IResult::Done(i,
+                                  Message::Unparsed(raw_message.message_type,
+                                                    raw_message.body.into()))
+                }
+            }
+        }
+        IResult::Incomplete(len) => {
+            println!("Incomplete::Raw: {:?}", raw_message_result);
+            IResult::Incomplete(len)
+        }
+        IResult::Error(e) => IResult::Error(e),
+    }
+}
+
+named!(version <Message>, 
+  do_parse!(
+    version: le_i32 >>
+    services: le_u64 >>
+    timestamp: le_i64 >>
+    addr_recv: version_net_addr >>
+    addr_send: version_net_addr >>
+    nonce: le_u64 >>
+    user_agent: variable_str >>
+    start: le_i32 >>
+    relay: cond!(version >= 70001, take!(1)) >>
+    (
+       Message::Version(VersionMessage {
+        version: version,
+        services: services,
+        timestamp: timestamp,
+        addr_recv: addr_recv,
+        addr_send: addr_send,
+        nonce: nonce,
+        user_agent: user_agent,
+        start_height: start,
+        relay: relay.is_some() && relay.unwrap() == [1],
+      })
+    )
+));
+
+
+named!(addr<Message>, 
+  do_parse!(
+    count: dbg_dmp!(compact_size) >>
+    // list: count!(addr_part, count as usize) >>
+    list: many0!(addr_part) >>
+    (Message::Addr(list))
+));
+
+
+named!(addr_part<(u32, NetAddr)>,
+  dbg_dmp!(tuple!(
+    le_u32,
+    dbg_dmp!(net_addr)
+  ))
+);
+
+named!(variable_str <String>, 
+do_parse!(
+  len: compact_size >>
+  data: take!(len) >>
+  (String::from_utf8_lossy(data).into())
+));
+
+
+named!(compact_size<u64>,
+    do_parse!(
+      res: alt!(i9 | i5 | i3 | i) >>
+      (res as u64)
+    )
+);
+
+named!(i<u64>,
+  do_parse!(
+    i: take!(1) >>
+    (i[0] as u64)
+));
+
+named!(i3<u64>,
+  do_parse!(
+    tag!([0xfd]) >>
+    len: le_u16 >>
+    (len as u64)
+  )
+);
+
+named!(i5<u64>,
+  do_parse!(
+    tag!([0xfe]) >>
+    len: le_u32 >>
+    (len as u64)
+  )
+);
+
+named!(i9<u64>,
+  do_parse!(
+    tag!([0xff]) >>
+    len: le_u64 >>
+    (len)
+  )
+);
+
+named!(ipv6< Ipv6Addr >,
+  do_parse!(
+    a: be_u16 >>
+    b: be_u16 >>
+    c: be_u16 >>
+    d: be_u16 >>
+    e: be_u16 >>
+    f: be_u16 >>
+    g: be_u16 >>
+    h: be_u16 >>
+    (Ipv6Addr::new(a, b, c, d, e, f, g, h))
+));
+
+named!(pub version_net_addr< NetAddr >,
+  do_parse!(
+    services: le_u64 >>
+    ip: ipv6 >>
+    port: be_u16 >>
+
+    (NetAddr {
+      time: None,
+      services: services,
+      ip: ip,
+      port: port
+    })
+));
+
+named!(pub net_addr< NetAddr >,
+  do_parse!(
+    time: le_u32 >>
+    services: le_u64 >>
+    ip: ipv6 >>
+    port: be_u16 >>
+
+    (NetAddr {
+      time: Some(time),
+      services: services,
+      ip: ip,
+      port: port
+    })
+));
+
 
 #[cfg(test)]
 mod parse_tests {
@@ -129,204 +343,13 @@ mod parse_tests {
         let output = message(&input);
         println!("Output: {:?}", output);
     }
-}
 
-// named!(header <&str>,
-//   do_parse!(
-//     magic: le_u32 >>
-//     message_type: take_str!(12) >>
-//     payload_len: le_u32 >>
-//     checksum: le_u32 >>
-//     (message_type.trim_matches(0x00 as char).into())
-// ));
+    #[test]
+    fn it_parses_an_addr() {
+        let input = [];
 
-// named!(pub message< Message >,
-//   do_parse!(
-//     message: switch!(message_type,
-//       "version" => version,
-//       "verack" => verack,
-//       // _ => unknown,
-//     ) >>
-//     (message)
-// ));
-
-
-// fn verack(i: &[u8]) -> IResult<&[u8], Message::Verack> {
-//     IResult::Done(i, Message::Verack)
-// }
-
-struct RawMessage<'a> {
-    magic: u32,
-    message_type: String,
-    len: u32,
-    checksum: &'a [u8],
-    body: &'a [u8],
-}
-
-impl<'a> RawMessage<'a> {
-    fn valid(&self) -> bool {
-        let mut check: [u8; 4] = [0; 4];
-        // create a Sha256 object
-        let mut hasher = Sha256::default();
-        hasher.input(&self.body);
-        let intermediate = hasher.result();
-        let mut hasher = Sha256::default();
-        hasher.input(&intermediate);
-        let output = hasher.result();
-        // write the checksum
-        for i in 0..4 {
-            // let _ = packet.write_u8(output[i]);
-            check[i] = output[i];
-        }
-        check == self.checksum
+        let parsed = addr(&input);
+        println!("parsed: {:?}", parsed);
+        println!("Parsed addr: {:?}", parsed.unwrap());
     }
 }
-
-
-named!(raw_message<RawMessage>,
-  do_parse!(
-    magic: le_u32 >>
-    message_type: take_str!(12) >>
-    payload_len: le_u32 >>
-    checksum: take!(4) >>
-    body: take!(payload_len) >>
-    (
-      RawMessage {
-        magic: magic,
-        message_type: message_type.trim_matches(0x00 as char).into(),
-        len: payload_len,
-        checksum: checksum,
-        body: body
-      }
-    )
-));
-
-pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
-    let raw_message_result = raw_message(&i);
-    match raw_message_result {
-        IResult::Done(i, raw_message) => {
-            if !raw_message.valid() {
-                return IResult::Error(nom::ErrorKind::Custom(0));
-            }
-            match &raw_message.message_type[..] {
-                "version" => version(raw_message.body),
-                "verack" => IResult::Done(i, Message::Verack),
-                _ => IResult::Done(i, Message::Unparsed(raw_message.body.into())),
-            }
-        }
-        IResult::Incomplete(len) => IResult::Incomplete(len),
-        IResult::Error(e) => IResult::Error(e),
-    }
-}
-
-named!(version <Message>, 
-  do_parse!(
-    version: le_i32 >>
-    services: le_u64 >>
-    timestamp: le_i64 >>
-    addr_recv: version_net_addr >>
-    addr_send: version_net_addr >>
-    nonce: le_u64 >>
-    user_agent: variable_str >>
-    start: le_i32 >>
-    // relay: opt!(take!(1)) >>
-    (
-       Message::Version(VersionMessage {
-        version: version,
-        services: services,
-        timestamp: timestamp,
-        addr_recv: addr_recv,
-        addr_send: addr_send,
-        nonce: nonce,
-        user_agent: user_agent,
-        start_height: start,
-        relay: false, //relay.is_some() && relay.unwrap() == [1],
-      })
-    )
-));
-
-named!(variable_str <String>, 
-do_parse!(
-  len: compact_size >>
-  data: take!(len) >>
-  (String::from_utf8_lossy(data).into())
-));
-
-named!(compact_size<u64>,
-    do_parse!(
-      res: alt!(i9 | i5 | i3 | i) >>
-      (res as u64)
-    )
-);
-
-named!(i<u64>,
-  do_parse!(
-    i: take!(1) >>
-    (i[0] as u64)
-));
-
-named!(i3<u64>,
-  do_parse!(
-    tag!([0xfd]) >>
-    len: le_u16 >>
-    (len as u64)
-  )
-);
-
-named!(i5<u64>,
-  do_parse!(
-    tag!([0xfe]) >>
-    len: le_u32 >>
-    (len as u64)
-  )
-);
-
-named!(i9<u64>,
-  do_parse!(
-    tag!([0xff]) >>
-    len: le_u64 >>
-    (len)
-  )
-);
-
-named!(ipv6< Ipv6Addr >,
-  do_parse!(
-    a: be_u16 >>
-    b: be_u16 >>
-    c: be_u16 >>
-    d: be_u16 >>
-    e: be_u16 >>
-    f: be_u16 >>
-    g: be_u16 >>
-    h: be_u16 >>
-    (Ipv6Addr::new(a, b, c, d, e, f, g, h))
-));
-
-named!(pub version_net_addr< NetAddr >,
-  do_parse!(
-    services: le_u64 >>
-    ip: ipv6 >>
-    port: be_u16 >>
-
-    (NetAddr {
-      time: None,
-      services: services,
-      ip: ip,
-      port: port
-    })
-));
-
-named!(pub net_addr< NetAddr >,
-  do_parse!(
-    time: le_u32 >>
-    services: le_u64 >>
-    ip: ipv6 >>
-    port: be_u16 >>
-
-    (NetAddr {
-      time: Some(time),
-      services: services,
-      ip: ip,
-      port: port
-    })
-));

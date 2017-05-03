@@ -5,9 +5,12 @@ use nom::IResult;
 use sha2::{Sha256, Digest};
 
 mod version_message;
+mod addr_message;
 
 pub use self::version_message::VersionMessage;
+pub use self::addr_message::AddrMessage;
 
+use net_addr::NetAddr;
 use parser::message;
 
 #[cfg(test)]
@@ -152,7 +155,10 @@ mod tests {
 pub enum Message {
     Version(VersionMessage),
     Verack,
-    Unparsed(Vec<u8>),
+    SendHeaders,
+    GetAddr,
+    Addr(Vec<(u32, NetAddr)>),
+    Unparsed(String, Vec<u8>),
     None,
 }
 
@@ -196,21 +202,14 @@ macro_rules! packet {
 }
 
 impl Message {
-    pub fn try_parse(input: &[u8]) -> Result<Message, Error> {
-        let message = message(input);
-        if let IResult::Done(_, message) = message {
-            return Ok(message);
-        } else {
-            println!("Problem parsing: {:?}", input);
-        }
-        Ok(Message::None)
-    }
-
     pub fn encode(&self) -> Vec<u8> {
         match *self {
             Message::Version(ref message) => packet!("version", message),
             Message::Verack => packet!("verack" => Vec::with_capacity(0)),
-            Message::Unparsed(ref v) => v.clone(),
+            Message::SendHeaders => packet!("sendheaders" => Vec::with_capacity(0)),
+            Message::GetAddr => packet!("getaddr" => Vec::with_capacity(0)),
+            Message::Addr(_) => packet!("addr"=> Vec::with_capacity(0)),
+            Message::Unparsed(_, ref v) => v.clone(),
             Message::None => Vec::with_capacity(0),
         }
     }
