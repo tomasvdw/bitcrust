@@ -148,10 +148,11 @@ mod tests {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Message {
     Version(VersionMessage),
     Verack,
+    Unparsed(Vec<u8>),
     None,
 }
 
@@ -209,6 +210,7 @@ impl Message {
         match *self {
             Message::Version(ref message) => packet!("version", message),
             Message::Verack => packet!("verack" => Vec::with_capacity(0)),
+            Message::Unparsed(ref v) => v.clone(),
             Message::None => Vec::with_capacity(0),
         }
     }

@@ -1,7 +1,8 @@
 use std::net::Ipv6Addr;
 
 use nom;
-use nom::{le_u16, le_u32, le_u64, le_i32, le_i64, be_u16, be_u32};
+use nom::{le_u16, le_u32, le_u64, le_i32, le_i64, be_u16, be_u32, IResult};
+use sha2::{Sha256, Digest};
 
 use message::Message;
 use message::VersionMessage;
@@ -57,7 +58,7 @@ mod parse_tests {
           0xC0, 0x3E, 0x03, 0x00                                                                                                                                      //- Last block sending node has is block #212672
         ];
         println!("Parsing len: {}", input.len());
-        let expected = VersionMessage {
+        let expected = Message::Version(VersionMessage {
             version: 60002,
             services: 1,
             timestamp: 1355854353,
@@ -77,7 +78,7 @@ mod parse_tests {
             user_agent: "/Satoshi:0.7.2/".into(),
             start_height: 212672,
             relay: false,
-        };
+        });
         let actual = version(&input);
         println!("actual: {:?}", actual);
         assert_eq!(expected, actual.unwrap().1);
@@ -130,28 +131,95 @@ mod parse_tests {
     }
 }
 
-named!(pub message< Message >,
+// named!(header <&str>,
+//   do_parse!(
+//     magic: le_u32 >>
+//     message_type: take_str!(12) >>
+//     payload_len: le_u32 >>
+//     checksum: le_u32 >>
+//     (message_type.trim_matches(0x00 as char).into())
+// ));
+
+// named!(pub message< Message >,
+//   do_parse!(
+//     message: switch!(message_type,
+//       "version" => version,
+//       "verack" => verack,
+//       // _ => unknown,
+//     ) >>
+//     (message)
+// ));
+
+
+// fn verack(i: &[u8]) -> IResult<&[u8], Message::Verack> {
+//     IResult::Done(i, Message::Verack)
+// }
+
+struct RawMessage<'a> {
+    magic: u32,
+    message_type: String,
+    len: u32,
+    checksum: &'a [u8],
+    body: &'a [u8],
+}
+
+impl<'a> RawMessage<'a> {
+    fn valid(&self) -> bool {
+        let mut check: [u8; 4] = [0; 4];
+        // create a Sha256 object
+        let mut hasher = Sha256::default();
+        hasher.input(&self.body);
+        let intermediate = hasher.result();
+        let mut hasher = Sha256::default();
+        hasher.input(&intermediate);
+        let output = hasher.result();
+        // write the checksum
+        for i in 0..4 {
+            // let _ = packet.write_u8(output[i]);
+            check[i] = output[i];
+        }
+        check == self.checksum
+    }
+}
+
+
+named!(raw_message<RawMessage>,
   do_parse!(
     magic: le_u32 >>
     message_type: take_str!(12) >>
     payload_len: le_u32 >>
-    checksum: le_u32 >>
-    version_message: cond!(message_type.trim_matches(0x00 as char) == "version", version) >>
-    // mes: alt!(
-    //   version => {|v| Message::Version(v)}
-    // ) >>
-    ({
-      println!("Message type: {:?}", message_type);
-       match message_type.trim_matches(0x00 as char) {
-      "verack" => Message::Verack,
-      "version" => Message::Version(version_message.unwrap()),
-      _ => Message::None
-      // _ => unreachable!()
-    }})
+    checksum: take!(4) >>
+    body: take!(payload_len) >>
+    (
+      RawMessage {
+        magic: magic,
+        message_type: message_type.trim_matches(0x00 as char).into(),
+        len: payload_len,
+        checksum: checksum,
+        body: body
+      }
+    )
 ));
 
+pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
+    let raw_message_result = raw_message(&i);
+    match raw_message_result {
+        IResult::Done(i, raw_message) => {
+            if !raw_message.valid() {
+                return IResult::Error(nom::ErrorKind::Custom(0));
+            }
+            match &raw_message.message_type[..] {
+                "version" => version(raw_message.body),
+                "verack" => IResult::Done(i, Message::Verack),
+                _ => IResult::Done(i, Message::Unparsed(raw_message.body.into())),
+            }
+        }
+        IResult::Incomplete(len) => IResult::Incomplete(len),
+        IResult::Error(e) => IResult::Error(e),
+    }
+}
 
-named!(version <VersionMessage>, 
+named!(version <Message>, 
   do_parse!(
     version: le_i32 >>
     services: le_u64 >>
@@ -163,7 +231,7 @@ named!(version <VersionMessage>,
     start: le_i32 >>
     // relay: opt!(take!(1)) >>
     (
-      VersionMessage {
+       Message::Version(VersionMessage {
         version: version,
         services: services,
         timestamp: timestamp,
@@ -173,7 +241,7 @@ named!(version <VersionMessage>,
         user_agent: user_agent,
         start_height: start,
         relay: false, //relay.is_some() && relay.unwrap() == [1],
-      }
+      })
     )
 ));
 
