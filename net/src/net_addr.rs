@@ -40,28 +40,6 @@ pub struct NetAddr {
 }
 
 impl NetAddr {
-    pub fn try_parse(input: &[u8], version_packet: bool) -> Result<NetAddr, Error> {
-        let mut buf = BufReader::new(input);
-        let time = if version_packet {
-            None
-        } else {
-            Some(buf.read_u32::<LittleEndian>()?)
-        };
-        Ok(NetAddr {
-            time: time,
-            services: buf.read_u64::<LittleEndian>()?,
-            ip: Ipv6Addr::new(buf.read_u16::<NetworkEndian>()?,
-                              buf.read_u16::<NetworkEndian>()?,
-                              buf.read_u16::<NetworkEndian>()?,
-                              buf.read_u16::<NetworkEndian>()?,
-                              buf.read_u16::<NetworkEndian>()?,
-                              buf.read_u16::<NetworkEndian>()?,
-                              buf.read_u16::<NetworkEndian>()?,
-                              buf.read_u16::<NetworkEndian>()?),
-            port: buf.read_u16::<BigEndian>()?,
-        })
-    }
-
     pub fn encode(&self) -> Vec<u8> {
         let mut v: Vec<u8> = Vec::with_capacity(30);
         // write time

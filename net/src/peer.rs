@@ -31,6 +31,7 @@ pub struct Peer {
     socket: TcpStream,
     messages: Vec<Message>,
     buffer: Vec<u8>,
+    send_compact: bool,
 }
 
 impl Peer {
@@ -45,6 +46,7 @@ impl Peer {
                     socket: socket,
                     messages: Vec::with_capacity(10),
                     buffer: Vec::with_capacity(4096),
+                    send_compact: false,
                 })
             }
             Err(e) => Err(e),
@@ -52,39 +54,73 @@ impl Peer {
     }
 
     fn handle_message(&mut self, message: Message) {
-        println!("Handling {:?}", message);
+        debug!("Handling {:?}", message);
+        match message {
+            Message::Version(v) => {
+                self.send(Peer::version());
+            }
+            Message::Ping(nonce) => {
+                info!("Ping");
+                self.send(Message::Pong(nonce));
+            }
+            Message::SendCompact(msg) => {
+                self.send_compact = msg.send_compact;
+            }
+            Message::Addr(addrs) => {
+                info!("Found {} addrs", addrs.len());
+            }
+            _ => info!("Not handling {:?} yet", message),
+        };
     }
 
     pub fn run(&mut self) {
         let _ = self.send(Peer::version()).unwrap();
-        if let Some(message) = self.recv() {
-            let _ = self.send(Message::Verack).unwrap();
-            let _ = self.send(Message::GetAddr);
-            loop {
-                if let Some(msg) = self.recv() {
-                    self.handle_message(msg);
-                } else {
-                    println!("[{}] Trying to recieve again", self.buffer.len());
-                }
-                // sending messages to peers
+        loop {
 
+            if let Some(message) = self.recv() {
+                let _ = self.send(Message::Verack).unwrap();
+                let _ = self.send(Message::GetAddr);
+                break;
+            } else {
+                debug!("Failed to understand VERSION packet from remote peer");
             }
-        } else {
-            println!("Failed to understand VERSION packet from remote peer");
+        }
+        loop {
+            if let Some(msg) = self.recv() {
+                self.handle_message(msg);
+            } else {
+                debug!("[{}] Trying to recieve again", self.buffer.len());
+            }
+            // sending messages to peers
+            // check if this is bad
         }
     }
 
     pub fn addrs(&mut self) {
         let message = self.recv().unwrap();
-        println!("Message: {:?}", message);
+        debug!("Message: {:?}", message);
         let _ = self.send(Message::GetAddr).unwrap();
     }
 
     fn recv(&mut self) -> Option<Message> {
         let mut buffer: Vec<u8> = Vec::with_capacity(8192 + self.buffer.len());
-        println!("appending buffer of len: {}", self.buffer.len());
+        // debug!("appending buffer of len: {}", self.buffer.len());
         buffer.append(&mut self.buffer);
-        println!("Buffer len: {}", buffer.len());
+        debug!("Buffer len: {}", buffer.len());
+        let starting_len = buffer.len();
+        if starting_len > 0 {
+            match message(&buffer) {
+                IResult::Done(remaining, msg) => {
+                    self.buffer = remaining.into();
+                    info!("Got back {:?}", msg);
+                    return Some(msg);
+                }
+                _ => {
+                    // trace!("Problem parsing: {:?}", buffer);
+                    trace!("Failed to parse remaining buffer");
+                }
+            };
+        }
         let mut buff = [0; 8192];
         let mut read = match self.socket.read(&mut buff) {
             Ok(r) => r,
@@ -93,7 +129,7 @@ impl Peer {
                 return None;
             }
         };
-        println!("[{}] Read: {}", buffer.len(), read);
+        debug!("[{}] Read: {}", buffer.len(), read);
         buffer.extend((buff[0..read]).iter().cloned());
         while read == 8192 {
             if let Ok(r) = self.socket.read(&mut buff) {
@@ -102,11 +138,11 @@ impl Peer {
             } else {
                 break;
             }
-            println!("[{}] Read: {}", buffer.len(), read);
+            debug!("[{}] Read: {}", buffer.len(), read);
         }
-        // println!("Read: {}", read);
-        // println!("Buff: {:?}", to_hex_string(&messages));
-        if buffer.len() == 0 {
+        // debug!("Read: {}", read);
+        // debug!("Buff: {:?}", to_hex_string(&messages));
+        if buffer.len() == 0 || buffer.len() == starting_len {
             return None;
         } else {
             {
@@ -115,13 +151,14 @@ impl Peer {
                 };
                 match message {
                     IResult::Done(remaining, msg) => {
-                        println!("Remaining: {:?}", remaining);
+                        debug!("Remaining: {:?}", remaining);
                         self.buffer = remaining.into();
-                        println!("Got back {:?}", msg);
+                        info!("Got back {:?}", msg);
                         return Some(msg);
                     }
                     _ => {
-                        println!("Problem parsing: {:?}, have: {:?}", buffer, message);
+                        // debug!("Problem parsing: {:?}, have: {:?}", buffer, message);
+                        trace!("Problem parsing final buffer");
                     }
                 };
             }
@@ -131,9 +168,9 @@ impl Peer {
     }
 
     fn send(&mut self, message: Message) -> Result<(), Error> {
-        println!("About to write: {:?}", message);
+        info!("About to write: {:?}", message);
         let written = self.socket.write(&message.encode())?;
-        println!("Written: {:}", written);
+        debug!("Written: {:}", written);
         Ok(())
     }
 
@@ -155,7 +192,7 @@ impl Peer {
                 port: 8333,
             },
             nonce: 1,
-            user_agent: "bitcrust".into(),
+            user_agent: "/bitcrust:0.1.0/".into(),
             start_height: 0,
             relay: false,
         })

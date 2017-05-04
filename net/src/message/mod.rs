@@ -5,10 +5,12 @@ use nom::IResult;
 use sha2::{Sha256, Digest};
 
 mod version_message;
-mod addr_message;
+// mod addr_message;
+mod sendcmpct_message;
 
 pub use self::version_message::VersionMessage;
-pub use self::addr_message::AddrMessage;
+// pub use self::addr_message::AddrMessage;
+pub use self::sendcmpct_message::SendCmpctMessage;
 
 use net_addr::NetAddr;
 use parser::message;
@@ -157,9 +159,12 @@ pub enum Message {
     Version(VersionMessage),
     Verack,
     SendHeaders,
+    SendCompact(SendCmpctMessage),
     GetAddr,
-    Addr(Vec<(u32, NetAddr)>),
+    Addr(Vec<NetAddr>),
     Unparsed(String, Vec<u8>),
+    Ping(u64),
+    Pong(u64),
     None,
 }
 
@@ -210,6 +215,17 @@ impl Message {
             Message::SendHeaders => packet!("sendheaders" => Vec::with_capacity(0)),
             Message::GetAddr => packet!("getaddr" => Vec::with_capacity(0)),
             Message::Addr(_) => packet!("addr"=> Vec::with_capacity(0)),
+            Message::SendCompact(ref message) => packet!("sendcmpct", message),
+            Message::Ping(nonce) => {
+                let mut v = Vec::with_capacity(4);
+                v.write_u64::<LittleEndian>(nonce);
+                packet!("ping" => v)
+            }
+            Message::Pong(nonce) => {
+                let mut v = Vec::with_capacity(4);
+                v.write_u64::<LittleEndian>(nonce);
+                packet!("pong" => v)
+            }
             Message::Unparsed(_, ref v) => v.clone(),
             Message::None => Vec::with_capacity(0),
         }

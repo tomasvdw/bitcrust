@@ -8,3 +8,6 @@ byteorder = "1"
 log = "0.3"
 nom = "^2.2"
 sha2 = "0.5"
+
+[dev-dependencies]
+env_logger = "0.4.2"
