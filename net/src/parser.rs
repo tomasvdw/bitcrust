@@ -76,7 +76,7 @@ pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
                 "verack" => IResult::Done(i, Message::Verack),
                 "sendheaders" => IResult::Done(i, Message::SendHeaders),
                 _ => {
-                    println!("Raw message: {:?}\n\n{:}", raw_message.message_type, to_hex_string(raw_message.body));
+                    trace!("Raw message: {:?}\n\n{:}", raw_message.message_type, to_hex_string(raw_message.body));
                     IResult::Done(i,
                                   Message::Unparsed(raw_message.message_type,
                                                     raw_message.body.into()))
@@ -84,7 +84,7 @@ pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
             }
         }
         IResult::Incomplete(len) => {
-            println!("Incomplete::Raw: {:?}", raw_message_result);
+            trace!("Incomplete::Raw: {:?}", raw_message_result);
             IResult::Incomplete(len)
         }
         IResult::Error(e) => IResult::Error(e),
@@ -271,7 +271,7 @@ mod parse_tests {
           0x0F, 0x2F, 0x53, 0x61, 0x74, 0x6F, 0x73, 0x68, 0x69, 0x3A, 0x30, 0x2E, 0x37, 0x2E, 0x32, 0x2F,                                                             //- "/Satoshi:0.7.2/" sub-version string (string is 15 bytes long)
           0xC0, 0x3E, 0x03, 0x00                                                                                                                                      //- Last block sending node has is block #212672
         ];
-        println!("Parsing len: {}", input.len());
+        trace!("Parsing len: {}", input.len());
         let expected = Message::Version(VersionMessage {
             version: 60002,
             services: 1,
@@ -294,7 +294,7 @@ mod parse_tests {
             relay: false,
         });
         let actual = version(&input);
-        println!("actual: {:?}", actual);
+        trace!("actual: {:?}", actual);
         assert_eq!(expected, actual.unwrap().1);
     }
 
@@ -317,7 +317,7 @@ mod parse_tests {
                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
         let res = message(&input);
-        println!("Message: {:?}", res);
+        trace!("Message: {:?}", res);
         // assert!(res.is_ok())
     }
 
@@ -341,7 +341,7 @@ mod parse_tests {
           0xC0, 0x3E, 0x03, 0x00                                                                                                                                      //- Last block sending node has is block #212672
         ];
         let output = message(&input);
-        println!("Output: {:?}", output);
+        trace!("Output: {:?}", output);
     }
 
     #[test]
@@ -349,7 +349,7 @@ mod parse_tests {
         let input = [];
 
         let parsed = addr(&input);
-        println!("parsed: {:?}", parsed);
-        println!("Parsed addr: {:?}", parsed.unwrap());
+        trace!("parsed: {:?}", parsed);
+        trace!("Parsed addr: {:?}", parsed.unwrap());
     }
 }

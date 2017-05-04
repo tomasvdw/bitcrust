@@ -100,9 +100,10 @@ mod tests {
              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
              0x00, 0x00];
 
-        let res = Message::try_parse(&input);
+        let res = message(&input);
         println!("Message: {:?}", res);
-        assert!(res.is_ok())
+        res.unwrap();
+        // assert!(res.is_ok())
     }
 
     #[test]

@@ -66,6 +66,8 @@ impl Peer {
                 } else {
                     println!("[{}] Trying to recieve again", self.buffer.len());
                 }
+                // sending messages to peers
+
             }
         } else {
             println!("Failed to understand VERSION packet from remote peer");
