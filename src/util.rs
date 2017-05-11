@@ -1,6 +1,7 @@
 //! General utility functions
 
 
+
 /// Used mainly for tests; found somewhere (rustc_serialize I think)
 pub fn from_hex(str: &str) -> Vec<u8> {
 

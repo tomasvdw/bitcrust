@@ -79,6 +79,10 @@ pub fn add_transaction(_: &[u8]) {
 
 
 
+pub fn get_block(_: [u8; 32]) {
+
+}
+
 
 #[cfg(test)]
 mod tests {

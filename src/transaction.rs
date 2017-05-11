@@ -77,6 +77,8 @@ pub struct Transaction<'a> {
 
 
 
+
+
 impl<'a> Parse<'a> for Transaction<'a> {
 
     /// Parses the raw bytes into individual fields

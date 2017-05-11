@@ -57,6 +57,8 @@ mod spend_tree;
 
 mod prune;
 
+mod tips;
+
 mod transactions;
 
 pub use self::spend_tree::SpendingError;
