@@ -33,6 +33,7 @@ pub struct Peer {
     buffer: Vec<u8>,
     send_compact: bool,
     send_headers: bool,
+    acked: bool,
     addrs: Vec<NetAddr>,
 }
 
@@ -50,6 +51,7 @@ impl Peer {
                     buffer: Vec::with_capacity(4096),
                     send_compact: false,
                     send_headers: false,
+                    acked: false,
                     addrs: Vec::with_capacity(1000),
                 })
             }
@@ -76,6 +78,9 @@ impl Peer {
             }
             Message::SendHeaders => {
                 self.send_headers = true;
+            }
+            Message::Verack => {
+                self.acked = true;
             }
             _ => info!("Not handling {:?} yet", message),
         };
