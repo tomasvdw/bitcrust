@@ -5,11 +5,11 @@ use nom::IResult;
 use sha2::{Sha256, Digest};
 
 mod version_message;
-// mod addr_message;
+mod addr_message;
 mod sendcmpct_message;
 
 pub use self::version_message::VersionMessage;
-// pub use self::addr_message::AddrMessage;
+pub use self::addr_message::AddrMessage;
 pub use self::sendcmpct_message::SendCmpctMessage;
 
 use net_addr::NetAddr;
@@ -109,6 +109,35 @@ mod tests {
     }
 
     #[test]
+    fn it_encodes_a_u8_varint() {
+        let input = 12;
+        let var_int = var_int(input);
+        assert_eq!(var_int, &[12 as u8]);
+    }
+
+    #[test]
+    fn it_encodes_a_u16_varint() {
+        let input = 0xFFFF;
+        let var_int = var_int(input);
+        assert_eq!(var_int, &[0xFD, 0xFF, 0xFF]);
+    }
+
+    #[test]
+    fn it_encodes_a_u32_varint() {
+        let input = 0xFFFFFFFF;
+        let var_int = var_int(input);
+        assert_eq!(var_int, &[0xFE, 0xFF, 0xFF, 0xFF, 0xFF]);
+    }
+
+    #[test]
+    fn it_encodes_a_u64_varint() {
+        let input = 0xFFFFFFFF + 1;
+        let var_int = var_int(input);
+        assert_eq!(var_int,
+                   &[0xFF, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]);
+    }
+
+    #[test]
     fn it_encodes_a_version_message() {
 
         let expected = vec![
@@ -161,10 +190,11 @@ pub enum Message {
     SendHeaders,
     SendCompact(SendCmpctMessage),
     GetAddr,
-    Addr(Vec<NetAddr>),
+    Addr(AddrMessage),
     Unparsed(String, Vec<u8>),
     Ping(u64),
     Pong(u64),
+    FeeFilter(u64),
     None,
 }
 
@@ -226,8 +256,34 @@ impl Message {
                 v.write_u64::<LittleEndian>(nonce);
                 packet!("pong" => v)
             }
+            Message::FeeFilter(filter) => {
+                let mut v = Vec::with_capacity(8);
+                v.write_u64::<LittleEndian>(filter);
+                packet!("feefilter" => v)
+            }
             Message::Unparsed(_, ref v) => v.clone(),
             Message::None => Vec::with_capacity(0),
         }
     }
+}
+
+fn var_int(num: u64) -> Vec<u8> {
+    let mut res = Vec::with_capacity(4);
+    if num < 0xFD {
+        res.write_u8(num as u8);
+        return res;
+    }
+    if num <= 0xFFFF {
+        res.write_u8(0xFD);
+        res.write_u16::<LittleEndian>(num as u16);
+        return res;
+    }
+    if num <= 0xFFFFFFFF {
+        res.write_u8(0xFE);
+        res.write_u32::<LittleEndian>(num as u32);
+        return res;
+    }
+    res.write_u8(0xFF);
+    res.write_u64::<LittleEndian>(num);
+    res
 }

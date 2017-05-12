@@ -32,6 +32,8 @@ pub struct Peer {
     messages: Vec<Message>,
     buffer: Vec<u8>,
     send_compact: bool,
+    send_headers: bool,
+    addrs: Vec<NetAddr>,
 }
 
 impl Peer {
@@ -47,6 +49,8 @@ impl Peer {
                     messages: Vec::with_capacity(10),
                     buffer: Vec::with_capacity(4096),
                     send_compact: false,
+                    send_headers: false,
+                    addrs: Vec::with_capacity(1000),
                 })
             }
             Err(e) => Err(e),
@@ -67,7 +71,11 @@ impl Peer {
                 self.send_compact = msg.send_compact;
             }
             Message::Addr(addrs) => {
-                info!("Found {} addrs", addrs.len());
+                info!("Found {} addrs", addrs.addrs.len());
+                self.addrs = addrs.addrs;
+            }
+            Message::SendHeaders => {
+                self.send_headers = true;
             }
             _ => info!("Not handling {:?} yet", message),
         };
@@ -79,7 +87,9 @@ impl Peer {
 
             if let Some(message) = self.recv() {
                 let _ = self.send(Message::Verack).unwrap();
-                let _ = self.send(Message::GetAddr);
+                if self.addrs.len() < 1000 {
+                    let _ = self.send(Message::GetAddr);
+                }
                 break;
             } else {
                 debug!("Failed to understand VERSION packet from remote peer");
@@ -112,11 +122,11 @@ impl Peer {
             match message(&buffer) {
                 IResult::Done(remaining, msg) => {
                     self.buffer = remaining.into();
-                    info!("Got back {:?}", msg);
+                    // info!("Got back {:?}", msg);
                     return Some(msg);
                 }
                 _ => {
-                    // trace!("Problem parsing: {:?}", buffer);
+                    trace!("Problem parsing: {:?}", buffer);
                     trace!("Failed to parse remaining buffer");
                 }
             };
@@ -131,17 +141,7 @@ impl Peer {
         };
         debug!("[{}] Read: {}", buffer.len(), read);
         buffer.extend((buff[0..read]).iter().cloned());
-        while read == 8192 {
-            if let Ok(r) = self.socket.read(&mut buff) {
-                read = r;
-                buffer.extend((buff[0..read]).iter().cloned());
-            } else {
-                break;
-            }
-            debug!("[{}] Read: {}", buffer.len(), read);
-        }
-        // debug!("Read: {}", read);
-        // debug!("Buff: {:?}", to_hex_string(&messages));
+
         if buffer.len() == 0 || buffer.len() == starting_len {
             return None;
         } else {
@@ -153,11 +153,14 @@ impl Peer {
                     IResult::Done(remaining, msg) => {
                         debug!("Remaining: {:?}", remaining);
                         self.buffer = remaining.into();
-                        info!("Got back {:?}", msg);
+                        // info!("Got back {:?}", msg);
                         return Some(msg);
                     }
+                    IResult::Incomplete(len) => {
+                        info!("Still need {:?} more bytes", len);
+                    }
                     _ => {
-                        // debug!("Problem parsing: {:?}, have: {:?}", buffer, message);
+                        debug!("Problem parsing: {:?}, have: {:?}", buffer, message);
                         trace!("Problem parsing final buffer");
                     }
                 };

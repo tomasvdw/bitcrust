@@ -5,7 +5,7 @@ use nom::{le_u16, le_u32, le_u64, le_i32, le_i64, be_u16, be_u32, IResult};
 use sha2::{Sha256, Digest};
 
 use message::Message;
-use message::{SendCmpctMessage, VersionMessage};
+use message::{AddrMessage, SendCmpctMessage, VersionMessage};
 use net_addr::NetAddr;
 
 fn to_hex_string(bytes: &[u8]) -> String {
@@ -56,7 +56,7 @@ named!(header <Header>,
   do_parse!(
   magic: le_u32 >>
     message_type: take_str!(12) >>
-    payload_len: dbg_dmp!(le_u32) >>
+    payload_len: le_u32 >>
     checksum: take!(4) >>
     ({trace!("message_type: {:?}\tpayload len: {}", message_type, payload_len); Header {
       magic: magic,
@@ -69,12 +69,8 @@ named!(header <Header>,
 
 named!(raw_message<RawMessage>,
   do_parse!(
-    // magic: le_u32 >>
-    // message_type: take_str!(12) >>
-    // payload_len: dbg_dmp!(le_u32) >>
-    // checksum: take!(4) >>
     header: header >>
-    body: dbg_dmp!(take!(header.len)) >>
+    body: take!(header.len) >>
     ({trace!("Body.len: {}", body.len());
       RawMessage {
         magic: header.magic,
@@ -91,7 +87,7 @@ pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
     match raw_message_result {
         IResult::Done(i, raw_message) => {
             if !raw_message.valid() {
-                println!("type: {:?}", header(&i));
+                // println!("type: {:?}", header(&i));
                 warn!("Invalid message");
                 return IResult::Error(nom::ErrorKind::Custom(0));
             }
@@ -100,6 +96,7 @@ pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
                 "verack" => IResult::Done(i, Message::Verack),
                 "sendheaders" => IResult::Done(i, Message::SendHeaders),
                 "sendcmpct" => send_compact(raw_message.body),
+                "feefilter" => feefilter(raw_message.body),
                 "ping" => ping(raw_message.body),
                 "pong" => pong(raw_message.body),
                 "addr" => addr(raw_message.body),
@@ -113,7 +110,7 @@ pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
         }
         IResult::Incomplete(len) => {
             debug!("type: {:?}", header(&i));
-            trace!("Incomplete::Raw: {:?}", raw_message_result);
+            // trace!("Incomplete::Raw: {:?}", raw_message_result);
             IResult::Incomplete(len)
         }
         IResult::Error(e) => {
@@ -122,6 +119,12 @@ pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
         }
     }
 }
+
+named!(feefilter <Message>,
+  do_parse!(
+    feefilter: le_u64 >>
+    (Message::FeeFilter(feefilter))
+));
 
 named!(ping <Message>,
   do_parse!(
@@ -246,10 +249,10 @@ named!(pub version_net_addr< NetAddr >,
 
 named!(pub net_addr< NetAddr >,
   do_parse!(
-    time: dbg_dmp!(le_u32) >>
-    services: dbg_dmp!(le_u64) >>
-    ip: dbg_dmp!(ipv6) >>
-    port: dbg_dmp!(be_u16) >>
+    time: le_u32 >>
+    services: le_u64 >>
+    ip: ipv6 >>
+    port: be_u16 >>
 
     (NetAddr {
       time: Some(time),
@@ -265,7 +268,7 @@ named!(addr<Message>,
     count: compact_size >>
     list: count!(net_addr, (count) as usize) >>
     // list: many0!(addr_part) >>
-    (Message::Addr(list))
+    (Message::Addr(AddrMessage{addrs: list}))
 ));
 
 
