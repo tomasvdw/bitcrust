@@ -38,6 +38,10 @@ pub struct Peer {
 
 impl Peer {
     pub fn new(host: &str) -> Result<Peer, Error> {
+        Peer::new_with_addrs(host, Vec::with_capacity(1000))
+    }
+
+    pub fn new_with_addrs(host: &str, addrs: Vec<NetAddr>) -> Result<Peer, Error> {
         match TcpStream::connect(host) {
             Ok(socket) => {
                 socket.set_read_timeout(Some(Duration::from_secs(1)))
@@ -52,7 +56,7 @@ impl Peer {
                     send_compact: false,
                     send_headers: false,
                     acked: false,
-                    addrs: Vec::with_capacity(1000),
+                    addrs: addrs,
                 })
             }
             Err(e) => Err(e),
@@ -105,7 +109,7 @@ impl Peer {
                 Some(Message::Version(message)) => {
                     debug!("Connected to a peer running: {}", message.user_agent);
                     let _ = self.send(Message::Verack).unwrap();
-                    if self.addrs.len() < 1000 {
+                    if self.addrs.len() < 100 {
                         let _ = self.send(Message::GetAddr);
                     }
                     break;
