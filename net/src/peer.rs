@@ -40,9 +40,9 @@ impl Peer {
     pub fn new(host: &str) -> Result<Peer, Error> {
         match TcpStream::connect(host) {
             Ok(socket) => {
-                socket.set_read_timeout(Some(Duration::from_secs(2)))
+                socket.set_read_timeout(Some(Duration::from_secs(1)))
                     .expect("set_read_timeout call failed");
-                socket.set_write_timeout(Some(Duration::from_secs(2)))
+                socket.set_write_timeout(Some(Duration::from_secs(1)))
                     .expect("set_read_timeout call failed");
                 Ok(Peer {
                     socket: socket,
@@ -101,16 +101,17 @@ impl Peer {
     pub fn run(&mut self) {
         let _ = self.send(Peer::version()).unwrap();
         loop {
-
-            if let Some(Message::Version(message)) = self.recv() {
-                debug!("Connected to a peer running: {}", message.user_agent);
-                let _ = self.send(Message::Verack).unwrap();
-                if self.addrs.len() < 1000 {
-                    let _ = self.send(Message::GetAddr);
+            match self.recv() {
+                Some(Message::Version(message)) => {
+                    debug!("Connected to a peer running: {}", message.user_agent);
+                    let _ = self.send(Message::Verack).unwrap();
+                    if self.addrs.len() < 1000 {
+                        let _ = self.send(Message::GetAddr);
+                    }
+                    break;
                 }
-                break;
-            } else {
-                debug!("Failed to understand VERSION packet from remote peer");
+                Some(s) => debug!("Received {:?} prior to VERSION", s),
+                _ => debug!("Haven't yet received VERSION packet from remote peer"),
             }
         }
         loop {
@@ -150,6 +151,7 @@ impl Peer {
         };
         if let Some((message, remaining_len)) = parsed {
             self.buffer.consume(available_data - remaining_len);
+            self.needed = 0;
             return Some(message);
         }
         None
@@ -161,6 +163,9 @@ impl Peer {
             return Some(message);
         }
         self.read();
+        if self.buffer.available_data() < self.needed {
+            return None;
+        }
 
         if let Some(message) = self.try_parse() {
             return Some(message);
@@ -170,33 +175,25 @@ impl Peer {
 
     fn read(&mut self) {
         let mut buff = [0; 8192];
-        while self.needed >= self.buffer.available_data() {
-
-            let read = match self.socket.read(&mut buff) {
-                Ok(r) => r,
-                Err(e) => {
-                    debug!("Socket read error: {:?}", e);
-                    return;
-                }
-            };
-            if read == 0 {
-                return;
-            }
-            debug!("[{}] Read: {}, Need: {}",
-                   self.buffer.available_data(),
-                   read,
-                   self.needed);
-            self.buffer.grow(read);
-            let _ = self.buffer.write(&buff[0..read]);
-            if self.needed >= read {
-                self.needed -= read;
-            } else {
-                self.needed = 0;
-                return;
-            }
-            trace!("Reading some more, trying to get {} to 0 ( current buff len: {} )",
-                   self.needed,
-                   self.buffer.available_data());
+        let read = match self.socket.read(&mut buff) {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        if read == 0 {
+            return;
+        }
+        debug!("[{} / {}] Read: {}, Need: {}",
+               self.buffer.available_data(),
+               self.buffer.capacity(),
+               read,
+               self.needed);
+        self.buffer.grow(read);
+        let _ = self.buffer.write(&buff[0..read]);
+        if self.needed >= read {
+            self.needed -= read;
+        } else {
+            self.needed = 0;
+            return;
         }
     }
 
