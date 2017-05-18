@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Tomas van der Wansem <tomas@tomasvdw.nl>"]
 
 [dependencies]
+circular = "~0.2"
 byteorder = "1"
 log = "0.3"
 nom = "^2.2"

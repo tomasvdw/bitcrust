@@ -5,7 +5,8 @@ use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::time::{UNIX_EPOCH, SystemTime};
 
-use nom::IResult;
+use circular::Buffer;
+use nom::{IResult, Needed};
 
 use net_addr::NetAddr;
 use message::Message;
@@ -28,9 +29,10 @@ mod tests {
 ///
 /// After the handshake, other communication can occur
 pub struct Peer {
+    buffer: Buffer,
     socket: TcpStream,
-    messages: Vec<Message>,
-    buffer: Vec<u8>,
+    /// Bytes that we need to parse the next message
+    needed: usize,
     send_compact: bool,
     send_headers: bool,
     acked: bool,
@@ -47,8 +49,8 @@ impl Peer {
                     .expect("set_read_timeout call failed");
                 Ok(Peer {
                     socket: socket,
-                    messages: Vec::with_capacity(10),
-                    buffer: Vec::with_capacity(4096),
+                    buffer: Buffer::with_capacity(4096),
+                    needed: 0,
                     send_compact: false,
                     send_headers: false,
                     acked: false,
@@ -60,7 +62,6 @@ impl Peer {
     }
 
     fn handle_message(&mut self, message: Message) {
-        debug!("Handling {:?}", message);
         match message {
             Message::Version(v) => {
                 self.send(Peer::version());
@@ -99,7 +100,8 @@ impl Peer {
         let _ = self.send(Peer::version()).unwrap();
         loop {
 
-            if let Some(message) = self.recv() {
+            if let Some(Message::Version(message)) = self.recv() {
+                debug!("Connected to a peer running: {}", message.user_agent);
                 let _ = self.send(Message::Verack).unwrap();
                 if self.addrs.len() < 1000 {
                     let _ = self.send(Message::GetAddr);
@@ -113,7 +115,7 @@ impl Peer {
             if let Some(msg) = self.recv() {
                 self.handle_message(msg);
             } else {
-                debug!("[{}] Trying to recieve again", self.buffer.len());
+                trace!("[{}] Trying to recieve again", self.buffer.available_data());
             }
             // sending messages to peers
             // check if this is bad
@@ -126,61 +128,59 @@ impl Peer {
         let _ = self.send(Message::GetAddr).unwrap();
     }
 
+    fn try_parse(&mut self) -> Option<Message> {
+        let available_data = self.buffer.available_data();
+        if available_data == 0 {
+            return None;
+        }
+        let parsed = match message(&self.buffer.data()) {
+            IResult::Done(remaining, msg) => Some((msg, remaining.len())),
+            IResult::Incomplete(len) => {
+                if let Needed::Size(s) = len {
+                    self.needed = s;
+                }
+                None
+            }
+            _ => {
+                trace!("Failed to parse remaining buffer");
+                None
+            }
+        };
+        if let Some((message, remaining_len)) = parsed {
+            self.buffer.consume(available_data - remaining_len);
+            return Some(message);
+        }
+        None
+    }
+
     fn recv(&mut self) -> Option<Message> {
-        let mut buffer: Vec<u8> = Vec::with_capacity(8192 + self.buffer.len());
+        // let mut buffer: Vec<u8> = Vec::with_capacity(8192);
         // debug!("appending buffer of len: {}", self.buffer.len());
-        buffer.append(&mut self.buffer);
-        debug!("Buffer len: {}", buffer.len());
-        let starting_len = buffer.len();
-        if starting_len > 0 {
-            match message(&buffer) {
-                IResult::Done(remaining, msg) => {
-                    self.buffer = remaining.into();
-                    // info!("Got back {:?}", msg);
-                    return Some(msg);
-                }
-                _ => {
-                    trace!("Problem parsing: {:?}", buffer);
-                    trace!("Failed to parse remaining buffer");
-                }
-            };
+        // buffer.append(&mut self.buffer);
+        trace!("Buffer len: {}", self.buffer.available_data());
+        let starting_len = self.buffer.available_data();
+        if let Some(message) = self.try_parse() {
+            return Some(message);
         }
         let mut buff = [0; 8192];
         let mut read = match self.socket.read(&mut buff) {
             Ok(r) => r,
             Err(_) => {
-                self.buffer = buffer;
+                // self.buffer = buffer;
                 return None;
             }
         };
-        debug!("[{}] Read: {}", buffer.len(), read);
-        buffer.extend((buff[0..read]).iter().cloned());
-
-        if buffer.len() == 0 || buffer.len() == starting_len {
+        if read == 0 {
             return None;
-        } else {
-            {
-                let message = {
-                    message(&buffer)
-                };
-                match message {
-                    IResult::Done(remaining, msg) => {
-                        debug!("Remaining: {:?}", remaining);
-                        self.buffer = remaining.into();
-                        // info!("Got back {:?}", msg);
-                        return Some(msg);
-                    }
-                    IResult::Incomplete(len) => {
-                        info!("Still need {:?} more bytes", len);
-                    }
-                    _ => {
-                        debug!("Problem parsing: {:?}, have: {:?}", buffer, message);
-                        trace!("Problem parsing final buffer");
-                    }
-                };
-            }
-            self.buffer = buffer;
-        };
+        }
+        debug!("[{}] Read: {}", self.buffer.available_data(), read);
+        self.buffer.grow(read);
+        self.buffer.write(&buff[0..read]);
+        // buffer.extend((buff[0..read]).iter().cloned());
+
+        if let Some(message) = self.try_parse() {
+            return Some(message);
+        }
         None
     }
 

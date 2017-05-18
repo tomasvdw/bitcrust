@@ -1,4 +1,5 @@
 extern crate byteorder;
+extern crate circular;
 #[macro_use]
 extern crate log;
 #[macro_use]
