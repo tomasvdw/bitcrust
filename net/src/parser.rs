@@ -109,7 +109,7 @@ pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
             }
         }
         IResult::Incomplete(len) => {
-            debug!("type: {:?}", header(&i));
+            trace!("type: {:?}", header(&i));
             // trace!("Incomplete::Raw: {:?}", raw_message_result);
             IResult::Incomplete(len)
         }
