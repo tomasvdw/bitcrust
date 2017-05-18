@@ -82,7 +82,16 @@ impl Peer {
             Message::Verack => {
                 self.acked = true;
             }
-            _ => info!("Not handling {:?} yet", message),
+            Message::Unparsed(name, message) => {
+                // Support for alert messages has been removed from bitcoin core in March 2016.
+                // Read more at https://github.com/bitcoin/bitcoin/pull/7692
+                if name != "alert" {
+                    info!("Not handling {} yet ({:?})", name, to_hex_string(&message))
+                }
+            }
+            _ => {
+                debug!("Not handling {:?} yet", message);
+            }
         };
     }
 
