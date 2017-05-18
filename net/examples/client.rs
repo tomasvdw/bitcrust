@@ -7,6 +7,6 @@ fn main() {
     env_logger::init().unwrap();
     let mut peer = Peer::new("seed.bitcoinstats.com:8333")
     // let mut peer = Peer::new("127.0.0.1:8333")
-        .expect("You need to be running bitcoin-core to run tests");
+      .expect("Could not connect to bitcoinstats peer to initialize network connection");
     peer.run();
 }
