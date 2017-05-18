@@ -1,7 +1,4 @@
-use std::io::{BufReader, Error, Read};
-
-use byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt};
-use nom::IResult;
+use byteorder::{LittleEndian, WriteBytesExt};
 use sha2::{Sha256, Digest};
 
 mod version_message;
@@ -12,17 +9,15 @@ pub use self::version_message::VersionMessage;
 pub use self::addr_message::AddrMessage;
 pub use self::sendcmpct_message::SendCmpctMessage;
 
-use net_addr::NetAddr;
-use parser::message;
-
 #[cfg(test)]
 mod tests {
-    use std::{i32, u64};
     use std::str::FromStr;
     use std::net::Ipv6Addr;
 
     use net_addr::NetAddr;
     use super::*;
+
+    use parser::message;
     #[test]
     fn it_parses_a_version_message() {
         // taken from my Satoshi client's response on 25 April, 2017
@@ -195,7 +190,6 @@ pub enum Message {
     Ping(u64),
     Pong(u64),
     FeeFilter(u64),
-    None,
 }
 
 macro_rules! packet {
@@ -203,12 +197,12 @@ macro_rules! packet {
         let mut payload: Vec<u8> = $payload;
         let len = payload.len();
         let mut packet: Vec<u8> = Vec::with_capacity(len + 24);
-        packet.write_u32::<LittleEndian>(0xD9B4BEF9); // magic
+        let _ = packet.write_u32::<LittleEndian>(0xD9B4BEF9); // magic
         // Write the message type
         for byte in $packet_type.as_bytes() {
           let _ = packet.write_u8(*byte);
         }
-        for i in 1 .. (12-$packet_type.len()) {
+        for _ in 1 .. (12-$packet_type.len()) {
           let _ = packet.write_u8(0x00);
         }
         let _ = packet.write_u8(0x00);
@@ -232,8 +226,7 @@ macro_rules! packet {
         packet
     }};
     ($packet_type: expr, $packet: ident) => {{
-        let mut payload = $packet.encode();
-        packet!($packet_type => payload)
+        packet!($packet_type => $packet.encode())
     }}
 }
 
@@ -244,25 +237,24 @@ impl Message {
             Message::Verack => packet!("verack" => Vec::with_capacity(0)),
             Message::SendHeaders => packet!("sendheaders" => Vec::with_capacity(0)),
             Message::GetAddr => packet!("getaddr" => Vec::with_capacity(0)),
-            Message::Addr(_) => packet!("addr"=> Vec::with_capacity(0)),
+            Message::Addr(ref addr) => packet!("addr", addr),
             Message::SendCompact(ref message) => packet!("sendcmpct", message),
             Message::Ping(nonce) => {
                 let mut v = Vec::with_capacity(4);
-                v.write_u64::<LittleEndian>(nonce);
+                let _ = v.write_u64::<LittleEndian>(nonce);
                 packet!("ping" => v)
             }
             Message::Pong(nonce) => {
                 let mut v = Vec::with_capacity(4);
-                v.write_u64::<LittleEndian>(nonce);
+                let _ = v.write_u64::<LittleEndian>(nonce);
                 packet!("pong" => v)
             }
             Message::FeeFilter(filter) => {
                 let mut v = Vec::with_capacity(8);
-                v.write_u64::<LittleEndian>(filter);
+                let _ = v.write_u64::<LittleEndian>(filter);
                 packet!("feefilter" => v)
             }
             Message::Unparsed(_, ref v) => v.clone(),
-            Message::None => Vec::with_capacity(0),
         }
     }
 }
@@ -270,20 +262,20 @@ impl Message {
 fn var_int(num: u64) -> Vec<u8> {
     let mut res = Vec::with_capacity(4);
     if num < 0xFD {
-        res.write_u8(num as u8);
+        let _ = res.write_u8(num as u8);
         return res;
     }
     if num <= 0xFFFF {
-        res.write_u8(0xFD);
-        res.write_u16::<LittleEndian>(num as u16);
+        let _ = res.write_u8(0xFD);
+        let _ = res.write_u16::<LittleEndian>(num as u16);
         return res;
     }
     if num <= 0xFFFFFFFF {
-        res.write_u8(0xFE);
-        res.write_u32::<LittleEndian>(num as u32);
+        let _ = res.write_u8(0xFE);
+        let _ = res.write_u32::<LittleEndian>(num as u32);
         return res;
     }
-    res.write_u8(0xFF);
-    res.write_u64::<LittleEndian>(num);
+    let _ = res.write_u8(0xFF);
+    let _ = res.write_u64::<LittleEndian>(num);
     res
 }

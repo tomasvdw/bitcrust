@@ -1,7 +1,7 @@
 use std::net::Ipv6Addr;
 
 use nom;
-use nom::{le_u16, le_u32, le_u64, le_i32, le_i64, be_u16, be_u32, IResult};
+use nom::{le_u16, le_u32, le_u64, le_i32, le_i64, be_u16, IResult};
 use sha2::{Sha256, Digest};
 
 use message::Message;

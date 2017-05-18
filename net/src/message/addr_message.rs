@@ -1,5 +1,3 @@
-use byteorder::{LittleEndian, WriteBytesExt};
-
 use net_addr::NetAddr;
 use super::var_int;
 

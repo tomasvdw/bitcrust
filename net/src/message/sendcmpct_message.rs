@@ -25,7 +25,7 @@ impl SendCmpctMessage {
         } else {
             v.push(0);
         }
-        v.write_u64::<LittleEndian>(self.version);
+        let _ = v.write_u64::<LittleEndian>(self.version);
         v
     }
 }

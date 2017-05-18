@@ -1,13 +1,10 @@
-use std::io::{BufReader, Error, Read};
-use std::net::Ipv6Addr;
-use std::time::{UNIX_EPOCH, SystemTime};
-
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{LittleEndian, WriteBytesExt};
 
 use net_addr::NetAddr;
 
 #[cfg(test)]
 mod tests {
+    use std::net::Ipv6Addr;
     use std::str::FromStr;
     use super::*;
     #[test]
@@ -18,7 +15,7 @@ mod tests {
         let v = VersionMessage {
             version: 60002,
             services: 1,
-            timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64,
+            timestamp: 1495102309,
             addr_recv: NetAddr {
                 time: None,
                 services: 1,
@@ -36,6 +33,13 @@ mod tests {
             start_height: 0,
             relay: false,
         };
+        let encoded = v.encode();
+        let expected: Vec<u8> =
+            vec![98, 234, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 101, 115, 29, 89, 0, 0, 0, 0, 1, 0, 0, 0,
+                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 127, 0, 0, 1, 32, 141, 1, 0,
+                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 127, 0, 0, 1, 32, 141,
+                 1, 0, 0, 0, 0, 0, 0, 0, 8, 98, 105, 116, 99, 114, 117, 115, 116, 0, 0, 0, 0];
+        assert_eq!(expected, encoded);
     }
 }
 
@@ -62,7 +66,7 @@ impl VersionMessage {
         if self.version >= 106 {
             v.append(&mut self.addr_send.encode());
             let _ = v.write_u64::<LittleEndian>(self.nonce);
-            v.write_u8(self.user_agent.bytes().len() as u8);
+            let _ = v.write_u8(self.user_agent.bytes().len() as u8);
             for byte in self.user_agent.bytes() {
                 let _ = v.write_u8(byte);
             }

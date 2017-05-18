@@ -1,9 +1,6 @@
-use std::io::{BufReader, Read, Error};
 use std::net::Ipv6Addr;
 
-use byteorder::{BigEndian, LittleEndian, NetworkEndian, ReadBytesExt, WriteBytesExt};
-
-use parser::{net_addr, version_net_addr};
+use byteorder::{BigEndian, LittleEndian, NetworkEndian, WriteBytesExt};
 
 #[cfg(test)]
 mod tests {
@@ -31,7 +28,7 @@ mod tests {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct NetAddr {
     pub time: Option<u32>,
     pub services: u64,

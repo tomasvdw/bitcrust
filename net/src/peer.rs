@@ -10,14 +10,11 @@ use nom::{IResult, Needed};
 
 use net_addr::NetAddr;
 use message::Message;
-use message::VersionMessage;
+use message::{AddrMessage, VersionMessage};
 use parser::message;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-}
+mod tests {}
 
 /// Peer bootstrapping follows the following sequence:
 /// New client == -->
@@ -42,7 +39,7 @@ pub struct Peer {
 impl Peer {
     pub fn new(host: &str) -> Result<Peer, Error> {
         match TcpStream::connect(host) {
-            Ok(mut socket) => {
+            Ok(socket) => {
                 socket.set_read_timeout(Some(Duration::from_secs(2)))
                     .expect("set_read_timeout call failed");
                 socket.set_write_timeout(Some(Duration::from_secs(2)))
@@ -63,12 +60,12 @@ impl Peer {
 
     fn handle_message(&mut self, message: Message) {
         match message {
-            Message::Version(v) => {
-                self.send(Peer::version());
+            Message::Version(_v) => {
+                let _ = self.send(Peer::version());
             }
             Message::Ping(nonce) => {
                 info!("Ping");
-                self.send(Message::Pong(nonce));
+                let _ = self.send(Message::Pong(nonce));
             }
             Message::SendCompact(msg) => {
                 self.send_compact = msg.send_compact;
@@ -76,6 +73,10 @@ impl Peer {
             Message::Addr(addrs) => {
                 info!("Found {} addrs", addrs.addrs.len());
                 self.addrs = addrs.addrs;
+            }
+            Message::GetAddr => {
+                let msg = AddrMessage { addrs: self.addrs.clone() };
+                let _ = self.send(Message::Addr(msg));
             }
             Message::SendHeaders => {
                 self.send_headers = true;
@@ -158,12 +159,11 @@ impl Peer {
         // debug!("appending buffer of len: {}", self.buffer.len());
         // buffer.append(&mut self.buffer);
         trace!("Buffer len: {}", self.buffer.available_data());
-        let starting_len = self.buffer.available_data();
         if let Some(message) = self.try_parse() {
             return Some(message);
         }
         let mut buff = [0; 8192];
-        let mut read = match self.socket.read(&mut buff) {
+        let read = match self.socket.read(&mut buff) {
             Ok(r) => r,
             Err(_) => {
                 // self.buffer = buffer;
@@ -175,7 +175,7 @@ impl Peer {
         }
         debug!("[{}] Read: {}", self.buffer.available_data(), read);
         self.buffer.grow(read);
-        self.buffer.write(&buff[0..read]);
+        let _ = self.buffer.write(&buff[0..read]);
         // buffer.extend((buff[0..read]).iter().cloned());
 
         if let Some(message) = self.try_parse() {
