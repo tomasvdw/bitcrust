@@ -42,25 +42,21 @@ impl Peer {
     }
 
     pub fn new_with_addrs(host: &str, addrs: Vec<NetAddr>) -> Result<Peer, Error> {
-        match TcpStream::connect(host) {
-            Ok(socket) => {
-                socket.set_read_timeout(Some(Duration::from_secs(1)))
-                    .expect("set_read_timeout call failed");
-                socket.set_write_timeout(Some(Duration::from_secs(1)))
-                    .expect("set_read_timeout call failed");
-                Ok(Peer {
-                    socket: socket,
-                    // Allocate a buffer with 128k of capacity
-                    buffer: Buffer::with_capacity(1024 * 128),
-                    needed: 0,
-                    send_compact: false,
-                    send_headers: false,
-                    acked: false,
-                    addrs: addrs,
-                })
-            }
-            Err(e) => Err(e),
-        }
+        let socket = TcpStream::connect(host)?;
+        socket.set_read_timeout(Some(Duration::from_secs(1)))?;
+        // .expect("set_read_timeout call failed");
+        socket.set_write_timeout(Some(Duration::from_secs(1)))?;
+        // .expect("set_read_timeout call failed");
+        Ok(Peer {
+            socket: socket,
+            // Allocate a buffer with 128k of capacity
+            buffer: Buffer::with_capacity(1024 * 128),
+            needed: 0,
+            send_compact: false,
+            send_headers: false,
+            acked: false,
+            addrs: addrs,
+        })
     }
 
     fn handle_message(&mut self, message: Message) {

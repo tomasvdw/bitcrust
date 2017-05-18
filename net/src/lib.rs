@@ -4,9 +4,11 @@ extern crate circular;
 extern crate log;
 #[macro_use]
 extern crate nom;
+extern crate rusqlite;
 extern crate sha2;
 
 mod parser;
 mod message;
 mod net_addr;
 pub mod peer;
+pub mod client;

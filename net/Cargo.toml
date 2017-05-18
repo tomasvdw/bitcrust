@@ -8,6 +8,7 @@ circular = "~0.2"
 byteorder = "1"
 log = "0.3"
 nom = "^2.2"
+rusqlite = "~0.11"
 sha2 = "0.5"
 
 [dev-dependencies]
