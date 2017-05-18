@@ -46,7 +46,8 @@ impl Peer {
                     .expect("set_read_timeout call failed");
                 Ok(Peer {
                     socket: socket,
-                    buffer: Buffer::with_capacity(4096),
+                    // Allocate a buffer with 128k of capacity
+                    buffer: Buffer::with_capacity(1024 * 128),
                     needed: 0,
                     send_compact: false,
                     send_headers: false,
@@ -155,33 +156,48 @@ impl Peer {
     }
 
     fn recv(&mut self) -> Option<Message> {
-        // let mut buffer: Vec<u8> = Vec::with_capacity(8192);
-        // debug!("appending buffer of len: {}", self.buffer.len());
-        // buffer.append(&mut self.buffer);
         trace!("Buffer len: {}", self.buffer.available_data());
         if let Some(message) = self.try_parse() {
             return Some(message);
         }
-        let mut buff = [0; 8192];
-        let read = match self.socket.read(&mut buff) {
-            Ok(r) => r,
-            Err(_) => {
-                // self.buffer = buffer;
-                return None;
-            }
-        };
-        if read == 0 {
-            return None;
-        }
-        debug!("[{}] Read: {}", self.buffer.available_data(), read);
-        self.buffer.grow(read);
-        let _ = self.buffer.write(&buff[0..read]);
-        // buffer.extend((buff[0..read]).iter().cloned());
+        self.read();
 
         if let Some(message) = self.try_parse() {
             return Some(message);
         }
         None
+    }
+
+    fn read(&mut self) {
+        let mut buff = [0; 8192];
+        while self.needed >= self.buffer.available_data() {
+
+            let read = match self.socket.read(&mut buff) {
+                Ok(r) => r,
+                Err(e) => {
+                    debug!("Socket read error: {:?}", e);
+                    return;
+                }
+            };
+            if read == 0 {
+                return;
+            }
+            debug!("[{}] Read: {}, Need: {}",
+                   self.buffer.available_data(),
+                   read,
+                   self.needed);
+            self.buffer.grow(read);
+            let _ = self.buffer.write(&buff[0..read]);
+            if self.needed >= read {
+                self.needed -= read;
+            } else {
+                self.needed = 0;
+                return;
+            }
+            trace!("Reading some more, trying to get {} to 0 ( current buff len: {} )",
+                   self.needed,
+                   self.buffer.available_data());
+        }
     }
 
     fn send(&mut self, message: Message) -> Result<(), Error> {

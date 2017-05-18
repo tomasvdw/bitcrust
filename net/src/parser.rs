@@ -87,7 +87,6 @@ pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
     match raw_message_result {
         IResult::Done(i, raw_message) => {
             if !raw_message.valid() {
-                // println!("type: {:?}", header(&i));
                 warn!("Invalid message");
                 return IResult::Error(nom::ErrorKind::Custom(0));
             }
@@ -108,15 +107,8 @@ pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
                 }
             }
         }
-        IResult::Incomplete(len) => {
-            trace!("type: {:?}", header(&i));
-            // trace!("Incomplete::Raw: {:?}", raw_message_result);
-            IResult::Incomplete(len)
-        }
-        IResult::Error(e) => {
-            debug!("error :: type: {:?}", header(&i));
-            IResult::Error(e)
-        }
+        IResult::Incomplete(len) => IResult::Incomplete(len),
+        IResult::Error(e) => IResult::Error(e),
     }
 }
 
