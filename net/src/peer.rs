@@ -1,13 +1,16 @@
 use std::io::{Error, Read, Write};
 use std::net::TcpStream;
+use std::thread;
 use std::time::Duration;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::time::{UNIX_EPOCH, SystemTime};
 
 use circular::Buffer;
-use nom::{IResult, Needed};
+use multiqueue::{BroadcastReceiver, BroadcastSender};
+use nom::{ErrorKind, IResult, Needed};
 
+use client_message::ClientMessage;
 use net_addr::NetAddr;
 use message::Message;
 use message::{AddrMessage, VersionMessage};
@@ -26,6 +29,7 @@ mod tests {}
 ///
 /// After the handshake, other communication can occur
 pub struct Peer {
+    host: String,
     buffer: Buffer,
     socket: TcpStream,
     /// Bytes that we need to parse the next message
@@ -34,20 +38,32 @@ pub struct Peer {
     send_headers: bool,
     acked: bool,
     addrs: Vec<NetAddr>,
+    sender: BroadcastSender<ClientMessage>,
+    receiver: BroadcastReceiver<ClientMessage>,
 }
 
 impl Peer {
-    pub fn new(host: &str) -> Result<Peer, Error> {
-        Peer::new_with_addrs(host, Vec::with_capacity(1000))
+    pub fn new(host: &str,
+               sender: &BroadcastSender<ClientMessage>,
+               receiver: &BroadcastReceiver<ClientMessage>)
+               -> Result<Peer, Error> {
+        Peer::new_with_addrs(host, Vec::with_capacity(1000), sender, receiver)
     }
 
-    pub fn new_with_addrs(host: &str, addrs: Vec<NetAddr>) -> Result<Peer, Error> {
+    pub fn new_with_addrs(host: &str,
+                          addrs: Vec<NetAddr>,
+                          sender: &BroadcastSender<ClientMessage>,
+                          receiver: &BroadcastReceiver<ClientMessage>)
+                          -> Result<Peer, Error> {
+        info!("Trying to initialize connection to {}", host);
         let socket = TcpStream::connect(host)?;
-        socket.set_read_timeout(Some(Duration::from_secs(1)))?;
+        info!("Connected to {}", host);
+        socket.set_read_timeout(Some(Duration::from_secs(2)))?;
         // .expect("set_read_timeout call failed");
-        socket.set_write_timeout(Some(Duration::from_secs(1)))?;
+        socket.set_write_timeout(Some(Duration::from_secs(2)))?;
         // .expect("set_read_timeout call failed");
         Ok(Peer {
+            host: host.into(),
             socket: socket,
             // Allocate a buffer with 128k of capacity
             buffer: Buffer::with_capacity(1024 * 128),
@@ -56,6 +72,8 @@ impl Peer {
             send_headers: false,
             acked: false,
             addrs: addrs,
+            sender: sender.clone(),
+            receiver: receiver.clone(),
         })
     }
 
@@ -65,15 +83,16 @@ impl Peer {
                 let _ = self.send(Peer::version());
             }
             Message::Ping(nonce) => {
-                info!("Ping");
+                debug!("Ping");
                 let _ = self.send(Message::Pong(nonce));
             }
             Message::SendCompact(msg) => {
                 self.send_compact = msg.send_compact;
             }
-            Message::Addr(addrs) => {
-                info!("Found {} addrs", addrs.addrs.len());
-                self.addrs = addrs.addrs;
+            Message::Addr(mut addrs) => {
+                debug!("Found {} addrs", addrs.addrs.len());
+                let _ = self.sender.try_send(ClientMessage::Addrs(addrs.addrs.clone()));
+                self.addrs.append(&mut addrs.addrs);
             }
             Message::GetAddr => {
                 let msg = AddrMessage { addrs: self.addrs.clone() };
@@ -89,7 +108,10 @@ impl Peer {
                 // Support for alert messages has been removed from bitcoin core in March 2016.
                 // Read more at https://github.com/bitcoin/bitcoin/pull/7692
                 if name != "alert" {
-                    info!("Not handling {} yet ({:?})", name, to_hex_string(&message))
+                    info!("{} : Not handling {} yet ({:?})",
+                          self.host,
+                          name,
+                          to_hex_string(&message))
                 }
             }
             _ => {
@@ -98,31 +120,44 @@ impl Peer {
         };
     }
 
-    pub fn run(&mut self) {
-        let _ = self.send(Peer::version()).unwrap();
-        loop {
-            match self.recv() {
-                Some(Message::Version(message)) => {
-                    debug!("Connected to a peer running: {}", message.user_agent);
-                    let _ = self.send(Message::Verack).unwrap();
-                    if self.addrs.len() < 100 {
-                        let _ = self.send(Message::GetAddr);
+    pub fn run(mut self) -> thread::JoinHandle<()> {
+        thread::spawn(move || {
+            let _ = self.send(Peer::version()).unwrap();
+            loop {
+                match self.recv() {
+                    Some(Message::Version(message)) => {
+                        debug!("Connected to a peer running: {}", message.user_agent);
+                        let _ = self.send(Message::Verack).unwrap();
+                        if self.addrs.len() < 100 {
+                            let _ = self.send(Message::GetAddr);
+                        }
+                        break;
                     }
-                    break;
+                    Some(s) => debug!("Received {:?} prior to VERSION", s),
+                    _ => debug!("Haven't yet received VERSION packet from remote peer"),
                 }
-                Some(s) => debug!("Received {:?} prior to VERSION", s),
-                _ => debug!("Haven't yet received VERSION packet from remote peer"),
             }
-        }
-        loop {
-            if let Some(msg) = self.recv() {
-                self.handle_message(msg);
-            } else {
-                trace!("[{}] Trying to recieve again", self.buffer.available_data());
+            loop {
+                if let Some(msg) = self.recv() {
+                    self.handle_message(msg);
+                } else {
+                    trace!("{} :: [{}] Trying to recieve again",
+                           self.host,
+                           self.buffer.available_data());
+                }
+                if let Ok(msg) = self.receiver.try_recv() {
+                    match msg {
+                        ClientMessage::Addrs(addrs) => {
+                            let _ = self.send(Message::Addr(AddrMessage { addrs: addrs }));
+                        }
+                        // _ => info!("Ignoring msg: {:?}", msg),
+                    }
+                }
+                // sending messages to peers
+                // check if this is bad
             }
-            // sending messages to peers
-            // check if this is bad
-        }
+        })
+
     }
 
     pub fn addrs(&mut self) {
@@ -136,7 +171,7 @@ impl Peer {
         if available_data == 0 {
             return None;
         }
-        let parsed = match message(&self.buffer.data()) {
+        let parsed = match message(&self.buffer.data(), &self.host) {
             IResult::Done(remaining, msg) => Some((msg, remaining.len())),
             IResult::Incomplete(len) => {
                 if let Needed::Size(s) = len {
@@ -144,8 +179,15 @@ impl Peer {
                 }
                 None
             }
-            _ => {
-                trace!("Failed to parse remaining buffer");
+            IResult::Error(e) => {
+                match e {
+                    ErrorKind::Custom(0) => warn!("{} Gave us bad data!", self.host),
+                    _ => {
+                        debug!("{} - Failed to parse remaining buffer :: {:?}",
+                               self.host,
+                               e)
+                    }
+                }
                 None
             }
         };
@@ -162,8 +204,10 @@ impl Peer {
         if let Some(message) = self.try_parse() {
             return Some(message);
         }
+        let len = self.buffer.available_data();
         self.read();
-        if self.buffer.available_data() < self.needed {
+        if self.buffer.available_data() < self.needed || self.buffer.available_data() == 0 ||
+           self.buffer.available_data() == len {
             return None;
         }
 
@@ -177,7 +221,10 @@ impl Peer {
         let mut buff = [0; 8192];
         let read = match self.socket.read(&mut buff) {
             Ok(r) => r,
-            Err(_) => return,
+            Err(e) => {
+                trace!("Socket read error? {:?}", e);
+                return;
+            }
         };
         if read == 0 {
             return;
@@ -198,7 +245,7 @@ impl Peer {
     }
 
     fn send(&mut self, message: Message) -> Result<(), Error> {
-        info!("About to write: {:?}", message);
+        debug!("About to write: {:?}", message);
         let written = self.socket.write(&message.encode())?;
         debug!("Written: {:}", written);
         Ok(())

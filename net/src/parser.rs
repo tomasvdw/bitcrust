@@ -82,12 +82,12 @@ named!(raw_message<RawMessage>,
     )
 ));
 
-pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
+pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
     let raw_message_result = raw_message(&i);
     match raw_message_result {
         IResult::Done(i, raw_message) => {
             if !raw_message.valid() {
-                warn!("Invalid message");
+                warn!("Invalid message from {}\n\t{:?}", name, raw_message);
                 return IResult::Error(nom::ErrorKind::Custom(0));
             }
             match &raw_message.message_type[..] {
