@@ -105,6 +105,8 @@ pub struct Store {
     pub spend_tree: spend_tree::SpendTree,
     pub spend_index: spend_index::SpendIndex,
 
+    pub tips: tips::Tips,
+
     // todo; this needs to go; structured logging is superior
     pub metrics: Metrics,
 
@@ -139,6 +141,7 @@ impl Store {
             spend_tree:   spend_tree::SpendTree::new(&cfg),
             spend_index:  spend_index::SpendIndex::new(&cfg),
 
+            tips:         tips::Tips::new(&cfg),
 
             metrics:       Metrics::new(),
             logger:        slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!()),

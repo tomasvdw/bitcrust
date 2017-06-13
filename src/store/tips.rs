@@ -31,7 +31,7 @@ use hash::*;
 use config;
 
 
-struct Tips {
+pub struct Tips {
 
     path: PathBuf
 }
@@ -53,9 +53,9 @@ impl Tips {
 
     pub fn add_tip(&self, tip: Tip) {
 
-        let path = self.path.join(format!("{:?}", tip.block_hash));
+        let path = self.path.join(format!("{}", tip.filename()));
 
-        let mut file = fs::File::create(tip.filename())
+        let mut file = fs::File::create(path)
             .expect("Cannot create files in store");
 
         tip.write(&mut file);
@@ -79,7 +79,7 @@ impl Tips {
     }
 }
 
-struct Tip {
+pub struct Tip {
 
     block_hash: Hash32Buf,
 
