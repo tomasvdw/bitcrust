@@ -36,6 +36,27 @@ pub struct Tips {
     path: PathBuf
 }
 
+pub fn add_tip(tips: &Tips, block_hash: Hash32Buf, difficulty: u64, height: u64) {
+
+
+    let tip = Tip {
+        block_hash: block_hash,
+        difficulty: difficulty,
+        height: height
+    };
+    let path = tips.path.join(format!("{}", tip.filename()));
+
+    println!("ADD TIP: {:?}", path);
+
+    let path = tips.path.join(format!("{}", tip.filename()));
+
+    let mut file = fs::File::create(path)
+        .expect("Cannot create files in store");
+
+    tip.write(&mut file);
+}
+
+
 impl Tips {
 
     pub fn new(cfg: &config::Config) -> Tips {
@@ -51,16 +72,6 @@ impl Tips {
         }
     }
 
-    pub fn add_tip(&self, tip: Tip) {
-
-        let path = self.path.join(format!("{}", tip.filename()));
-
-        let mut file = fs::File::create(path)
-            .expect("Cannot create files in store");
-
-        tip.write(&mut file);
-
-    }
 
     pub fn get_tips() -> Vec<Tip> {
         vec![]
@@ -135,12 +146,8 @@ mod tests {
 
         let tips = Tips::new(&test_cfg!());
 
-        tips.add_tip(Tip::new(
-            Hash32Buf::from_slice(&from_hex_rev(HASH1)), 1, 2)
-        );
-        tips.add_tip(Tip::new(
-            Hash32Buf::from_slice(&from_hex_rev(HASH2)), 3, 4)
-        );
+        add_tip(&tips, Hash32Buf::from_slice(&from_hex_rev(HASH1)), 1, 2);
+        add_tip(&tips, Hash32Buf::from_slice(&from_hex_rev(HASH2)), 3, 4);
 
     }
 }

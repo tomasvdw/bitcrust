@@ -57,7 +57,7 @@ mod spend_tree;
 
 mod prune;
 
-mod tips;
+pub mod tips;
 
 mod transactions;
 
