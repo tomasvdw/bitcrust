@@ -16,6 +16,7 @@ mod tests {
 
     use net_addr::NetAddr;
     use super::*;
+    use services::Services;
 
     use parser::message;
     #[test]
@@ -97,7 +98,7 @@ mod tests {
              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
              0x00, 0x00];
 
-        let res = message(&input);
+        let res = message(&input, &"test".to_string());
         println!("Message: {:?}", res);
         res.unwrap();
         // assert!(res.is_ok())
@@ -154,17 +155,17 @@ mod tests {
         ];
         let version = VersionMessage {
             version: 60002,
-            services: 1,
+            services: Services::from(1),
             timestamp: 1355854353,
             addr_recv: NetAddr {
                 time: None,
-                services: 1,
+                services: Services::from(1),
                 ip: Ipv6Addr::from_str("::ffff:10.0.0.1").unwrap(),
                 port: 8333,
             },
             addr_send: NetAddr {
                 time: None,
-                services: 1,
+                services: Services::from(1),
                 ip: Ipv6Addr::from_str("::ffff:10.0.0.1").unwrap(),
                 port: 8333,
             },

@@ -9,13 +9,14 @@ use rusqlite::{Error, Connection};
 use client_message::ClientMessage;
 use net_addr::NetAddr;
 use peer::Peer;
+use services::Services;
 
 pub struct Client {
     addrs: Vec<NetAddr>,
     database: Connection,
     sender: BroadcastSender<ClientMessage>,
     receiver: BroadcastReceiver<ClientMessage>,
-    peers: Vec<thread::JoinHandle<()>>,
+    peers: Vec<(String, thread::JoinHandle<()>)>,
 }
 
 //pub time: Option<u32>,
@@ -51,7 +52,7 @@ impl Client {
             let addrs: Vec<NetAddr> = stmt.query_map(&[], |row| {
                     NetAddr {
                         time: Some(row.get(0)),
-                        services: row.get::<_, i64>(1) as u64,
+                        services: Services::from(row.get::<_, i64>(1) as u64),
                         ip: Ipv6Addr::from_str(&row.get::<_, String>(2))
                             .unwrap_or(Ipv6Addr::from_str("::").unwrap()),
                         port: row.get(3),
@@ -93,32 +94,10 @@ impl Client {
             match self.receiver.recv() {
                 Ok(s) => {
                     match s {
-                        ClientMessage::Addrs(addrs) => {
-                            info!("Peer sent us {} new addrs", addrs.len());
-                            for addr in addrs {
-                                if self.peers.len() < 100 {
-                                    match Peer::new_with_addrs(&format!("{}:{}",
-                                                                        addr.ip,
-                                                                        addr.port),
-                                                               self.addrs.clone(),
-                                                               &self.sender,
-                                                               &self.receiver) {
-                                        Ok(peer) => {
-                                            let _ = self.update_time(&addr);
-                                            self.peers.push(peer.run())
-                                        }
-                                        Err(e) => {
-                                            debug!("Failed to connect to peer at {} :: {:?}",
-                                                   addr.ip,
-                                                   e);
-                                        }
-                                    };
-                                }
-                                match self.add_addr(addr) {
-                                    Ok(_) => {}
-                                    Err(e) => warn!("Error adding addr: {:?}", e),
-                                }
-                            }
+                        ClientMessage::Addrs(addrs) => self.addr_message(addrs),
+                        ClientMessage::Closing(hostname) => {
+                            self.peers
+                                .retain(|ref peer| peer.0 != hostname);
                         }
                     }
                 }
@@ -133,20 +112,46 @@ impl Client {
         }
     }
 
-    fn initialize_peers(&mut self) -> Vec<thread::JoinHandle<()>> {
+    fn addr_message(&mut self, addrs: Vec<NetAddr>) {
+        info!("Peer sent us {} new addrs", addrs.len());
+        for addr in addrs {
+            if self.peers.len() < 100 {
+                let host = format!("{}:{}", addr.ip, addr.port);
+                match Peer::new_with_addrs(&host,
+                                           self.addrs.clone(),
+                                           &self.sender,
+                                           &self.receiver) {
+                    Ok(peer) => {
+                        let _ = self.update_time(&addr);
+                        self.peers.push((host, peer.run()));
+                    }
+                    Err(e) => {
+                        debug!("Failed to connect to peer at {} :: {:?}", addr.ip, e);
+                    }
+                };
+            }
+            match self.add_addr(addr) {
+                Ok(_) => {}
+                Err(e) => warn!("Error adding addr: {:?}", e),
+            }
+        }
+    }
+
+    fn initialize_peers(&mut self) -> Vec<(String, thread::JoinHandle<()>)> {
         let mut threads = vec![];
         if self.addrs.len() > 0 {
             for addr in &self.addrs {
                 if threads.len() >= 100 {
                     break;
                 }
-                match Peer::new_with_addrs(&format!("{}:{}", addr.ip, addr.port),
+                let host = format!("{}:{}", addr.ip, addr.port);
+                match Peer::new_with_addrs(&host,
                                            self.addrs.clone(),
                                            &self.sender,
                                            &self.receiver) {
                     Ok(peer) => {
                         let _ = self.update_time(addr);
-                        threads.push(peer.run())
+                        threads.push((host, peer.run()));
                     }
                     Err(e) => {
                         debug!("Failed to connect to peer at {} :: {:?}", addr.ip, e);
@@ -168,7 +173,9 @@ impl Client {
                 .iter() {
                 // info!("Trying to connect")
                 match Peer::new(&hostname, &self.sender, &self.receiver) {
-                    Ok(peer) => threads.push(peer.run()),
+                    Ok(peer) => {
+                        threads.push((hostname.to_string(), peer.run()));
+                    }
                     Err(e) => warn!("Error connecting to {}: {:?}", hostname, e),
                 }
 
@@ -189,7 +196,7 @@ impl Client {
         let mut stmt = self.database
             .prepare("INSERT INTO peers (time, services, ip, port) VALUES (?, ?, ?, ?)")?;
         stmt.execute(&[&format!("{}", addr.time.unwrap_or(0)),
-                       &format!("{}", addr.services as i64),
+                       &format!("{}", addr.services.encode() as i64),
                        &format!("{}", addr.ip),
                        &format!("{}", addr.port)])?;
         self.addrs.push(addr.clone());

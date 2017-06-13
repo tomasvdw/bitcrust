@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate bitflags;
 extern crate byteorder;
 extern crate circular;
 #[macro_use]
@@ -12,6 +14,7 @@ pub mod client_message;
 mod parser;
 mod message;
 mod net_addr;
+mod services;
 
 pub mod peer;
 pub mod client;

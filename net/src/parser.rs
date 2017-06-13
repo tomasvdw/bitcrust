@@ -7,6 +7,7 @@ use sha2::{Sha256, Digest};
 use message::Message;
 use message::{AddrMessage, SendCmpctMessage, VersionMessage};
 use net_addr::NetAddr;
+use services::Services;
 
 fn to_hex_string(bytes: &[u8]) -> String {
     let strs: Vec<String> = bytes.iter()
@@ -54,8 +55,8 @@ struct Header<'a> {
 
 named!(header <Header>,
   do_parse!(
-  magic: le_u32 >>
-    message_type: take_str!(12) >>
+    magic: le_u32 >>
+    message_type: dbg_dmp!(take_str!(12)) >>
     payload_len: le_u32 >>
     checksum: take!(4) >>
     ({trace!("message_type: {:?}\tpayload len: {}", message_type, payload_len); Header {
@@ -88,7 +89,8 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
         IResult::Done(i, raw_message) => {
             if !raw_message.valid() {
                 warn!("Invalid message from {}\n\t{:?}", name, raw_message);
-                return IResult::Error(nom::ErrorKind::Custom(0));
+                // return IResult::Error(nom::ErrorKind::Custom(0));
+                return IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(raw_message.len + 20)));
             }
             match &raw_message.message_type[..] {
                 "version" => version(raw_message.body),
@@ -154,7 +156,7 @@ named!(version <Message>,
     (
        Message::Version(VersionMessage {
         version: version,
-        services: services,
+        services: Services::from(services),
         timestamp: timestamp,
         addr_recv: addr_recv,
         addr_send: addr_send,
@@ -233,7 +235,7 @@ named!(pub version_net_addr< NetAddr >,
 
     (NetAddr {
       time: None,
-      services: services,
+      services: Services::from(services),
       ip: ip,
       port: port
     })
@@ -248,7 +250,7 @@ named!(pub net_addr< NetAddr >,
 
     (NetAddr {
       time: Some(time),
-      services: services,
+      services: Services::from(services),
       ip: ip,
       port: port
     })
@@ -289,7 +291,7 @@ mod parse_tests {
         assert_eq!(parsed,
                    NetAddr {
                        time: None,
-                       services: 1,
+                       services: Services::from(1),
                        ip: Ipv6Addr::from_str("::ffff:10.0.0.1").unwrap(),
                        port: 8333,
                    });
@@ -317,17 +319,17 @@ mod parse_tests {
         println!("Parsing len: {}", input.len());
         let expected = Message::Version(VersionMessage {
             version: 60002,
-            services: 1,
+            services: Services::from(1),
             timestamp: 1355854353,
             addr_recv: NetAddr {
                 time: None,
-                services: 1,
+                services: Services::from(1),
                 ip: Ipv6Addr::from_str("::ffff:10.0.0.1").unwrap(),
                 port: 8333,
             },
             addr_send: NetAddr {
                 time: None,
-                services: 1,
+                services: Services::from(1),
                 ip: Ipv6Addr::from_str("::ffff:10.0.0.1").unwrap(),
                 port: 8333,
             },
@@ -359,7 +361,7 @@ mod parse_tests {
                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
-        let res = message(&input);
+        let res = message(&input, &"test".to_string());
         println!("Message: {:?}", res);
         // assert!(res.is_ok())
     }
@@ -383,7 +385,7 @@ mod parse_tests {
           0x0F, 0x2F, 0x53, 0x61, 0x74, 0x6F, 0x73, 0x68, 0x69, 0x3A, 0x30, 0x2E, 0x37, 0x2E, 0x32, 0x2F,                                                             //- "/Satoshi:0.7.2/" sub-version string (string is 15 bytes long)
           0xC0, 0x3E, 0x03, 0x00                                                                                                                                      //- Last block sending node has is block #212672
         ];
-        let output = message(&input);
+        let output = message(&input, &"test".to_string());
         println!("Output: {:?}", output);
     }
 
@@ -458,7 +460,7 @@ mod parse_tests {
                      0x20,
                      0x8D];
 
-        let parsed = message(&input);
+        let parsed = message(&input, &"test".to_string());
         println!("Parsed addr: {:?}", parsed.unwrap());
     }
 }
