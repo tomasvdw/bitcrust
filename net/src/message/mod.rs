@@ -3,11 +3,13 @@ use sha2::{Sha256, Digest};
 
 mod version_message;
 mod addr_message;
+mod getheaders_message;
 mod inv_message;
 mod sendcmpct_message;
 
 pub use self::version_message::VersionMessage;
 pub use self::addr_message::AddrMessage;
+pub use self::getheaders_message::GetheadersMessage;
 pub use self::inv_message::InvMessage;
 pub use self::sendcmpct_message::SendCmpctMessage;
 
@@ -188,6 +190,7 @@ pub enum Message {
     SendHeaders,
     SendCompact(SendCmpctMessage),
     GetAddr,
+    GetHeaders(GetheadersMessage),
     Addr(AddrMessage),
     Inv(InvMessage),
     Unparsed(String, Vec<u8>),
@@ -241,6 +244,7 @@ impl Message {
             Message::Verack => packet!("verack" => Vec::with_capacity(0)),
             Message::SendHeaders => packet!("sendheaders" => Vec::with_capacity(0)),
             Message::GetAddr => packet!("getaddr" => Vec::with_capacity(0)),
+            Message::GetHeaders(ref msg) => packet!("getheaders", msg),
             Message::Addr(ref addr) => packet!("addr", addr),
             Message::Inv(ref inv) => packet!("inv", inv),
             Message::SendCompact(ref message) => packet!("sendcmpct", message),

@@ -30,7 +30,7 @@ mod tests {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NetAddr {
     pub time: Option<u32>,
     pub services: Services,

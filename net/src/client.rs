@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::env::home_dir;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
@@ -12,7 +13,7 @@ use peer::Peer;
 use services::Services;
 
 pub struct Client {
-    addrs: Vec<NetAddr>,
+    addrs: HashSet<NetAddr>,
     database: Connection,
     sender: BroadcastSender<ClientMessage>,
     receiver: BroadcastReceiver<ClientMessage>,
@@ -43,13 +44,13 @@ impl Client {
                      &[])
             .unwrap();
 
-        let addrs: Vec<NetAddr> = {
+        let addrs: HashSet<NetAddr> = {
             let mut stmt =
                 db.prepare("SELECT time, services, ip, port from peers ORDER BY time DESC \
                               limit 1000")
                     .unwrap();
 
-            let addrs: Vec<NetAddr> = stmt.query_map(&[], |row| {
+            let addrs: HashSet<NetAddr> = stmt.query_map(&[], |row| {
                     NetAddr {
                         time: Some(row.get(0)),
                         services: Services::from(row.get::<_, i64>(1) as u64),
@@ -119,10 +120,7 @@ impl Client {
         for addr in addrs.into_iter().filter(|addr| current_addrs.contains(addr)) {
             if self.peers.len() < 100 {
                 let host = format!("{}:{}", addr.ip, addr.port);
-                match Peer::new_with_addrs(&host,
-                                           self.addrs.clone(),
-                                           &self.sender,
-                                           &self.receiver) {
+                match Peer::new(&host, &self.sender, &self.receiver) {
                     Ok(peer) => {
                         let _ = self.update_time(&addr);
                         self.peers.push((host, peer.run()));
@@ -192,10 +190,15 @@ impl Client {
 
     fn add_addr(&mut self, addr: NetAddr) -> Result<(), Error> {
         if self.update_time(&addr).is_some() {
-            for a in self.addrs
-                .iter_mut()
-                .filter(|a| a.ip == addr.ip && a.port == addr.port) {
+            let updating: Vec<NetAddr> = self.addrs
+                .iter()
+                .filter(|a| a.ip == addr.ip && a.port == addr.port)
+                .map(|a| a.clone())
+                .collect();
+            for mut a in updating {
+                self.addrs.remove(&a);
                 a.time = addr.time;
+                self.addrs.insert(a);
             }
             return Ok::<(), Error>(());
         }
@@ -205,7 +208,7 @@ impl Client {
                        &format!("{}", addr.services.encode() as i64),
                        &format!("{}", addr.ip),
                        &format!("{}", addr.port)])?;
-        self.addrs.push(addr.clone());
+        self.addrs.insert(addr.clone());
         Ok(())
     }
 

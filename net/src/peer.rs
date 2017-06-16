@@ -134,6 +134,7 @@ impl Peer {
             Message::SendHeaders => {
                 self.send_headers = true;
             }
+            Message::GetHeaders(msg) => {}
             Message::Verack => {
                 self.acked = true;
             }
