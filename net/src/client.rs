@@ -80,8 +80,8 @@ impl Client {
 
     pub fn execute(&mut self) {
         debug!("Executing!");
-        let mut peers = self.initialize_peers();
-        self.peers.append(&mut peers);
+        self.initialize_peers();
+        // self.peers.append(&mut peers);
         // println!("About to make a scope for a peer");
         // debug!("Made a crossbeam scope!");
 
@@ -109,12 +109,14 @@ impl Client {
                     // }
                 }
             }
+            self.initialize_peers();
         }
     }
 
     fn addr_message(&mut self, addrs: Vec<NetAddr>) {
         info!("Peer sent us {} new addrs", addrs.len());
-        for addr in addrs {
+        let current_addrs = self.addrs.clone();
+        for addr in addrs.into_iter().filter(|addr| current_addrs.contains(addr)) {
             if self.peers.len() < 100 {
                 let host = format!("{}:{}", addr.ip, addr.port);
                 match Peer::new_with_addrs(&host,
@@ -137,32 +139,37 @@ impl Client {
         }
     }
 
-    fn initialize_peers(&mut self) -> Vec<(String, thread::JoinHandle<()>)> {
-        let mut threads = vec![];
+    fn initialize_peers(&mut self) {
+        if self.peers.len() >= 100 {
+            return;
+        }
+
         if self.addrs.len() > 0 {
-            for addr in &self.addrs {
-                if threads.len() >= 100 {
+            let connected_addrs: Vec<String> = self.peers.iter().map(|t| t.0.clone()).collect();
+            for (addr, host) in self.addrs
+                .iter()
+                .map(|addr| {
+                    let s = format!("{}:{}", addr.ip, addr.port);
+                    (addr, s)
+                })
+                .filter(|a| !connected_addrs.contains(&a.1)) {
+                if self.peers.len() >= 100 {
                     break;
                 }
-                let host = format!("{}:{}", addr.ip, addr.port);
-                match Peer::new_with_addrs(&host,
-                                           self.addrs.clone(),
-                                           &self.sender,
-                                           &self.receiver) {
+                match Peer::new(&host, &self.sender, &self.receiver) {
                     Ok(peer) => {
                         let _ = self.update_time(addr);
-                        threads.push((host, peer.run()));
+                        self.peers.push((host.to_string(), peer.run()));
                     }
                     Err(e) => {
                         debug!("Failed to connect to peer at {} :: {:?}", addr.ip, e);
                         let _ = self.remove_addr(&addr);
                     }
                 };
-
             }
         }
 
-        if self.peers.len() + threads.len() == 0 {
+        if self.peers.len() == 0 {
             for hostname in ["seed.bitcoin.sipa.be:8333",
                              "dnsseed.bluematt.me:8333",
                              "dnsseed.bitcoin.dashjr.org:8333",
@@ -174,14 +181,13 @@ impl Client {
                 // info!("Trying to connect")
                 match Peer::new(&hostname, &self.sender, &self.receiver) {
                     Ok(peer) => {
-                        threads.push((hostname.to_string(), peer.run()));
+                        self.peers.push((hostname.to_string(), peer.run()));
                     }
                     Err(e) => warn!("Error connecting to {}: {:?}", hostname, e),
                 }
 
             }
         }
-        threads
     }
 
     fn add_addr(&mut self, addr: NetAddr) -> Result<(), Error> {

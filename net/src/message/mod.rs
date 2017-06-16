@@ -3,10 +3,12 @@ use sha2::{Sha256, Digest};
 
 mod version_message;
 mod addr_message;
+mod inv_message;
 mod sendcmpct_message;
 
 pub use self::version_message::VersionMessage;
 pub use self::addr_message::AddrMessage;
+pub use self::inv_message::InvMessage;
 pub use self::sendcmpct_message::SendCmpctMessage;
 
 #[cfg(test)]
@@ -187,6 +189,7 @@ pub enum Message {
     SendCompact(SendCmpctMessage),
     GetAddr,
     Addr(AddrMessage),
+    Inv(InvMessage),
     Unparsed(String, Vec<u8>),
     Ping(u64),
     Pong(u64),
@@ -239,6 +242,7 @@ impl Message {
             Message::SendHeaders => packet!("sendheaders" => Vec::with_capacity(0)),
             Message::GetAddr => packet!("getaddr" => Vec::with_capacity(0)),
             Message::Addr(ref addr) => packet!("addr", addr),
+            Message::Inv(ref inv) => packet!("inv", inv),
             Message::SendCompact(ref message) => packet!("sendcmpct", message),
             Message::Ping(nonce) => {
                 let mut v = Vec::with_capacity(4);

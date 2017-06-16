@@ -13,6 +13,7 @@ extern crate sha2;
 pub mod client_message;
 mod parser;
 mod message;
+mod inventory_vector;
 mod net_addr;
 mod services;
 

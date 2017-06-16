@@ -137,6 +137,7 @@ impl Peer {
             Message::Verack => {
                 self.acked = true;
             }
+            Message::Inv(inv) => {}
             Message::Unparsed(name, message) => {
                 // Support for alert messages has been removed from bitcoin core in March 2016.
                 // Read more at https://github.com/bitcoin/bitcoin/pull/7692
@@ -171,7 +172,7 @@ impl Peer {
                     }
                     Some(s) => debug!("Received {:?} prior to VERSION", s),
                     _ => {
-                        debug!("{} - Haven't yet received VERSION packet from remote peer",
+                        trace!("{} - Haven't yet received VERSION packet from remote peer",
                                self.host)
                     }
                 }
@@ -187,7 +188,9 @@ impl Peer {
                 if let Ok(msg) = self.receiver.try_recv() {
                     match msg {
                         ClientMessage::Addrs(addrs) => {
-                            let _ = self.send(Message::Addr(AddrMessage { addrs: addrs }));
+                            // Need some more logic around when to send the AddrMessage
+                            // to the peer
+                            // let _ = self.send(Message::Addr(AddrMessage { addrs: addrs }));
                         }
                         ClientMessage::Closing(_) => {}
                         // _ => info!("Ignoring msg: {:?}", msg),
@@ -311,7 +314,7 @@ impl Peer {
         if read == 0 {
             return;
         }
-        debug!("{} [{} / {}] Read: {}, Need: {}",
+        trace!("{} [{} / {}] Read: {}, Need: {}",
                self.host,
                self.buffer.available_data(),
                self.buffer.capacity(),
@@ -328,9 +331,9 @@ impl Peer {
     }
 
     fn send(&mut self, message: Message) -> Result<(), Error> {
-        debug!("{} About to write: {:?}", self.host, message);
+        trace!("{} About to write: {:?}", self.host, message);
         let written = self.socket.write(&message.encode())?;
-        debug!("{} Written: {:}", self.host, written);
+        trace!("{} Written: {:}", self.host, written);
         Ok(())
     }
 
