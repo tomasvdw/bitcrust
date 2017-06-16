@@ -14,10 +14,15 @@ impl GetheadersMessage {
         let mut v = Vec::with_capacity(128);
         let _ = v.write_u32::<LittleEndian>(self.version);
         v.append(&mut var_int(self.locator_hashes.len() as u64));
-        // for hash in self.locator_hashes {
-        //     v.append(&mut hash);
-        // }
-        // v.append(&mut self.hash_stop);
+
+        for hash in &self.locator_hashes {
+            for byte in hash {
+                let _ = v.write_u8(*byte);
+            }
+        }
+        for byte in &self.hash_stop {
+            let _ = v.write_u8(*byte);
+        }
         v
     }
 }

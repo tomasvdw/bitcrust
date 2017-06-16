@@ -1,3 +1,5 @@
+use byteorder::{LittleEndian, WriteBytesExt};
+
 #[derive(Debug, PartialEq)]
 pub struct InventoryVector {
     flags: InvFlags,
@@ -13,9 +15,14 @@ bitflags! {
       const MSG_CMPCT_BLOCK     = 0b00001000
   }
 }
+
 impl InventoryVector {
     pub fn encode(&self) -> Vec<u8> {
         let mut v: Vec<u8> = Vec::with_capacity(36);
+        let _ = v.write_u32::<LittleEndian>(self.flags.bits);
+        for byte in &self.hash {
+            let _ = v.write_u8(*byte);
+        }
         v
     }
 
