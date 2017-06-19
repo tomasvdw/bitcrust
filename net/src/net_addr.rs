@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use std::net::Ipv6Addr;
 
 use byteorder::{BigEndian, LittleEndian, NetworkEndian, WriteBytesExt};
@@ -30,7 +31,7 @@ mod tests {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NetAddr {
     pub time: Option<u32>,
     pub services: Services,
@@ -54,5 +55,13 @@ impl NetAddr {
         // write port
         let _ = v.write_u16::<BigEndian>(self.port);
         v
+    }
+}
+
+impl Hash for NetAddr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.services.hash(state);
+        self.ip.hash(state);
+        self.port.hash(state);
     }
 }
