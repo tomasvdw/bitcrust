@@ -376,7 +376,7 @@ pub fn add_block(store: &mut Store, buffer: &[u8]) {
 
     }
 
-    tips::add_tip(&store.tips, block_hash, 0, 0);
+    tips::add_tip(&store.tips, block_hash, None, 0, 0);
 
 
     // TODO verify amounts

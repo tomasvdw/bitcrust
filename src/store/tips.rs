@@ -36,7 +36,13 @@ pub struct Tips {
     path: PathBuf
 }
 
-pub fn add_tip(tips: &Tips, block_hash: Hash32Buf, difficulty: u64, height: u64) {
+pub fn add_tip(
+    tips: &Tips,
+    block_hash: Hash32Buf,
+    previous_hash: Option<Hash32Buf>,
+    difficulty: u64,
+    height: u64)
+{
 
 
     let tip = Tip {
@@ -146,8 +152,8 @@ mod tests {
 
         let tips = Tips::new(&test_cfg!());
 
-        add_tip(&tips, Hash32Buf::from_slice(&from_hex_rev(HASH1)), 1, 2);
-        add_tip(&tips, Hash32Buf::from_slice(&from_hex_rev(HASH2)), 3, 4);
+        add_tip(&tips, Hash32Buf::from_slice(&from_hex_rev(HASH1)), None, 1, 2);
+        add_tip(&tips, Hash32Buf::from_slice(&from_hex_rev(HASH2)), None, 3, 4);
 
     }
 }
