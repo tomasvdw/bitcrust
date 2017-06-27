@@ -91,7 +91,7 @@ impl Client {
         // });
         // });
         loop {
-            info!("Currently connected to {} peers", self.peers.len());
+            info!("Currently connected to {}/{} peers", self.peers.len(), self.addrs.len());
             match self.receiver.recv() {
                 Ok(s) => {
                     match s {
@@ -116,24 +116,11 @@ impl Client {
 
     fn addr_message(&mut self, addrs: Vec<NetAddr>) {
         info!("Peer sent us {} new addrs", addrs.len());
-        let current_addrs = self.addrs.clone();
-        for addr in addrs.into_iter().filter(|addr| current_addrs.contains(addr)) {
-            if self.peers.len() < 100 {
-                let host = format!("{}:{}", addr.ip, addr.port);
-                match Peer::new(&host[..], &self.sender, &self.receiver) {
-                    Ok(peer) => {
-                        let _ = self.update_time(&addr);
-                        self.peers.push((host, peer.run()));
-                    }
-                    Err(e) => {
-                        debug!("Failed to connect to peer at {} :: {:?}", addr.ip, e);
-                    }
-                };
-            }
+        for addr in addrs.into_iter() {
             match self.add_addr(addr) {
-                Ok(_) => {}
-                Err(e) => warn!("Error adding addr: {:?}", e),
-            }
+                    Ok(_) => {}
+                    Err(e) => warn!("Error adding addr: {:?}", e),
+                }
         }
     }
 

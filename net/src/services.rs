@@ -14,7 +14,7 @@ bitflags! {
 /// 1 NODE_NETWORK  This node can be asked for full blocks instead of just headers.
 /// 2 NODE_GETUTXO  See [BIP 0064](https://github.com/bitcoin/bips/blob/master/bip-0064.mediawiki)
 /// 4 NODE_BLOOM  See [BIP 0111](https://github.com/bitcoin/bips/blob/master/bip-0111.mediawiki)
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Services {
     flags: ServiceFlags,
 }

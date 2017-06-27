@@ -10,6 +10,7 @@ extern crate nom;
 extern crate rusqlite;
 extern crate sha2;
 
+pub mod bitcoin_network_connection;
 pub mod client_message;
 mod parser;
 mod message;
