@@ -70,30 +70,31 @@ impl Debug for Peer {
 }
 
 impl Peer {
-    pub fn new(host: &str,
+    pub fn new<T: Into<String>>(host: T,
                sender: &BroadcastSender<ClientMessage>,
                receiver: &BroadcastReceiver<ClientMessage>)
                -> Result<Peer, Error> {
         Peer::new_with_addrs(host, HashSet::with_capacity(1000), sender, receiver)
     }
 
-    pub fn new_with_addrs(host: &str,
+    pub fn new_with_addrs<T: Into<String>>(host: T,
                           addrs: HashSet<NetAddr>,
                           sender: &BroadcastSender<ClientMessage>,
                           receiver: &BroadcastReceiver<ClientMessage>)
                           -> Result<Peer, Error> {
+        let host = host.into();
         info!("Trying to initialize connection to {}", host);
-        let socket = TcpStream::connect(host)?;
+        let socket = TcpStream::connect(&host)?;
         info!("Connected to {}", host);
         socket.set_read_timeout(Some(Duration::from_secs(2)))?;
         // .expect("set_read_timeout call failed");
         socket.set_write_timeout(Some(Duration::from_secs(2)))?;
         // .expect("set_read_timeout call failed");
         Ok(Peer {
-            host: host.into(),
+            host: host,
             socket: socket,
-            // Allocate a buffer with 128k of capacity
-            buffer: Buffer::with_capacity(1024 * 128),
+            // Allocate a buffer with 4MB of capacity
+            buffer: Buffer::with_capacity(1024 * 1024 * 4),
             needed: 0,
             send_compact: false,
             send_headers: false,

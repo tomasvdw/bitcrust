@@ -120,7 +120,7 @@ impl Client {
         for addr in addrs.into_iter().filter(|addr| current_addrs.contains(addr)) {
             if self.peers.len() < 100 {
                 let host = format!("{}:{}", addr.ip, addr.port);
-                match Peer::new(&host, &self.sender, &self.receiver) {
+                match Peer::new(&host[..], &self.sender, &self.receiver) {
                     Ok(peer) => {
                         let _ = self.update_time(&addr);
                         self.peers.push((host, peer.run()));
@@ -154,14 +154,15 @@ impl Client {
                 if self.peers.len() >= 100 {
                     break;
                 }
-                match Peer::new(&host, &self.sender, &self.receiver) {
+                match Peer::new(&host[..], &self.sender, &self.receiver) {
                     Ok(peer) => {
                         let _ = self.update_time(addr);
                         self.peers.push((host.to_string(), peer.run()));
                     }
                     Err(e) => {
                         debug!("Failed to connect to peer at {} :: {:?}", addr.ip, e);
-                        let _ = self.remove_addr(&addr);
+                        let r = self.remove_addr(&addr);
+                        debug!("Removing addr res: {:?}", r);
                     }
                 };
             }
@@ -177,7 +178,7 @@ impl Client {
                              ]
                 .iter() {
                 // info!("Trying to connect")
-                match Peer::new(&hostname, &self.sender, &self.receiver) {
+                match Peer::new(*hostname, &self.sender, &self.receiver) {
                     Ok(peer) => {
                         self.peers.push((hostname.to_string(), peer.run()));
                     }
