@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::{self, Debug};
 use std::io::{Error, Read, Write};
 use std::net::TcpStream;
@@ -39,7 +40,7 @@ pub struct Peer {
     send_compact: bool,
     send_headers: bool,
     acked: bool,
-    addrs: Vec<NetAddr>,
+    addrs: HashSet<NetAddr>,
     version: Option<VersionMessage>,
     sender: BroadcastSender<ClientMessage>,
     receiver: BroadcastReceiver<ClientMessage>,
@@ -73,11 +74,11 @@ impl Peer {
                sender: &BroadcastSender<ClientMessage>,
                receiver: &BroadcastReceiver<ClientMessage>)
                -> Result<Peer, Error> {
-        Peer::new_with_addrs(host, Vec::with_capacity(1000), sender, receiver)
+        Peer::new_with_addrs(host, HashSet::with_capacity(1000), sender, receiver)
     }
 
     pub fn new_with_addrs(host: &str,
-                          addrs: Vec<NetAddr>,
+                          addrs: HashSet<NetAddr>,
                           sender: &BroadcastSender<ClientMessage>,
                           receiver: &BroadcastReceiver<ClientMessage>)
                           -> Result<Peer, Error> {
@@ -122,23 +123,26 @@ impl Peer {
             Message::SendCompact(msg) => {
                 self.send_compact = msg.send_compact;
             }
-            Message::Addr(mut addrs) => {
-                debug!("Found {} addrs", addrs.addrs.len());
+            Message::Addr(addrs) => {
                 let _ = self.sender.try_send(ClientMessage::Addrs(addrs.addrs.clone()));
-                self.addrs.append(&mut addrs.addrs);
+                // Ensure that we don't realocate repeatedly in here
+                self.addrs.reserve(addrs.addrs.len());
+                for addr in addrs.addrs {
+                    self.addrs.insert(addr);
+                }
             }
             Message::GetAddr => {
-                let msg = AddrMessage { addrs: self.addrs.clone() };
+                let msg = AddrMessage { addrs: self.addrs.iter().cloned().collect() };
                 let _ = self.send(Message::Addr(msg));
             }
             Message::SendHeaders => {
                 self.send_headers = true;
             }
-            Message::GetHeaders(msg) => {}
+            Message::GetHeaders(_msg) => {}
             Message::Verack => {
                 self.acked = true;
             }
-            Message::Inv(inv) => {}
+            Message::Inv(_inv) => {}
             Message::Unparsed(name, message) => {
                 // Support for alert messages has been removed from bitcoin core in March 2016.
                 // Read more at https://github.com/bitcoin/bitcoin/pull/7692
@@ -186,17 +190,7 @@ impl Peer {
                            self.host,
                            self.buffer.available_data());
                 }
-                if let Ok(msg) = self.receiver.try_recv() {
-                    match msg {
-                        ClientMessage::Addrs(addrs) => {
-                            // Need some more logic around when to send the AddrMessage
-                            // to the peer
-                            // let _ = self.send(Message::Addr(AddrMessage { addrs: addrs }));
-                        }
-                        ClientMessage::Closing(_) => {}
-                        // _ => info!("Ignoring msg: {:?}", msg),
-                    }
-                }
+                self.handle_local_peer_message();
                 // sending messages to peers
                 // check if this is bad
                 if last_cleanup.elapsed() > self.thread_speed * 5 {
@@ -223,6 +217,26 @@ impl Peer {
             let _ = self.sender.try_send(ClientMessage::Closing(self.host));
         })
 
+    }
+
+    fn handle_local_peer_message(&mut self) {
+        if let Ok(msg) = self.receiver.try_recv() {
+            match msg {
+                ClientMessage::Addrs(addrs) => {
+                    // We only want to send `Addr`s that we don't think the remote
+                    // peer knows about already
+                    let mut addrs_to_send = Vec::with_capacity(addrs.len());
+                    for addr in addrs {
+                        if !self.addrs.insert(addr.clone()) {
+                            addrs_to_send.push(addr);
+                        }
+                    }
+                    let _ = self.send(Message::Addr(AddrMessage { addrs: addrs_to_send }));
+                }
+                ClientMessage::Closing(_) => {}
+                // _ => info!("Ignoring msg: {:?}", msg),
+            }
+        }
     }
 
     pub fn addrs(&mut self) {
