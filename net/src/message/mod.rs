@@ -178,7 +178,7 @@ mod tests {
             start_height: 212672,
             relay: false,
         };
-        let actual = Message::Version(version).encode();
+        let actual = Message::Version(version).encode(false);
         assert_eq!(expected, actual);
     }
 }
@@ -200,11 +200,15 @@ pub enum Message {
 }
 
 macro_rules! packet {
-    ($packet_type: expr => $payload: expr) => {{
+    ($testnet: expr, $packet_type: expr => $payload: expr) => {{
         let mut payload: Vec<u8> = $payload;
         let len = payload.len();
         let mut packet: Vec<u8> = Vec::with_capacity(len + 24);
-        let _ = packet.write_u32::<LittleEndian>(0xD9B4BEF9); // magic
+        if $testnet {
+            let _ = packet.write_u32::<LittleEndian>(0xDAB5BFFA); // magic
+        } else {
+            let _ = packet.write_u32::<LittleEndian>(0xD9B4BEF9); // magic
+        }
         // Write the message type
         for byte in $packet_type.as_bytes() {
           let _ = packet.write_u8(*byte);
@@ -232,36 +236,36 @@ macro_rules! packet {
         packet.append(&mut payload);
         packet
     }};
-    ($packet_type: expr, $packet: ident) => {{
-        packet!($packet_type => $packet.encode())
+    ($testnet: expr, $packet_type: expr, $packet: ident) => {{
+        packet!($testnet, $packet_type => $packet.encode())
     }}
 }
 
 impl Message {
-    pub fn encode(&self) -> Vec<u8> {
+    pub fn encode(&self, testnet: bool) -> Vec<u8> {
         match *self {
-            Message::Version(ref message) => packet!("version", message),
-            Message::Verack => packet!("verack" => Vec::with_capacity(0)),
-            Message::SendHeaders => packet!("sendheaders" => Vec::with_capacity(0)),
-            Message::GetAddr => packet!("getaddr" => Vec::with_capacity(0)),
-            Message::GetHeaders(ref msg) => packet!("getheaders", msg),
-            Message::Addr(ref addr) => packet!("addr", addr),
-            Message::Inv(ref inv) => packet!("inv", inv),
-            Message::SendCompact(ref message) => packet!("sendcmpct", message),
+            Message::Version(ref message) => packet!(testnet, "version", message),
+            Message::Verack => packet!(testnet, "verack" => Vec::with_capacity(0)),
+            Message::SendHeaders => packet!(testnet, "sendheaders" => Vec::with_capacity(0)),
+            Message::GetAddr => packet!(testnet, "getaddr" => Vec::with_capacity(0)),
+            Message::GetHeaders(ref msg) => packet!(testnet, "getheaders", msg),
+            Message::Addr(ref addr) => packet!(testnet, "addr", addr),
+            Message::Inv(ref inv) => packet!(testnet, "inv", inv),
+            Message::SendCompact(ref message) => packet!(testnet, "sendcmpct", message),
             Message::Ping(nonce) => {
                 let mut v = Vec::with_capacity(4);
                 let _ = v.write_u64::<LittleEndian>(nonce);
-                packet!("ping" => v)
+                packet!(testnet, "ping" => v)
             }
             Message::Pong(nonce) => {
                 let mut v = Vec::with_capacity(4);
                 let _ = v.write_u64::<LittleEndian>(nonce);
-                packet!("pong" => v)
+                packet!(testnet, "pong" => v)
             }
             Message::FeeFilter(filter) => {
                 let mut v = Vec::with_capacity(8);
                 let _ = v.write_u64::<LittleEndian>(filter);
-                packet!("feefilter" => v)
+                packet!(testnet, "feefilter" => v)
             }
             Message::Unparsed(_, ref v) => v.clone(),
         }

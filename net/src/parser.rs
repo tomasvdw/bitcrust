@@ -20,7 +20,7 @@ fn to_hex_string(bytes: &[u8]) -> String {
 
 #[derive(Debug)]
 struct RawMessage<'a> {
-    magic: u32,
+    network: Network,
     message_type: String,
     len: u32,
     checksum: &'a [u8],
@@ -46,36 +46,85 @@ impl<'a> RawMessage<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
+enum Network {
+    Main,
+    Test,
+}
+
+// impl Network {
+//   pub fn from_slice(slice: &[u8]) -> Network {
+//     println!("Matching on {:?}", slice);
+//     if slice == &[0xF9, 0xBE, 0xB4, 0xD9] {
+//       Network::Main
+//     } else if slice == [0xFA, 0xBF, 0xB5, 0xDA] {
+//       Network::Test
+//     } else {
+//       Network::Unknown
+//     }
+//   }
+// }
+
+#[inline(always)]
+fn slice2tuple(s: &[u8]) -> (u8, u8, u8, u8) {
+    assert!(s.len() >= 4);
+    (s[0], s[1], s[2], s[3])
+}
+
+// testnet: [0xFA, 0xBF, 0xB5, 0xDA]
+// main net: [0xF9, 0xBE, 0xB4, 0xD9]
+#[inline]
+fn search_header(data: &[u8]) -> Option<(usize, Network)> {
+    data.windows(4)
+        .enumerate()
+        .filter_map(|(i, window)| match slice2tuple(window) {
+            (0xF9, 0xBE, 0xB4, 0xD9) => Some((i + 4, Network::Main)),
+            (0xFA, 0xBF, 0xB5, 0xDA) => Some((i + 4, Network::Test)),
+            _ => None,
+        })
+        .next()
+}
+
+#[inline]
+fn magic(input: &[u8]) -> IResult<&[u8], Network> {
+    match search_header(input) {
+        Some((i, network)) => IResult::Done(&input[i..], network),
+        None => IResult::Incomplete(nom::Needed::Unknown),
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
 struct Header<'a> {
-    magic: u32,
+    network: Network,
     message_type: String,
     len: u32,
     checksum: &'a [u8],
 }
 
+#[inline]
 named!(header <Header>,
   do_parse!(
-    magic: le_u32 >>
+    magic: magic >>
+    // magic: le_u32 >>
     message_type: take_str!(12) >>
     payload_len: le_u32 >>
     checksum: take!(4) >>
-    ({trace!("message_type: {:?}\tpayload len: {}", message_type, payload_len); Header {
-      magic: magic,
+    ({println!("message_type: {:?}\tpayload len: {}", message_type, payload_len); Header {
+        network: magic,
         message_type: message_type.trim_matches(0x00 as char).into(),
         len: payload_len,
         checksum: checksum,
     }})
 ));
 
-
+#[inline]
 named!(raw_message<RawMessage>,
   do_parse!(
     header: header >>
     body: take!(header.len) >>
     ({trace!("Body.len: {}", body.len());
       RawMessage {
-        magic: header.magic,
+        network: header.network,
         message_type: header.message_type, //.trim_matches(0x00 as char).into(),
         len: header.len,
         checksum: header.checksum,
@@ -340,6 +389,19 @@ mod parse_tests {
         let input = [0x0F, 0x2F, 0x53, 0x61, 0x74, 0x6F, 0x73, 0x68, 0x69, 0x3A, 0x30, 0x2E, 0x37,
                      0x2E, 0x32, 0x2F];
         assert_eq!(variable_str(&input).unwrap().1, "/Satoshi:0.7.2/");
+    }
+
+    #[test]
+    fn it_parses_a_header() {
+        let input = [
+          // Message Header:
+          0xF9, 0xBE, 0xB4, 0xD9,                                                 // Main network magic bytes
+          0x76, 0x65, 0x72, 0x73, 0x69, 0x6F, 0x6E, 0x00, 0x00, 0x00, 0x00, 0x00, // "version" command
+          0x64, 0x00, 0x00, 0x00,                                                 // Payload is 100 bytes long
+          0x30, 0x42, 0x7C, 0xEB,                                                 // payload checksum
+        ];
+        let header = header(&input).unwrap().1;
+        assert_eq!(header, Header { network: Network::Main, message_type: "version".into(), len: 100, checksum: &[48, 66, 124, 235]});
     }
 
     #[test]

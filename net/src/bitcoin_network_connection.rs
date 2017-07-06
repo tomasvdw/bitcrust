@@ -46,7 +46,7 @@ impl BitcoinNetworkConnection {
 
     pub fn try_send(&self, message: Message) -> Result<(), Error> {
           trace!("{} About to write: {:?}", self.host, message);
-          let written = self.socket.borrow_mut().write(&message.encode())?;
+          let written = self.socket.borrow_mut().write(&message.encode(false))?;
           trace!("{} Written: {:}", self.host, written);
           Ok(())
     }

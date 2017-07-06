@@ -7,6 +7,7 @@ extern crate log;
 extern crate multiqueue;
 #[macro_use]
 extern crate nom;
+extern crate regex;
 extern crate rusqlite;
 extern crate sha2;
 
@@ -18,5 +19,8 @@ mod inventory_vector;
 mod net_addr;
 mod services;
 
-pub mod peer;
-pub mod client;
+pub use message::*;
+pub use net_addr::NetAddr;
+pub use client_message::ClientMessage;
+pub use bitcoin_network_connection::BitcoinNetworkConnection;
+pub use services::Services;

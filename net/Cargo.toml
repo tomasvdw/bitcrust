@@ -13,12 +13,13 @@ byteorder = "1"
 log = "0.3"
 multiqueue = "~0.3.2"
 # nom = "^2.2"
+regex = "*"
 rusqlite = "~0.11"
 sha2 = "0.5"
 
 [dependencies.nom]
 version = "^2.2"
-features = ["verbose-errors"]
+features = ["verbose-errors", "regexp"]
 
 [dev-dependencies]
 env_logger = "0.4.2"
