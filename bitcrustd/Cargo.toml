@@ -1,0 +1,12 @@
+[package]
+name = "bitcrustd"
+version = "0.1.0"
+authors = ["Chris MacNaughton <chris@centaurisolutions.nl>"]
+
+[dependencies]
+bitcrust-net = {path = "../net"}
+clap = "~2.25"
+simple_logger = "*"
+log = "0.3"
+multiqueue = "~0.3.2"
+rusqlite = "~0.11"

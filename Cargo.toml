@@ -38,5 +38,5 @@ opt-level = 3
 default = []
 
 [workspace]
-members = [ "net", "monitor"]
+members = [ "bitcrustd", "monitor", "net"]
 

@@ -1,6 +1,9 @@
+use std::hash::{Hash, Hasher};
 use std::net::Ipv6Addr;
 
 use byteorder::{BigEndian, LittleEndian, NetworkEndian, WriteBytesExt};
+
+use services::Services;
 
 #[cfg(test)]
 mod tests {
@@ -13,7 +16,7 @@ mod tests {
     fn it_encodes_a_net_address() {
         let addr = NetAddr {
             time: None,
-            services: 1,
+            services: Services::from(1),
             ip: Ipv6Addr::from_str("::ffff:10.0.0.1").unwrap(),
             port: 8333,
         };
@@ -28,10 +31,10 @@ mod tests {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NetAddr {
     pub time: Option<u32>,
-    pub services: u64,
+    pub services: Services,
     pub ip: Ipv6Addr,
     pub port: u16,
 }
@@ -44,7 +47,7 @@ impl NetAddr {
             let _ = v.write_u32::<LittleEndian>(t);
         }
         // write services
-        let _ = v.write_u64::<LittleEndian>(self.services);
+        let _ = v.write_u64::<LittleEndian>(self.services.encode());
         // write IP
         for octet in self.ip.segments().iter() {
             let _ = v.write_u16::<NetworkEndian>(*octet);
@@ -52,5 +55,13 @@ impl NetAddr {
         // write port
         let _ = v.write_u16::<BigEndian>(self.port);
         v
+    }
+}
+
+impl Hash for NetAddr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.services.hash(state);
+        self.ip.hash(state);
+        self.port.hash(state);
     }
 }

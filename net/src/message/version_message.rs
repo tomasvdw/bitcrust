@@ -1,6 +1,7 @@
 use byteorder::{LittleEndian, WriteBytesExt};
 
 use net_addr::NetAddr;
+use services::Services;
 
 #[cfg(test)]
 mod tests {
@@ -14,17 +15,17 @@ mod tests {
     fn it_encodes_a_version_message() {
         let v = VersionMessage {
             version: 60002,
-            services: 1,
+            services: Services::from(1),
             timestamp: 1495102309,
             addr_recv: NetAddr {
                 time: None,
-                services: 1,
+                services: Services::from(1),
                 ip: Ipv6Addr::from_str("::ffff:127.0.0.1").unwrap(),
                 port: 8333,
             },
             addr_send: NetAddr {
                 time: None,
-                services: 1,
+                services: Services::from(1),
                 ip: Ipv6Addr::from_str("::ffff:127.0.0.1").unwrap(),
                 port: 8333,
             },
@@ -46,7 +47,7 @@ mod tests {
 #[derive(Debug, PartialEq)]
 pub struct VersionMessage {
     pub version: i32,
-    pub services: u64,
+    pub services: Services,
     pub timestamp: i64,
     pub addr_recv: NetAddr,
     pub addr_send: NetAddr,
@@ -60,7 +61,7 @@ impl VersionMessage {
     pub fn encode(&self) -> Vec<u8> {
         let mut v = Vec::with_capacity(86 + self.user_agent.len());
         let _ = v.write_i32::<LittleEndian>(self.version);
-        let _ = v.write_u64::<LittleEndian>(self.services);
+        let _ = v.write_u64::<LittleEndian>(self.services.encode());
         let _ = v.write_i64::<LittleEndian>(self.timestamp);
         v.append(&mut self.addr_recv.encode());
         if self.version >= 106 {
