@@ -3,7 +3,7 @@ use byteorder::{LittleEndian, WriteBytesExt};
 #[derive(Debug, PartialEq)]
 pub struct InventoryVector {
     flags: InvFlags,
-    pub hash: Vec<u8>,
+    pub hash: [u8; 32],
 }
 
 bitflags! {
@@ -27,9 +27,12 @@ impl InventoryVector {
     }
 
     pub fn new(flags: u32, hash: &[u8]) -> InventoryVector {
+      debug_assert!(hash.len() == 32);
+      let mut a: [u8; 32] = Default::default();
+      a.copy_from_slice(&hash);
         InventoryVector {
             flags: InvFlags { bits: flags },
-            hash: hash.to_owned(),
+            hash: a,
         }
     }
 }

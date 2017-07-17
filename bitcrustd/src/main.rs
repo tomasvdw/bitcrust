@@ -32,6 +32,7 @@ fn main() {
                 .takes_value(true)
                 .required(true)))
         .get_matches();
+
     let log_level = match matches.occurrences_of("debug") {
         0 => LogLevel::Warn,
         1 => LogLevel::Info,

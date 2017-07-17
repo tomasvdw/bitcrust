@@ -221,11 +221,19 @@ named!(getheaders <Message>,
     count: compact_size >>
     hashes: count!(take!(32), count as usize) >>
     hash_stop: take!(32) >>
-    (Message::GetHeaders(GetheadersMessage {
+    ({
+       debug_assert!(hash_stop.len() == 32);
+      let mut a: [u8; 32] = Default::default();
+      a.copy_from_slice(&hash_stop);
+      Message::GetHeaders(GetheadersMessage {
       version: version,
-      locator_hashes: hashes.iter().map(|h| h.to_vec()).collect(),
-      hash_stop: hash_stop.to_owned()
-    }))
+      locator_hashes: hashes.iter().map(|h| {
+        let mut a: [u8; 32] = Default::default();
+        a.copy_from_slice(&h);
+        a
+      }).collect(),
+      hash_stop: a,
+    })})
   )
 );
 

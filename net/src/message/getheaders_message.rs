@@ -5,8 +5,8 @@ use super::var_int;
 #[derive(Debug, PartialEq)]
 pub struct GetheadersMessage {
     pub version: u32,
-    pub locator_hashes: Vec<Vec<u8>>,
-    pub hash_stop: Vec<u8>,
+    pub locator_hashes: Vec<[u8; 32]>,
+    pub hash_stop: [u8; 32],
 }
 
 impl GetheadersMessage {
