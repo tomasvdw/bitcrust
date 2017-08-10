@@ -37,6 +37,21 @@ impl BitcoinNetworkConnection {
         })
     }
 
+    pub fn with_stream(host: String, socket: TcpStream) -> Result<BitcoinNetworkConnection, Error> {
+        socket.set_read_timeout(Some(Duration::from_secs(2)))?;
+        // .expect("set_read_timeout call failed");
+        socket.set_write_timeout(Some(Duration::from_secs(2)))?;
+        
+        Ok(BitcoinNetworkConnection {
+            host: host,
+            // Allocate a buffer with 4MB of capacity
+            buffer: RefCell::new(Buffer::with_capacity(1024 * 1024 * 4)),
+            socket: RefCell::new(socket),
+            needed: RefCell::new(0),
+            bad_messages: RefCell::new(0),
+        })
+    }
+
         // fn send(&mut self, message: Message) -> Result<(), Error> {
     //       trace!("{} About to write: {:?}", self.host, message);
     //       let written = self.socket.write(&message.encode())?;

@@ -1,5 +1,6 @@
 use std::hash::{Hash, Hasher};
-use std::net::Ipv6Addr;
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use byteorder::{BigEndian, LittleEndian, NetworkEndian, WriteBytesExt};
 
@@ -55,6 +56,26 @@ impl NetAddr {
         // write port
         let _ = v.write_u16::<BigEndian>(self.port);
         v
+    }
+
+    pub fn from_socket_addr(addr: SocketAddr) -> NetAddr {
+        let start = SystemTime::now();
+        let now = start.duration_since(UNIX_EPOCH)
+            .expect("Time went backwards").as_secs();
+        let ip = match addr.ip() {
+            IpAddr::V4(a) => a.to_ipv6_mapped(),
+            IpAddr::V6(a) => a
+        };
+        NetAddr {
+            time: Some(now as u32),
+            services: Services::from(0),
+            ip: ip,
+            port: addr.port(),
+        }
+    }
+
+    pub fn to_host(&self) -> String {
+        format!("{}:{}", self.ip, self.port)
     }
 }
 

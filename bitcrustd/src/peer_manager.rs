@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use std::env::home_dir;
 use std::net::{TcpListener, Ipv6Addr};
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, TryRecvError};
+use std::time::Duration;
 use std::str::FromStr;
 use std::thread;
 
@@ -84,6 +85,7 @@ impl PeerManager {
 
         let peer_sender = self.sender.clone();
         let peer_receiver = self.receiver.clone();
+        let sleep_duration = Duration::from_millis(200);
         thread::spawn(move || {
             let sender = sender.clone();
             info!("Spawning listener");
@@ -98,24 +100,26 @@ impl PeerManager {
                         let addr = NetAddr::from_socket_addr(addr);
                         match Peer::with_stream(host, socket, &peer_sender, &peer_receiver) {
                             Ok(peer) => {
-                                let _ = sender.send((addr, peer));
+                                debug!("new client: {:?}", peer);
+                                let _ = sender.send((addr, peer.run()));
                             }
                             Err(e) => {
                                 debug!("Some error happened while creating the Peer: {:?}", e);
                             }
                         }
-                        println!("new client: {:?}", addr)
                     },
-                    Err(e) => println!("couldn't get client: {:?}", e),
+                    Err(e) => debug!("couldn't get client: {:?}", e),
                 }
             }
          });
-        self.initialize_peers();
+        // self.initialize_peers();
+        let mut recieved = false;
         loop {
-            info!("Currently connected to {}/{} peers",
+            trace!("Currently connected to {}/{} peers",
                   self.peers.len(),
                   self.addrs.len());
-            match self.receiver.recv() {
+
+            match self.receiver.try_recv() {
                 Ok(s) => {
                     match s {
                         ClientMessage::Addrs(addrs) => self.addr_message(addrs),
@@ -124,9 +128,19 @@ impl PeerManager {
                                 .retain(|ref peer| peer.0 != hostname);
                         }
                     }
+                    recieved = true;
                 }
                 Err(e) => {
-                    trace!("Some error with thread communication, {:?}", e)
+                    match e {
+                        TryRecvError::Empty => {
+                            // thread::sleep_ms(200);
+                        },
+                        TryRecvError::Disconnected => {
+                            trace!("Remote end has disconnected?")
+                        }
+                        
+                    }
+                    
                     // match e {
                     //     Empty => {}
                     //     _ => trace!("Some error with thread communication, {:?}", e),
@@ -134,14 +148,25 @@ impl PeerManager {
                 }
             }
             match receiver.try_recv() {
-                Ok((addr, peer)) => {
+                Ok((addr, peer_handle)) => {
                     let _ = self.update_time(&addr);
-                    self.peers.push((addr.to_host(), peer.run()));
+                    self.peers.push((addr.to_host(), peer_handle));
+                    recieved = true;
                 },
                 Err(e) => {
-                    debug!("Couldn't read a new peer from the socket: {:?}", e);
+                    match e {
+                        TryRecvError::Empty => { },
+                        TryRecvError::Disconnected => {
+                            trace!("Listener has disconnected?")
+                        }
+                    }
                 },
             }
+
+            if recieved == false {
+                thread::sleep(sleep_duration);
+            }
+            recieved = false;
             self.initialize_peers();
         }
     }
