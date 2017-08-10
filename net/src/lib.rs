@@ -12,7 +12,7 @@ extern crate rusqlite;
 extern crate sha2;
 
 pub mod bitcoin_network_connection;
-pub mod client_message;
+// pub mod client_message;
 mod parser;
 mod message;
 mod inventory_vector;
@@ -21,6 +21,6 @@ mod services;
 
 pub use message::*;
 pub use net_addr::NetAddr;
-pub use client_message::ClientMessage;
-pub use bitcoin_network_connection::BitcoinNetworkConnection;
+// pub use client_message::ClientMessage;
+pub use bitcoin_network_connection::{BitcoinNetworkConnection, BitcoinNetworkError};
 pub use services::Services;

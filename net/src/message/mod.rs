@@ -7,11 +7,15 @@ mod getheaders_message;
 mod inv_message;
 mod sendcmpct_message;
 
+mod bitcrust;
+
 pub use self::version_message::VersionMessage;
 pub use self::addr_message::AddrMessage;
 pub use self::getheaders_message::GetheadersMessage;
 pub use self::inv_message::InvMessage;
 pub use self::sendcmpct_message::SendCmpctMessage;
+
+pub use self::bitcrust::*;
 
 #[cfg(test)]
 mod tests {
@@ -197,6 +201,9 @@ pub enum Message {
     Ping(u64),
     Pong(u64),
     FeeFilter(u64),
+    // Bitcrust Specific Messages
+    BitcrustPeerCount(u64),
+    BitcrustPeerCountRequest,
 }
 
 macro_rules! packet {
@@ -210,9 +217,16 @@ macro_rules! packet {
             let _ = packet.write_u32::<LittleEndian>(0xD9B4BEF9); // magic
         }
         // Write the message type
-        for byte in $packet_type.as_bytes() {
-          let _ = packet.write_u8(*byte);
+        if $packet_type.len() > 12 {
+            for byte in $packet_type.as_bytes()[0..11].iter() {
+              let _ = packet.write_u8(*byte);
+            }
+        } else {
+            for byte in $packet_type.as_bytes() {
+              let _ = packet.write_u8(*byte);
+            }
         }
+        
         for _ in 1 .. (12-$packet_type.len()) {
           let _ = packet.write_u8(0x00);
         }
@@ -266,7 +280,13 @@ impl Message {
                 let mut v = Vec::with_capacity(8);
                 let _ = v.write_u64::<LittleEndian>(filter);
                 packet!(testnet, "feefilter" => v)
+            },
+            Message::BitcrustPeerCount(count) => {
+                let mut v = Vec::with_capacity(8);
+                let _ = v.write_u64::<LittleEndian>(count);
+                packet!(testnet, "bcr_pc" => v)
             }
+            Message::BitcrustPeerCountRequest =>  packet!(testnet, "bcr_pcr" => Vec::with_capacity(0)),
             Message::Unparsed(_, ref v) => v.clone(),
         }
     }

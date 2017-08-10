@@ -109,7 +109,7 @@ named!(header <Header>,
     message_type: take_str!(12) >>
     payload_len: le_u32 >>
     checksum: take!(4) >>
-    ({println!("message_type: {:?}\tpayload len: {}", message_type, payload_len); Header {
+    ({debug!("message_type: {:?}\tpayload len: {}", message_type, payload_len); Header {
         network: magic,
         message_type: message_type.trim_matches(0x00 as char).into(),
         len: payload_len,
@@ -153,6 +153,9 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
                 "pong" => pong(raw_message.body),
                 "addr" => addr(raw_message.body),
                 "inv" => inv(raw_message.body),
+                // Bitcrust Specific Messages
+                "bcr_pcr" => IResult::Done(i, Message::BitcrustPeerCountRequest),
+                "bcr_pc" => bitcrust_peer_count(raw_message.body),
                 _ => {
                     trace!("Raw message: {:?}\n\n{:}", raw_message.message_type, to_hex_string(raw_message.body));
                     IResult::Done(i,
@@ -165,6 +168,12 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
         IResult::Error(e) => IResult::Error(e),
     }
 }
+
+named!(bitcrust_peer_count <Message>,
+  do_parse!(
+    count: le_u64 >>
+    (Message::BitcrustPeerCount(count))
+));
 
 named!(feefilter <Message>,
   do_parse!(

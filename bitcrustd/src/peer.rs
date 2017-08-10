@@ -9,8 +9,10 @@ use std::time::{UNIX_EPOCH, SystemTime};
 
 use multiqueue::{BroadcastReceiver, BroadcastSender};
 
-use bitcrust_net::{BitcoinNetworkConnection, ClientMessage, NetAddr, Message, AddrMessage, Services,
+use bitcrust_net::{BitcoinNetworkConnection, BitcoinNetworkError, NetAddr, Message, AddrMessage, Services,
                    VersionMessage};
+
+use client_message::ClientMessage;
 
 #[cfg(test)]
 mod tests {}
@@ -37,6 +39,8 @@ pub struct Peer {
     receiver: BroadcastReceiver<ClientMessage>,
     inbound_messages: usize,
     bad_messages: usize,
+    peers_connected: u64,
+    closed: bool,
     last_read: Instant,
     thread_speed: Duration,
 }
@@ -87,10 +91,12 @@ impl Peer {
             addrs: HashSet::with_capacity(1000),
             version: None,
             sender: sender.clone(),
-            receiver: receiver.clone(),
+            receiver: receiver.add_stream(),
             inbound_messages: 0,
             bad_messages: 0,
+            peers_connected: 0,
             last_read: Instant::now(),
+            closed: false,
             thread_speed: Duration::from_millis(250),
         })
     }
@@ -112,10 +118,12 @@ impl Peer {
             addrs: addrs,
             version: None,
             sender: sender.clone(),
-            receiver: receiver.clone(),
+            receiver: receiver.add_stream(),
             inbound_messages: 0,
             bad_messages: 0,
+            peers_connected: 0,
             last_read: Instant::now(),
+            closed: false,
             thread_speed: Duration::from_millis(250),
         })
     }
@@ -177,6 +185,10 @@ impl Peer {
                 self.acked = true;
             }
             Message::Inv(_inv) => {}
+            Message::BitcrustPeerCountRequest => {
+                let count = self.peers_connected;
+                let _ = self.send(Message::BitcrustPeerCount(count));
+            }
             Message::Unparsed(name, message) => {
                 // Support for alert messages has been removed from bitcoin core in March 2016.
                 // Read more at https://github.com/bitcoin/bitcoin/pull/7692
@@ -193,11 +205,14 @@ impl Peer {
         };
     }
 
-    pub fn run(mut self) -> thread::JoinHandle<()> {
+    pub fn run(mut self, send_version: bool) -> thread::JoinHandle<()> {
         thread::spawn(move || {
             let mut last_cleanup = Instant::now();
-            let _ = self.send(Peer::version()).unwrap();
-            self.version_sent = true;
+            if send_version {
+                let _ = self.send(Peer::version());
+                self.version_sent = true;
+            }
+            
             loop {
                 // Handle messages coming in from the network
                 self.handle_remote_peer_messages();
@@ -224,6 +239,9 @@ impl Peer {
                         }
                     }
                 }
+                if self.closed {
+                    break;
+                }
             }
             let _ = self.sender.try_send(ClientMessage::Closing(self.host));
         })
@@ -236,17 +254,26 @@ impl Peer {
             thread::sleep(time);
         }
         self.last_read = Instant::now();
-        if let Some(msg) = self.network_connection.try_recv() {
+        while let Some(msg) = self.network_connection.try_recv() {
             match msg {
                 Ok(msg) => self.handle_message(msg),
-                Err(()) => self.bad_messages += 1,
+                Err(e) => {
+                    match e {
+                        BitcoinNetworkError::BadBytes => {
+                            self.bad_messages += 1;
+                        }
+                        BitcoinNetworkError::Closed => self.closed = true,
+                        BitcoinNetworkError::ReadTimeout => {}
+                    }
+                    return
+                },
             }
 
         }
     }
 
     fn handle_local_peer_message(&mut self) {
-        if let Ok(msg) = self.receiver.try_recv() {
+        while let Ok(msg) = self.receiver.try_recv() {
             match msg {
                 ClientMessage::Addrs(addrs) => {
                     // We only want to send `Addr`s that we don't think the remote
@@ -259,6 +286,9 @@ impl Peer {
                     }
                     let _ = self.send(Message::Addr(AddrMessage { addrs: addrs_to_send }));
                 }
+                ClientMessage::PeersConnected(count) => {
+                    self.peers_connected = count;
+                }
                 ClientMessage::Closing(_) => {}
                 // _ => info!("Ignoring msg: {:?}", msg),
             }
@@ -269,7 +299,7 @@ impl Peer {
         self.network_connection.try_send(message)
     }
 
-    fn version() -> Message {
+    pub fn version() -> Message {
         Message::Version(VersionMessage {
             version: 70015,
             services: Services::from(1),
