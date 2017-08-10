@@ -3,7 +3,7 @@ use std::fmt::{self, Debug};
 use std::io::Error;
 use std::thread;
 use std::time::{Duration, Instant};
-use std::net::Ipv6Addr;
+use std::net::{Ipv6Addr, TcpStream};
 use std::str::FromStr;
 use std::time::{UNIX_EPOCH, SystemTime};
 
@@ -68,6 +68,31 @@ impl Peer {
                                 receiver: &BroadcastReceiver<ClientMessage>)
                                 -> Result<Peer, Error> {
         Peer::new_with_addrs(host, HashSet::with_capacity(1000), sender, receiver)
+    }
+
+    pub fn with_stream<T: Into<String>>(host: T,
+                                        socket: TcpStream,
+                                        sender: &BroadcastSender<ClientMessage>,
+                                        receiver: &BroadcastReceiver<ClientMessage>) -> Result<Peer, Error> {
+        let host = host.into();
+        debug!("Initialized incoming peer with host: {}", host);
+        let connection = BitcoinNetworkConnection::with_stream(host.clone(), socket)?;
+        Ok(Peer {
+            host: host,
+            network_connection: connection,
+            send_compact: false,
+            send_headers: false,
+            version_sent: false,
+            acked: false,
+            addrs: HashSet::with_capacity(1000),
+            version: None,
+            sender: sender.clone(),
+            receiver: receiver.clone(),
+            inbound_messages: 0,
+            bad_messages: 0,
+            last_read: Instant::now(),
+            thread_speed: Duration::from_millis(250),
+        })
     }
 
     pub fn new_with_addrs<T: Into<String>>(host: T,

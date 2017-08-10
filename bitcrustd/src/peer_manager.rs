@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::env::home_dir;
-use std::net::Ipv6Addr;
+use std::net::{TcpListener, Ipv6Addr};
+use std::sync::mpsc::channel;
 use std::str::FromStr;
 use std::thread;
 
@@ -79,15 +80,37 @@ impl PeerManager {
 
     pub fn execute(&mut self) -> ! {
         debug!("Executing!");
-        self.initialize_peers();
-        // self.peers.append(&mut peers);
-        // println!("About to make a scope for a peer");
-        // debug!("Made a crossbeam scope!");
+        let (sender, receiver) = channel();
 
-        // scope.spawn(|| {
-        // debug!("Spawning peer thread");
-        // });
-        // });
+        let peer_sender = self.sender.clone();
+        let peer_receiver = self.receiver.clone();
+        thread::spawn(move || {
+            let sender = sender.clone();
+            info!("Spawning listener");
+            let listener = TcpListener::bind("0.0.0.0:8333").unwrap();
+
+            // accept connections and process them serially
+
+            loop {
+                match listener.accept() {
+                    Ok((socket, addr)) => {
+                        let host = format!("{}", addr);
+                        let addr = NetAddr::from_socket_addr(addr);
+                        match Peer::with_stream(host, socket, &peer_sender, &peer_receiver) {
+                            Ok(peer) => {
+                                let _ = sender.send((addr, peer));
+                            }
+                            Err(e) => {
+                                debug!("Some error happened while creating the Peer: {:?}", e);
+                            }
+                        }
+                        println!("new client: {:?}", addr)
+                    },
+                    Err(e) => println!("couldn't get client: {:?}", e),
+                }
+            }
+         });
+        self.initialize_peers();
         loop {
             info!("Currently connected to {}/{} peers",
                   self.peers.len(),
@@ -109,6 +132,15 @@ impl PeerManager {
                     //     _ => trace!("Some error with thread communication, {:?}", e),
                     // }
                 }
+            }
+            match receiver.try_recv() {
+                Ok((addr, peer)) => {
+                    let _ = self.update_time(&addr);
+                    self.peers.push((addr.to_host(), peer.run()));
+                },
+                Err(e) => {
+                    debug!("Couldn't read a new peer from the socket: {:?}", e);
+                },
             }
             self.initialize_peers();
         }
