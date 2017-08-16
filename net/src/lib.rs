@@ -7,6 +7,8 @@ extern crate log;
 extern crate multiqueue;
 #[macro_use]
 extern crate nom;
+extern crate rand;
+extern crate ring;
 extern crate regex;
 extern crate rusqlite;
 extern crate sha2;

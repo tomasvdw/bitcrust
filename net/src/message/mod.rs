@@ -203,7 +203,7 @@ pub enum Message {
     FeeFilter(u64),
     // Bitcrust Specific Messages
     BitcrustPeerCount(u64),
-    BitcrustPeerCountRequest,
+    BitcrustPeerCountRequest(AuthenticatedBitcrustMessage),
 }
 
 macro_rules! packet {
@@ -286,7 +286,7 @@ impl Message {
                 let _ = v.write_u64::<LittleEndian>(count);
                 packet!(testnet, "bcr_pc" => v)
             }
-            Message::BitcrustPeerCountRequest =>  packet!(testnet, "bcr_pcr" => Vec::with_capacity(0)),
+            Message::BitcrustPeerCountRequest(ref req) =>  packet!(testnet, "bcr_pcr", req),
             Message::Unparsed(_, ref v) => v.clone(),
         }
     }

@@ -12,8 +12,10 @@ use rusqlite::{Error, Connection};
 use bitcrust_net::{NetAddr, Services};
 use client_message::ClientMessage;
 use peer::Peer;
+use config::Config;
 
 pub struct PeerManager {
+    config: Config,
     addrs: HashSet<NetAddr>,
     database: Connection,
     sender: BroadcastSender<ClientMessage>,
@@ -27,7 +29,7 @@ pub struct PeerManager {
 // pub port: u16,
 
 impl PeerManager {
-    pub fn new() -> PeerManager {
+    pub fn new(config: &Config) -> PeerManager {
         let mut path = home_dir().expect("Can't figure out where your $HOME is");
         path.push(".bitcrust.dat");
         debug!("Connecting to DB at {:?}", path);
@@ -72,6 +74,7 @@ impl PeerManager {
         debug!("Setup peers");
 
         PeerManager {
+            config: config.clone(),
             database: db,
             addrs: addrs,
             receiver: receiver,
@@ -86,6 +89,7 @@ impl PeerManager {
 
         let peer_sender = self.sender.clone();
         let peer_receiver = self.receiver.add_stream();
+        let peer_config = self.config.clone();
         let sleep_duration = Duration::from_millis(200);
         thread::spawn(move || {
             let sender = sender.clone();
@@ -99,7 +103,7 @@ impl PeerManager {
                     Ok((socket, addr)) => {
                         let host = format!("{}", addr);
                         let addr = NetAddr::from_socket_addr(addr);
-                        match Peer::with_stream(host, socket, &peer_sender, &peer_receiver) {
+                        match Peer::with_stream(host, socket, &peer_sender, &peer_receiver, &peer_config) {
                             Ok(peer) => {
                                 debug!("new client: {:?}", peer);
                                 let _ = sender.send((addr, peer.run(false)));
@@ -201,7 +205,7 @@ impl PeerManager {
                 if self.peers.len() >= 100 {
                     break;
                 }
-                match Peer::new(&host[..], &self.sender, &self.receiver) {
+                match Peer::new(&host[..], &self.sender, &self.receiver, &self.config) {
                     Ok(peer) => {
                         let _ = self.update_time(addr);
                         self.peers.push((host.to_string(), peer.run(true)));
@@ -225,7 +229,7 @@ impl PeerManager {
                              ]
                 .iter() {
                 // info!("Trying to connect")
-                match Peer::new(*hostname, &self.sender, &self.receiver) {
+                match Peer::new(*hostname, &self.sender, &self.receiver, &self.config) {
                     Ok(peer) => {
                         self.peers.push((hostname.to_string(), peer.run(true)));
                     }

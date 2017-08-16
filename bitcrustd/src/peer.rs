@@ -13,7 +13,7 @@ use bitcrust_net::{BitcoinNetworkConnection, BitcoinNetworkError, NetAddr, Messa
                    VersionMessage};
 
 use client_message::ClientMessage;
-
+use config::Config;
 #[cfg(test)]
 mod tests {}
 
@@ -27,6 +27,7 @@ mod tests {}
 ///
 /// After the handshake, other communication can occur
 pub struct Peer {
+    config: Config,
     host: String,
     network_connection: BitcoinNetworkConnection,
     send_compact: bool,
@@ -69,19 +70,22 @@ impl Debug for Peer {
 impl Peer {
     pub fn new<T: Into<String>>(host: T,
                                 sender: &BroadcastSender<ClientMessage>,
-                                receiver: &BroadcastReceiver<ClientMessage>)
+                                receiver: &BroadcastReceiver<ClientMessage>,
+                                config: &Config)
                                 -> Result<Peer, Error> {
-        Peer::new_with_addrs(host, HashSet::with_capacity(1000), sender, receiver)
+        Peer::new_with_addrs(host, HashSet::with_capacity(1000), sender, receiver, config)
     }
 
     pub fn with_stream<T: Into<String>>(host: T,
                                         socket: TcpStream,
                                         sender: &BroadcastSender<ClientMessage>,
-                                        receiver: &BroadcastReceiver<ClientMessage>) -> Result<Peer, Error> {
+                                        receiver: &BroadcastReceiver<ClientMessage>,
+                                        config: &Config) -> Result<Peer, Error> {
         let host = host.into();
         debug!("Initialized incoming peer with host: {}", host);
         let connection = BitcoinNetworkConnection::with_stream(host.clone(), socket)?;
         Ok(Peer {
+            config: config.clone(),
             host: host,
             network_connection: connection,
             send_compact: false,
@@ -104,11 +108,13 @@ impl Peer {
     pub fn new_with_addrs<T: Into<String>>(host: T,
                                            addrs: HashSet<NetAddr>,
                                            sender: &BroadcastSender<ClientMessage>,
-                                           receiver: &BroadcastReceiver<ClientMessage>)
+                                           receiver: &BroadcastReceiver<ClientMessage>,
+                                           config: &Config)
                                            -> Result<Peer, Error> {
         let host = host.into();
         let connection = BitcoinNetworkConnection::new(host.clone())?;
         Ok(Peer {
+            config: config.clone(),
             host: host,
             network_connection: connection,
             send_compact: false,
@@ -185,9 +191,14 @@ impl Peer {
                 self.acked = true;
             }
             Message::Inv(_inv) => {}
-            Message::BitcrustPeerCountRequest => {
-                let count = self.peers_connected;
-                let _ = self.send(Message::BitcrustPeerCount(count));
+            Message::BitcrustPeerCountRequest(msg) => {
+                if msg.valid(&self.config.key()) {
+                    let count = self.peers_connected;
+                    let _ = self.send(Message::BitcrustPeerCount(count));
+                } else {
+                    warn!("Invalid authenticated request!");
+                    self.closed = true;
+                }
             }
             Message::Unparsed(name, message) => {
                 // Support for alert messages has been removed from bitcoin core in March 2016.

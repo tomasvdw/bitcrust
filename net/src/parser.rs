@@ -5,7 +5,7 @@ use nom::{le_u16, le_u32, le_u64, le_i32, le_i64, be_u16, IResult};
 use sha2::{Sha256, Digest};
 
 use message::Message;
-use message::{AddrMessage, GetheadersMessage, InvMessage, SendCmpctMessage, VersionMessage};
+use message::{AddrMessage, AuthenticatedBitcrustMessage, GetheadersMessage, InvMessage, SendCmpctMessage, VersionMessage};
 use inventory_vector::InventoryVector;
 use net_addr::NetAddr;
 use services::Services;
@@ -154,7 +154,7 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
                 "addr" => addr(raw_message.body),
                 "inv" => inv(raw_message.body),
                 // Bitcrust Specific Messages
-                "bcr_pcr" => IResult::Done(i, Message::BitcrustPeerCountRequest),
+                "bcr_pcr" => bitcrust_peer_count_request(raw_message.body),
                 "bcr_pc" => bitcrust_peer_count(raw_message.body),
                 _ => {
                     trace!("Raw message: {:?}\n\n{:}", raw_message.message_type, to_hex_string(raw_message.body));
@@ -168,6 +168,13 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
         IResult::Error(e) => IResult::Error(e),
     }
 }
+
+named!(bitcrust_peer_count_request <Message>,
+  do_parse!(
+    nonce: take!(8) >>
+    signature: take!(32) >>
+    (Message::BitcrustPeerCountRequest(AuthenticatedBitcrustMessage::with_signature(signature, nonce)))
+));
 
 named!(bitcrust_peer_count <Message>,
   do_parse!(
