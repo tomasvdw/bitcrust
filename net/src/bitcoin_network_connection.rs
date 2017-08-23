@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::{self, Debug};
-use std::io::{Error, Read, Write};
-use std::net::TcpStream;
+use std::io::{Error, ErrorKind as IoErrorKind, Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
 use std::time::{Duration};
 
 use circular::Buffer;
@@ -28,7 +28,20 @@ pub enum BitcoinNetworkError {
 impl BitcoinNetworkConnection {
     pub fn new(host: String) -> Result<BitcoinNetworkConnection, Error> {
         info!("Trying to initialize connection to {}", host);
-        let socket = TcpStream::connect(&host)?;
+        let addrs: Vec<_> = host.to_socket_addrs()?
+            .collect();
+        let mut socket = None;
+        for addr in addrs {
+            let s = TcpStream::connect_timeout(&addr, Duration::from_millis(2000));
+            if let Ok(connected) = s {
+                socket = Some(connected);
+                break;
+            }
+        }
+        if socket.is_none() {
+            return Err(Error::new(IoErrorKind::NotConnected, format!("Couldn't connect to socket for {}", host)));
+        }
+        let socket = socket.unwrap();
         socket.set_read_timeout(Some(Duration::from_secs(2)))?;
         // .expect("set_read_timeout call failed");
         socket.set_write_timeout(Some(Duration::from_secs(2)))?;

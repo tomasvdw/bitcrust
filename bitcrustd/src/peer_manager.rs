@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::env::home_dir;
 use std::net::{TcpListener, Ipv6Addr};
 use std::sync::mpsc::{channel, TryRecvError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::str::FromStr;
 use std::thread;
@@ -91,6 +92,8 @@ impl PeerManager {
         let peer_receiver = self.receiver.add_stream();
         let peer_config = self.config.clone();
         let sleep_duration = Duration::from_millis(200);
+        let connected_peers = Arc::new(Mutex::new(0));
+        let listener_peers = connected_peers.clone();
         thread::spawn(move || {
             let sender = sender.clone();
             info!("Spawning listener");
@@ -103,9 +106,12 @@ impl PeerManager {
                     Ok((socket, addr)) => {
                         let host = format!("{}", addr);
                         let addr = NetAddr::from_socket_addr(addr);
-                        match Peer::with_stream(host, socket, &peer_sender, &peer_receiver, &peer_config) {
-                            Ok(peer) => {
+                        match Peer::with_stream(host, socket, &peer_sender, &peer_receiver, &peer_config, ) {
+                            Ok(mut peer) => {
                                 debug!("new client: {:?}", peer);
+                                if let Ok(peers) = listener_peers.try_lock() {
+                                    peer.connected_peers(*peers);
+                                }
                                 let _ = sender.send((addr, peer.run(false)));
                             }
                             Err(e) => {
@@ -173,7 +179,12 @@ impl PeerManager {
                 thread::sleep(sleep_duration);
             }
             recieved = false;
-            self.initialize_peers();
+            self.initialize_peers(&connected_peers);
+            if let Ok(peers) = connected_peers.try_lock() {
+                if *peers as usize != self.peers.len() {
+                    let _ = self.sender.try_send(ClientMessage::PeersConnected(*peers));
+                }
+            }
         }
     }
 
@@ -187,9 +198,9 @@ impl PeerManager {
         }
     }
 
-    fn initialize_peers(&mut self) {
+    fn initialize_peers(&mut self, connected_peers: &Arc<Mutex<u64>>) {
+        
         if self.peers.len() >= 100 {
-            let _ = self.sender.try_send(ClientMessage::PeersConnected(self.peers.len() as u64));
             return;
         }
 
@@ -209,6 +220,10 @@ impl PeerManager {
                     Ok(peer) => {
                         let _ = self.update_time(addr);
                         self.peers.push((host.to_string(), peer.run(true)));
+                        if let Ok(mut peers) = connected_peers.try_lock() {
+                            *peers += 1;
+                        }
+                        debug!("Self.peers.len(): {}", self.peers.len());
                     }
                     Err(e) => {
                         debug!("Failed to connect to peer at {} :: {:?}", addr.ip, e);
@@ -238,7 +253,6 @@ impl PeerManager {
 
             }
         }
-        let _ = self.sender.try_send(ClientMessage::PeersConnected(self.peers.len() as u64));
     }
 
     fn add_addr(&mut self, addr: NetAddr) -> Result<(), Error> {

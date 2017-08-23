@@ -1,5 +1,5 @@
 use rand::{self, Rng};
-use ring::{digest, hmac};
+use ring::hmac;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
@@ -38,23 +38,12 @@ impl AuthenticatedBitcrustMessage {
     pub fn encode(&self) -> Vec<u8> {
         let mut v = Vec::with_capacity(40);
 
-        // let _ = v.write_u64::<LittleEndian>(self.nonce);
         for byte in &self.nonce {
             let _ = v.write_u8(*byte);
         }
         for byte in &self.signature {
             let _ = v.write_u8(*byte);
         }
-        // v.append(&mut var_int(self.locator_hashes.len() as u64));
-
-        // for hash in &self.locator_hashes {
-        //     for byte in hash {
-        //         let _ = v.write_u8(*byte);
-        //     }
-        // }
-        // for byte in &self.hash_stop {
-        //     let _ = v.write_u8(*byte);
-        // }
         v
     }
 }

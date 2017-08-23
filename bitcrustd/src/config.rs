@@ -34,7 +34,7 @@ impl Config {
         let config_from_file: ConfigFile = if config_file_path.exists() {
             let mut f = File::open(config_file_path.clone()).unwrap();
             let mut s = String::new();
-            f.read_to_string(&mut s);
+            let _ = f.read_to_string(&mut s);
             toml::from_str(&s).unwrap_or_else(|_| Config::create_default(config_file_path))
         } else {
             Config::create_default(config_file_path)
@@ -64,7 +64,7 @@ impl Config {
         let s = toml::to_string(&c).unwrap();
         println!("Making a new config file with: {}", s);
         let mut f = File::create(path).unwrap();
-        f.write_all(&s.as_bytes());//.to_string());
+        let _ = f.write_all(&s.as_bytes());//.to_string());
         c
     }
 

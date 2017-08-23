@@ -57,12 +57,20 @@ impl Debug for Peer {
     version _sent: {},
     acked: {},
     addrs: Vec<NetAddr>,
+    inbound_messages: {},
+    bad_messages: {},
+    peers_connected: {},
+    closed: {},
     version: {:?}}}",
                self.host,
                self.send_compact,
                self.send_headers,
                self.version_sent,
                self.acked,
+               self.inbound_messages,
+               self.bad_messages,
+               self.peers_connected,
+               self.closed,
                self.version)
     }
 }
@@ -134,6 +142,10 @@ impl Peer {
         })
     }
 
+    pub fn connected_peers(&mut self, peers: u64) {
+        self.peers_connected = peers;
+    }
+
     fn handle_message(&mut self, message: Message) {
         self.inbound_messages += 1;
         if self.version.is_none() {
@@ -193,6 +205,7 @@ impl Peer {
             Message::Inv(_inv) => {}
             Message::BitcrustPeerCountRequest(msg) => {
                 if msg.valid(&self.config.key()) {
+                    debug!("Self: {:?}", self);
                     let count = self.peers_connected;
                     let _ = self.send(Message::BitcrustPeerCount(count));
                 } else {
