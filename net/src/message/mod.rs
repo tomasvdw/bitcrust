@@ -4,6 +4,7 @@ use sha2::{Sha256, Digest};
 mod version_message;
 mod addr_message;
 mod getheaders_message;
+mod header_message;
 mod inv_message;
 mod sendcmpct_message;
 
@@ -13,6 +14,7 @@ pub use self::version_message::VersionMessage;
 pub use self::addr_message::AddrMessage;
 pub use self::getheaders_message::GetheadersMessage;
 pub use self::inv_message::InvMessage;
+pub use self::header_message::HeaderMessage;
 pub use self::sendcmpct_message::SendCmpctMessage;
 
 pub use self::bitcrust::*;
@@ -196,6 +198,7 @@ pub enum Message {
     GetAddr,
     GetHeaders(GetheadersMessage),
     Addr(AddrMessage),
+    Header(HeaderMessage),
     Inv(InvMessage),
     Unparsed(String, Vec<u8>),
     Ping(u64),
@@ -265,6 +268,7 @@ impl Message {
             Message::GetHeaders(ref msg) => packet!(testnet, "getheaders", msg),
             Message::Addr(ref addr) => packet!(testnet, "addr", addr),
             Message::Inv(ref inv) => packet!(testnet, "inv", inv),
+            Message::Header(ref headers) => packet!(testnet, "headers", headers),
             Message::SendCompact(ref message) => packet!(testnet, "sendcmpct", message),
             Message::Ping(nonce) => {
                 let mut v = Vec::with_capacity(4);
@@ -292,7 +296,7 @@ impl Message {
     }
 }
 
-fn var_int(num: u64) -> Vec<u8> {
+pub fn var_int(num: u64) -> Vec<u8> {
     let mut res = Vec::with_capacity(4);
     if num < 0xFD {
         let _ = res.write_u8(num as u8);

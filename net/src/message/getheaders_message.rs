@@ -20,9 +20,7 @@ impl GetheadersMessage {
                 let _ = v.write_u8(*byte);
             }
         }
-        for byte in &self.hash_stop {
-            let _ = v.write_u8(*byte);
-        }
+        v.extend(&self.hash_stop);
         v
     }
 }
