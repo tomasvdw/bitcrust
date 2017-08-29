@@ -22,7 +22,7 @@ install:
 before_script:
   - |
       cargo install cargo-travis &&
-      export PATH=$HOME/.local/bin:$PATH
+      export PATH=$HOME/.cargo/bin:$PATH
 
 # the main build
 script:
