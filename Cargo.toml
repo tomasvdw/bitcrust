@@ -43,5 +43,5 @@ opt-level = 3
 default = []
 
 [workspace]
-members = [ "bitcrustd", "monitor", "net"]
+members = [ "bitcrustd", "monitor", "net", "encode-derive"]
 

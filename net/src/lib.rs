@@ -15,6 +15,9 @@ extern crate regex;
 extern crate rusqlite;
 extern crate sha2;
 
+#[macro_use]
+extern crate encode_derive;
+
 pub mod bitcoin_network_connection;
 mod block_header;
 mod encode;

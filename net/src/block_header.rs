@@ -1,9 +1,7 @@
-use std::io;
-
 use Encode;
 use VarInt;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Encode, PartialEq)]
 /// 4	version	int32_t	Block version information (note, this is signed)
 /// 32	prev_block	char[32]	The hash value of the previous block this particular block references
 /// 32	merkle_root	char[32]	The reference to a Merkle tree collection which is a hash of all transactions related to this block
@@ -20,17 +18,4 @@ pub struct BlockHeader {
     pub nonce: u32,
     /// txn_count is a var_int on the wire
     pub txn_count: VarInt,
-}
-
-impl Encode for BlockHeader {
-    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
-        self.version.encode(&mut buff)?;
-        self.prev_block.encode(&mut buff)?;
-        self.merkle_root.encode(&mut buff)?;
-        self.timestamp.encode(&mut buff)?;
-        self.bits.encode(&mut buff)?;
-        self.nonce.encode(&mut buff)?;
-        self.txn_count.encode(&mut buff)?;
-        Ok(())
-    }
 }

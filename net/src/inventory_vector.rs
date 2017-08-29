@@ -1,13 +1,13 @@
-use std::io;
 use Encode;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Encode, PartialEq)]
 pub struct InventoryVector {
     flags: InvFlags,
     pub hash: [u8; 32],
 }
 
 bitflags! {
+  #[derive(Encode)]
   flags InvFlags: u32 {
       const ERROR               = 0b0,
       const MSG_TX              = 0b00000001,
@@ -26,14 +26,5 @@ impl InventoryVector {
             flags: InvFlags { bits: flags },
             hash: a,
         }
-    }
-}
-
-impl Encode for InventoryVector {
-    fn encode(&self, mut v: &mut Vec<u8>) -> Result<(), io::Error> {
-        // let mut v: Vec<u8> = Vec::with_capacity(36);
-        self.flags.bits.encode(&mut v)?;
-        self.hash.encode(&mut v)?;
-        Ok(())
     }
 }

@@ -1,9 +1,7 @@
-use std::io;
-
 use {Encode, VarInt};
 use block_header::BlockHeader;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Encode, PartialEq)]
 pub struct HeaderMessage {
     pub count: VarInt,
     pub headers: Vec<BlockHeader>,
@@ -20,13 +18,4 @@ impl HeaderMessage {
         "headers"
     }
 
-
-}
-
-impl Encode for HeaderMessage {
-    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
-        let _ = self.count.encode(&mut buff);
-        let _ = self.headers.encode(&mut buff);
-        Ok(())
-    }
 }

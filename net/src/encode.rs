@@ -152,21 +152,30 @@ impl Encode for Ipv6Addr {
 
 impl Encode for [u8] {
     fn encode(&self, buff: &mut Vec<u8>) -> Result<(), io::Error> {
-        buff.extend(self);
+        for byte in self {
+            buff.write_u8(*byte)?;
+        }
+        // buff.extend(self);
         Ok(())
     }
 }
 
 impl Encode for [u8; 8] {
     fn encode(&self, buff: &mut Vec<u8>) -> Result<(), io::Error> {
-        buff.extend(self);
+        for byte in self {
+            buff.write_u8(*byte)?;
+        }
+        // buff.extend(self);
         Ok(())
     }
 }
 
 impl Encode for [u8; 32] {
     fn encode(&self, buff: &mut Vec<u8>) -> Result<(), io::Error> {
-        buff.extend(self);
+        for byte in self {
+            buff.write_u8(*byte)?;
+        }
+        // buff.extend(self);
         Ok(())
     }
 }

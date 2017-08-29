@@ -1,14 +1,12 @@
-use std::io;
-
 use rand::{self, Rng};
 use ring::hmac;
 
 use Encode;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Encode, PartialEq)]
 pub struct AuthenticatedBitcrustMessage {
-    signature: [u8; 32],
     nonce: [u8; 8],
+    signature: [u8; 32],
 }
 
 impl AuthenticatedBitcrustMessage {
@@ -39,15 +37,5 @@ impl AuthenticatedBitcrustMessage {
 
     pub fn len(&self) -> usize {
         40
-    }
-}
-
-impl Encode for AuthenticatedBitcrustMessage {
-    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
-        // let mut v = Vec::with_capacity(40);
-
-        let _ = self.nonce.encode(&mut buff);
-        let _ = self.signature.encode(&mut buff);
-        Ok(())
     }
 }

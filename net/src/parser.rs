@@ -110,7 +110,7 @@ named!(header <Header>,
     message_type: take_str!(12) >>
     payload_len: le_u32 >>
     checksum: take!(4) >>
-    ({debug!("message_type: {:?}\tpayload len: {}", message_type, payload_len); Header {
+    ({trace!("message_type: {:?}\tpayload len: {}", message_type, payload_len); Header {
         network: magic,
         message_type: message_type.trim_matches(0x00 as char).into(),
         len: payload_len,
@@ -407,7 +407,7 @@ named!(pub net_addr< NetAddr >,
 ));
 
 
-named!(addr<Message>, 
+named!(pub addr<Message>, 
   do_parse!(
     count: compact_size >>
     list: count!(net_addr, (count) as usize) >>

@@ -205,10 +205,10 @@ impl Peer {
             Message::Inv(_inv) => {}
             Message::BitcrustPeerCountRequest(msg) => {
                 if msg.valid(&self.config.key()) {
-                    debug!("Self: {:?}", self);
                     let count = self.peers_connected;
                     let _ = self.send(Message::BitcrustPeerCount(count));
                 } else {
+                    warn!("Message: {:?}", msg);
                     warn!("Invalid authenticated request!");
                     self.closed = true;
                 }
