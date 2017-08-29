@@ -225,6 +225,9 @@ macro_rules! packet {
         let mut packet_vec = Vec::with_capacity($packet.len());
         let _ = $packet.encode(&mut packet_vec);
         packet!($testnet, $packet.name() => packet_vec)
+    }};
+    ($testnet: expr, $packet_type: expr) => {{
+        packet!($testnet, $packet_type => vec![0;0])
     }}
 }
 
@@ -232,9 +235,9 @@ impl Message {
     pub fn encode(&self, testnet: bool) -> Vec<u8> {
         match *self {
             Message::Version(ref message) => packet!(testnet, message),
-            Message::Verack => packet!(testnet, "verack" => vec![0;0]),
-            Message::SendHeaders => packet!(testnet, "sendheaders" => vec![0;0]),
-            Message::GetAddr => packet!(testnet, "getaddr" => vec![0;0]),
+            Message::Verack => packet!(testnet, "verack"),
+            Message::SendHeaders => packet!(testnet, "sendheaders"),
+            Message::GetAddr => packet!(testnet, "getaddr"),
             Message::GetHeaders(ref msg) => packet!(testnet, msg),
             Message::Addr(ref addr) => packet!(testnet, addr),
             Message::Inv(ref inv) => packet!(testnet, inv),
