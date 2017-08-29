@@ -21,11 +21,7 @@ install:
 # load travis-cargo
 before_script:
   - |
-      git clone https://github.com/tomasvdw/cargo-travis.git &&
-      cd cargo-travis/ &&
-      git checkout exclude-pattern &&
-      cargo install &&
-      cd .. &&
+      cargo install cargo-travis &&
       export PATH=$HOME/.local/bin:$PATH
 
 # the main build
