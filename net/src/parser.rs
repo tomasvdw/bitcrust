@@ -7,7 +7,7 @@ use sha2::{Sha256, Digest};
 use message::Message;
 use message::{AddrMessage, AuthenticatedBitcrustMessage, GetheadersMessage, HeaderMessage, InvMessage, SendCmpctMessage, VersionMessage};
 use inventory_vector::InventoryVector;
-use BlockHeader;
+use {BlockHeader, VarInt};
 use net_addr::NetAddr;
 use services::Services;
 
@@ -218,7 +218,7 @@ named!(inv <Message>,
     inventory: count!(inv_vector, (count) as usize) >>
     (
 Message::Inv(InvMessage{
-  count: count,
+  count: VarInt::new(count),
   inventory: inventory
 })
     )
@@ -239,7 +239,7 @@ named!(headers <Message>,
     headers: count!(block_header, (count) as usize) >>
     (
 Message::Header(HeaderMessage{
-  count: count,
+  count: VarInt::new(count),
   headers: headers
 })
     )
@@ -266,7 +266,7 @@ named!(pub block_header< BlockHeader >,
             timestamp: timestamp,
             bits: bits,
             nonce: nonce,
-            txn_count: txn_count,
+            txn_count: VarInt::new(txn_count),
     }})
 ));
 

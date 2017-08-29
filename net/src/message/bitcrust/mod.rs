@@ -1,7 +1,9 @@
+use std::io;
+
 use rand::{self, Rng};
 use ring::hmac;
 
-use byteorder::{LittleEndian, WriteBytesExt};
+use Encode;
 
 #[derive(Debug, PartialEq)]
 pub struct AuthenticatedBitcrustMessage {
@@ -17,7 +19,7 @@ impl AuthenticatedBitcrustMessage {
         let nonce: u64 = rng.gen();
         
         let mut nonce_vec = Vec::with_capacity(8);
-        let _ = nonce_vec.write_u64::<LittleEndian>(nonce);
+        let _ = nonce.encode(&mut nonce_vec);
         let signature = hmac::sign(&key, &nonce_vec);
         AuthenticatedBitcrustMessage::with_signature(signature.as_ref(), &nonce_vec)
     }
@@ -35,15 +37,17 @@ impl AuthenticatedBitcrustMessage {
         hmac::verify_with_own_key(key, &self.nonce, &self.signature).is_ok()
     }
 
-    pub fn encode(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(40);
+    pub fn len(&self) -> usize {
+        40
+    }
+}
 
-        for byte in &self.nonce {
-            let _ = v.write_u8(*byte);
-        }
-        for byte in &self.signature {
-            let _ = v.write_u8(*byte);
-        }
-        v
+impl Encode for AuthenticatedBitcrustMessage {
+    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        // let mut v = Vec::with_capacity(40);
+
+        let _ = self.nonce.encode(&mut buff);
+        let _ = self.signature.encode(&mut buff);
+        Ok(())
     }
 }

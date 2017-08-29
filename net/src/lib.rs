@@ -24,6 +24,7 @@ mod message;
 mod inventory_vector;
 mod net_addr;
 mod services;
+mod var_int;
 
 use encode::Encode;
 pub use message::*;
@@ -32,3 +33,4 @@ pub use net_addr::NetAddr;
 pub use bitcoin_network_connection::{BitcoinNetworkConnection, BitcoinNetworkError};
 pub use block_header::BlockHeader;
 pub use services::Services;
+pub use var_int::VarInt;

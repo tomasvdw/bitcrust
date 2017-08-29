@@ -1,6 +1,6 @@
-use byteorder::{LittleEndian, WriteBytesExt};
 use sha2::{Sha256, Digest};
 
+use Encode;
 mod version_message;
 mod addr_message;
 mod getheaders_message;
@@ -115,35 +115,6 @@ mod tests {
     }
 
     #[test]
-    fn it_encodes_a_u8_varint() {
-        let input = 12;
-        let var_int = var_int(input);
-        assert_eq!(var_int, &[12 as u8]);
-    }
-
-    #[test]
-    fn it_encodes_a_u16_varint() {
-        let input = 0xFFFF;
-        let var_int = var_int(input);
-        assert_eq!(var_int, &[0xFD, 0xFF, 0xFF]);
-    }
-
-    #[test]
-    fn it_encodes_a_u32_varint() {
-        let input = 0xFFFFFFFF;
-        let var_int = var_int(input);
-        assert_eq!(var_int, &[0xFE, 0xFF, 0xFF, 0xFF, 0xFF]);
-    }
-
-    #[test]
-    fn it_encodes_a_u64_varint() {
-        let input = 0xFFFFFFFF + 1;
-        let var_int = var_int(input);
-        assert_eq!(var_int,
-                   &[0xFF, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]);
-    }
-
-    #[test]
     fn it_encodes_a_version_message() {
 
         let expected = vec![
@@ -211,108 +182,86 @@ pub enum Message {
 
 macro_rules! packet {
     ($testnet: expr, $packet_type: expr => $payload: expr) => {{
-        let mut payload: Vec<u8> = $payload;
-        let len = payload.len();
+        let len = $payload.len();
         let mut packet: Vec<u8> = Vec::with_capacity(len + 24);
         if $testnet {
-            let _ = packet.write_u32::<LittleEndian>(0xDAB5BFFA); // magic
+            let _ = 0xDAB5BFFAu32.encode(&mut packet);
         } else {
-            let _ = packet.write_u32::<LittleEndian>(0xD9B4BEF9); // magic
+            let _ = 0xD9B4BEF9u32.encode(&mut packet);
         }
         // Write the message type
         if $packet_type.len() > 12 {
-            for byte in $packet_type.as_bytes()[0..11].iter() {
-              let _ = packet.write_u8(*byte);
-            }
+            let _ = $packet_type.as_bytes()[0..11].encode(&mut packet);
         } else {
-            for byte in $packet_type.as_bytes() {
-              let _ = packet.write_u8(*byte);
-            }
+            let _ = $packet_type.as_bytes().encode(&mut packet);
         }
         
         for _ in 1 .. (12-$packet_type.len()) {
-          let _ = packet.write_u8(0x00);
+          let _ = 0x00u8.encode(&mut packet);
         }
-        let _ = packet.write_u8(0x00);
+        let _ = 0x00u8.encode(&mut packet);
         // Write the length of the payload
-        let _ = packet.write_u32::<LittleEndian>(len as u32);
+        let _ = (len as u32).encode(&mut packet);
 
         // create a Sha256 object
         let mut hasher = Sha256::default();
-        hasher.input(&payload);
+        hasher.input(&$payload);
         let intermediate = hasher.result();
         let mut hasher = Sha256::default();
         hasher.input(&intermediate);
         let output = hasher.result();
         // write the checksum
-        for i in 0..4 {
-          // let _ = packet.write_u8(output[i]);
-          packet.push(output[i]);
-        }
+        let _ = output[0..4].encode(&mut packet);
         // write the message payload
-        packet.append(&mut payload);
+        let _ = $payload.encode(&mut packet);
         packet
     }};
     ($testnet: expr, $packet_type: expr, $packet: ident) => {{
-        packet!($testnet, $packet_type => $packet.encode())
+        let mut packet_vec = Vec::with_capacity($packet.len());
+        let _ = $packet.encode(&mut packet_vec);
+        packet!($testnet, $packet_type => packet_vec)
+    }};
+    ($testnet: expr, $packet: ident) => {{
+        let mut packet_vec = Vec::with_capacity($packet.len());
+        let _ = $packet.encode(&mut packet_vec);
+        packet!($testnet, $packet.name() => packet_vec)
     }}
 }
 
 impl Message {
     pub fn encode(&self, testnet: bool) -> Vec<u8> {
         match *self {
-            Message::Version(ref message) => packet!(testnet, "version", message),
-            Message::Verack => packet!(testnet, "verack" => Vec::with_capacity(0)),
-            Message::SendHeaders => packet!(testnet, "sendheaders" => Vec::with_capacity(0)),
-            Message::GetAddr => packet!(testnet, "getaddr" => Vec::with_capacity(0)),
-            Message::GetHeaders(ref msg) => packet!(testnet, "getheaders", msg),
-            Message::Addr(ref addr) => packet!(testnet, "addr", addr),
-            Message::Inv(ref inv) => packet!(testnet, "inv", inv),
-            Message::Header(ref headers) => packet!(testnet, "headers", headers),
-            Message::SendCompact(ref message) => packet!(testnet, "sendcmpct", message),
+            Message::Version(ref message) => packet!(testnet, message),
+            Message::Verack => packet!(testnet, "verack" => vec![0;0]),
+            Message::SendHeaders => packet!(testnet, "sendheaders" => vec![0;0]),
+            Message::GetAddr => packet!(testnet, "getaddr" => vec![0;0]),
+            Message::GetHeaders(ref msg) => packet!(testnet, msg),
+            Message::Addr(ref addr) => packet!(testnet, addr),
+            Message::Inv(ref inv) => packet!(testnet, inv),
+            Message::Header(ref headers) => packet!(testnet, headers),
+            Message::SendCompact(ref message) => packet!(testnet, message),
             Message::Ping(nonce) => {
-                let mut v = Vec::with_capacity(4);
-                let _ = v.write_u64::<LittleEndian>(nonce);
+                let mut v = Vec::with_capacity(8);
+                let _ = nonce.encode(&mut v);
                 packet!(testnet, "ping" => v)
             }
             Message::Pong(nonce) => {
-                let mut v = Vec::with_capacity(4);
-                let _ = v.write_u64::<LittleEndian>(nonce);
+                let mut v = Vec::with_capacity(8);
+                let _ = nonce.encode(&mut v);
                 packet!(testnet, "pong" => v)
             }
             Message::FeeFilter(filter) => {
                 let mut v = Vec::with_capacity(8);
-                let _ = v.write_u64::<LittleEndian>(filter);
+                let _ = filter.encode(&mut v);
                 packet!(testnet, "feefilter" => v)
             },
             Message::BitcrustPeerCount(count) => {
                 let mut v = Vec::with_capacity(8);
-                let _ = v.write_u64::<LittleEndian>(count);
+                let _ = count.encode(&mut v);
                 packet!(testnet, "bcr_pc" => v)
             }
             Message::BitcrustPeerCountRequest(ref req) =>  packet!(testnet, "bcr_pcr", req),
             Message::Unparsed(_, ref v) => v.clone(),
         }
     }
-}
-
-pub fn var_int(num: u64) -> Vec<u8> {
-    let mut res = Vec::with_capacity(4);
-    if num < 0xFD {
-        let _ = res.write_u8(num as u8);
-        return res;
-    }
-    if num <= 0xFFFF {
-        let _ = res.write_u8(0xFD);
-        let _ = res.write_u16::<LittleEndian>(num as u16);
-        return res;
-    }
-    if num <= 0xFFFFFFFF {
-        let _ = res.write_u8(0xFE);
-        let _ = res.write_u32::<LittleEndian>(num as u32);
-        return res;
-    }
-    let _ = res.write_u8(0xFF);
-    let _ = res.write_u64::<LittleEndian>(num);
-    res
 }

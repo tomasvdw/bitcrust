@@ -1,20 +1,31 @@
-use super::var_int;
+use std::io;
+
 use inventory_vector::InventoryVector;
-// use byteorder::{LittleEndian, WriteBytesExt};
+use {Encode, VarInt};
 
 #[derive(Debug, PartialEq)]
 pub struct InvMessage {
-    pub count: u64,
+    pub count: VarInt,
     pub inventory: Vec<InventoryVector>,
 }
 
 impl InvMessage {
-    pub fn encode(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(8);
-        v.append(&mut var_int(self.count));
-        for item in &self.inventory {
-            v.append(&mut item.encode());
-        }
-        v
+    #[inline]
+    pub fn len(&self) -> usize {
+        8 + (36 * self.inventory.len())
+    }
+
+    #[inline]
+    pub fn name(&self) -> &'static str {
+        "inv"
+    }
+}
+
+
+impl Encode for InvMessage {
+    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        let _ = self.count.encode(&mut buff);
+        let _ = self.inventory.encode(&mut buff);
+        Ok(())
     }
 }

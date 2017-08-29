@@ -1,6 +1,6 @@
 use std::io;
-
-use byteorder::{LittleEndian, WriteBytesExt};
+use std::net::Ipv6Addr;
+use byteorder::{LittleEndian, BigEndian, WriteBytesExt};
 
 #[cfg(test)]
 mod tests {
@@ -136,6 +136,66 @@ impl Encode for bool {
             true => buff.push(1),
             false => buff.push(0),
         };
+        Ok(())
+    }
+}
+
+impl Encode for Ipv6Addr {
+// write IP
+    fn encode(&self, buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        for octet in self.segments().iter() {
+            buff.write_u16::<BigEndian>(*octet)?;
+        }
+        Ok(())
+    }
+}
+
+impl Encode for [u8] {
+    fn encode(&self, buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        buff.extend(self);
+        Ok(())
+    }
+}
+
+impl Encode for [u8; 8] {
+    fn encode(&self, buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        buff.extend(self);
+        Ok(())
+    }
+}
+
+impl Encode for [u8; 32] {
+    fn encode(&self, buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        buff.extend(self);
+        Ok(())
+    }
+}
+
+impl Encode for String {
+    fn encode(&self, buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        for byte in self.as_bytes() {
+            buff.write_u8(*byte)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T> Encode for Vec<T> 
+    where T: Encode {
+    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        for item in self {
+            item.encode(&mut buff)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T> Encode for Option<T> 
+    where T: Encode {
+    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        if let &Some(ref item) = self {
+            item.encode(&mut buff)?;
+        }
         Ok(())
     }
 }

@@ -1,6 +1,7 @@
-use byteorder::{LittleEndian, WriteBytesExt};
+use std::io;
 
-use message::var_int;
+use Encode;
+use VarInt;
 
 #[derive(Debug, PartialEq)]
 /// 4	version	int32_t	Block version information (note, this is signed)
@@ -18,19 +19,18 @@ pub struct BlockHeader {
     pub bits: u32,
     pub nonce: u32,
     /// txn_count is a var_int on the wire
-    pub txn_count: u64,
+    pub txn_count: VarInt,
 }
 
-impl BlockHeader {
-    pub fn encode(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(81);
-        let _ = v.write_i32::<LittleEndian>(self.version);
-        v.extend(&self.prev_block);
-        v.extend(&self.merkle_root);
-        let _ = v.write_u32::<LittleEndian>(self.timestamp);
-        let _ = v.write_u32::<LittleEndian>(self.bits);
-        let _ = v.write_u32::<LittleEndian>(self.nonce);
-        v.extend_from_slice(&mut var_int(self.txn_count));
-        v
+impl Encode for BlockHeader {
+    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        self.version.encode(&mut buff)?;
+        self.prev_block.encode(&mut buff)?;
+        self.merkle_root.encode(&mut buff)?;
+        self.timestamp.encode(&mut buff)?;
+        self.bits.encode(&mut buff)?;
+        self.nonce.encode(&mut buff)?;
+        self.txn_count.encode(&mut buff)?;
+        Ok(())
     }
 }

@@ -272,7 +272,7 @@ impl PeerManager {
         let mut stmt = self.database
             .prepare("INSERT INTO peers (time, services, ip, port) VALUES (?, ?, ?, ?)")?;
         stmt.execute(&[&format!("{}", addr.time.unwrap_or(0)),
-                       &format!("{}", addr.services.encode() as i64),
+                       &format!("{}", addr.services.as_i64()),
                        &format!("{}", addr.ip),
                        &format!("{}", addr.port)])?;
         self.addrs.insert(addr.clone());

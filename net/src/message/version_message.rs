@@ -1,5 +1,6 @@
-use byteorder::{LittleEndian, WriteBytesExt};
+use std::io;
 
+use Encode;
 use net_addr::NetAddr;
 use services::Services;
 
@@ -34,7 +35,8 @@ mod tests {
             start_height: 0,
             relay: false,
         };
-        let encoded = v.encode();
+        let mut encoded = vec![];
+        v.encode(&mut encoded).unwrap();
         let expected: Vec<u8> =
             vec![98, 234, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 101, 115, 29, 89, 0, 0, 0, 0, 1, 0, 0, 0,
                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 127, 0, 0, 1, 32, 141, 1, 0,
@@ -58,28 +60,40 @@ pub struct VersionMessage {
 }
 
 impl VersionMessage {
-    pub fn encode(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(86 + self.user_agent.len());
-        let _ = v.write_i32::<LittleEndian>(self.version);
-        let _ = v.write_u64::<LittleEndian>(self.services.encode());
-        let _ = v.write_i64::<LittleEndian>(self.timestamp);
-        v.append(&mut self.addr_recv.encode());
+    #[inline]
+    pub fn len(&self) -> usize {
+        86 + self.user_agent.len()
+    }
+
+    #[inline]
+    pub fn name(&self) -> &'static str {
+        "version"
+    }
+}
+
+impl Encode for VersionMessage {
+    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        let _ = self.version.encode(&mut buff);
+        let _ = self.services.encode(&mut buff);
+        let _ = self.timestamp.encode(&mut buff);
+        let _ = self.addr_recv.encode(&mut buff);
         if self.version >= 106 {
-            v.append(&mut self.addr_send.encode());
-            let _ = v.write_u64::<LittleEndian>(self.nonce);
-            let _ = v.write_u8(self.user_agent.bytes().len() as u8);
-            for byte in self.user_agent.bytes() {
-                let _ = v.write_u8(byte);
-            }
-            let _ = v.write_i32::<LittleEndian>(self.start_height);
+            let _ = self.addr_send.encode(&mut buff);
+            let _ = self.nonce.encode(&mut buff);
+            let _ = (self.user_agent.bytes().len() as u8).encode(&mut buff);
+            let _ = self.user_agent.encode(&mut buff);
+            // for byte in self.user_agent.bytes() {
+            //     let _ = v.write_u8(byte);
+            // }
+            let _ = self.start_height.encode(&mut buff);
             if self.version >= 70001 {
                 if self.relay {
-                    v.push(1);
+                    buff.push(1);
                 } else {
-                    v.push(0);
+                    buff.push(0);
                 }
             }
         }
-        v
+        Ok(())
     }
 }

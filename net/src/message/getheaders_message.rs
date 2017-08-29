@@ -1,6 +1,6 @@
-use byteorder::{LittleEndian, WriteBytesExt};
+use std::io;
 
-use super::var_int;
+use {Encode, VarInt};
 
 #[derive(Debug, PartialEq)]
 pub struct GetheadersMessage {
@@ -10,17 +10,23 @@ pub struct GetheadersMessage {
 }
 
 impl GetheadersMessage {
-    pub fn encode(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(128);
-        let _ = v.write_u32::<LittleEndian>(self.version);
-        v.append(&mut var_int(self.locator_hashes.len() as u64));
+    #[inline]
+    pub fn len(&self) -> usize {
+        128
+    }
 
-        for hash in &self.locator_hashes {
-            for byte in hash {
-                let _ = v.write_u8(*byte);
-            }
-        }
-        v.extend(&self.hash_stop);
-        v
+    #[inline]
+    pub fn name(&self) -> &'static str {
+        "getheaders"
+    }
+}
+
+impl Encode for GetheadersMessage {
+    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        let _ = self.version.encode(&mut buff);
+        let _ = VarInt::new(self.locator_hashes.len() as u64).encode(&mut buff);
+        let _ = self.locator_hashes.encode(&mut buff);
+        let _ = self.hash_stop.encode(&mut buff);
+        Ok(())
     }
 }
