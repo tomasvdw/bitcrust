@@ -17,6 +17,7 @@ extern crate sha2;
 
 pub mod bitcoin_network_connection;
 mod block_header;
+mod encode;
 // pub mod client_message;
 mod parser;
 mod message;
@@ -24,6 +25,7 @@ mod inventory_vector;
 mod net_addr;
 mod services;
 
+use encode::Encode;
 pub use message::*;
 pub use net_addr::NetAddr;
 // pub use client_message::ClientMessage;
