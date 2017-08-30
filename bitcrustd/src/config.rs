@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use clap::ArgMatches;
 use log::LogLevel;
 use ring::{digest, rand, hmac};
+use ring::rand::SecureRandom;
 use toml;
 
 #[derive(Deserialize, Serialize, Debug)]
