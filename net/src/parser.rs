@@ -5,8 +5,9 @@ use nom::{le_u16, le_u32, le_u64, le_i32, le_i64, be_u16, IResult};
 use sha2::{Sha256, Digest};
 
 use message::Message;
-use message::{AddrMessage, GetheadersMessage, InvMessage, SendCmpctMessage, VersionMessage};
+use message::{AddrMessage, AuthenticatedBitcrustMessage, GetheadersMessage, HeaderMessage, InvMessage, SendCmpctMessage, VersionMessage};
 use inventory_vector::InventoryVector;
+use {BlockHeader, VarInt};
 use net_addr::NetAddr;
 use services::Services;
 
@@ -109,7 +110,7 @@ named!(header <Header>,
     message_type: take_str!(12) >>
     payload_len: le_u32 >>
     checksum: take!(4) >>
-    ({println!("message_type: {:?}\tpayload len: {}", message_type, payload_len); Header {
+    ({debug!("message_type: {:?}\tpayload len: {}", message_type, payload_len); Header {
         network: magic,
         message_type: message_type.trim_matches(0x00 as char).into(),
         len: payload_len,
@@ -152,7 +153,11 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
                 "ping" => ping(raw_message.body),
                 "pong" => pong(raw_message.body),
                 "addr" => addr(raw_message.body),
+                "headers" => headers(raw_message.body),
                 "inv" => inv(raw_message.body),
+                // Bitcrust Specific Messages
+                "bcr_pcr" => bitcrust_peer_count_request(raw_message.body),
+                "bcr_pc" => bitcrust_peer_count(raw_message.body),
                 _ => {
                     trace!("Raw message: {:?}\n\n{:}", raw_message.message_type, to_hex_string(raw_message.body));
                     IResult::Done(i,
@@ -165,6 +170,19 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
         IResult::Error(e) => IResult::Error(e),
     }
 }
+
+named!(bitcrust_peer_count_request <Message>,
+  do_parse!(
+    nonce: take!(8) >>
+    signature: take!(32) >>
+    (Message::BitcrustPeerCountRequest(AuthenticatedBitcrustMessage::with_signature(signature, nonce)))
+));
+
+named!(bitcrust_peer_count <Message>,
+  do_parse!(
+    count: le_u64 >>
+    (Message::BitcrustPeerCount(count))
+));
 
 named!(feefilter <Message>,
   do_parse!(
@@ -200,7 +218,7 @@ named!(inv <Message>,
     inventory: count!(inv_vector, (count) as usize) >>
     (
 Message::Inv(InvMessage{
-  count: count,
+  count: VarInt::new(count),
   inventory: inventory
 })
     )
@@ -215,17 +233,62 @@ named!(inv_vector <InventoryVector>,
     )
 ));
 
+named!(headers <Message>,
+  do_parse!(
+    count: compact_size >>
+    headers: count!(block_header, (count) as usize) >>
+    (
+Message::Header(HeaderMessage{
+  count: VarInt::new(count),
+  headers: headers
+})
+    )
+));
+
+named!(pub block_header< BlockHeader >,
+  do_parse!(
+    version: le_i32 >>
+    prev_block: take!(32) >>
+    merkle_root: take!(32) >>
+    timestamp: le_u32 >>
+    bits: le_u32 >>
+    nonce: le_u32 >>
+    txn_count: compact_size >>
+    ({
+        let mut prev: [u8; 32] = Default::default();
+        prev.copy_from_slice(&prev_block);
+        let mut merkle: [u8; 32] = Default::default();
+        merkle.copy_from_slice(&merkle_root);
+        BlockHeader {
+            version: version,
+            prev_block: prev,
+            merkle_root: merkle,
+            timestamp: timestamp,
+            bits: bits,
+            nonce: nonce,
+            txn_count: VarInt::new(txn_count),
+    }})
+));
+
 named!(getheaders <Message>,
   do_parse!(
     version: le_u32 >>
     count: compact_size >>
     hashes: count!(take!(32), count as usize) >>
     hash_stop: take!(32) >>
-    (Message::GetHeaders(GetheadersMessage {
+    ({
+      debug_assert!(hash_stop.len() == 32);
+      let mut a: [u8; 32] = Default::default();
+      a.copy_from_slice(&hash_stop);
+      Message::GetHeaders(GetheadersMessage {
       version: version,
-      locator_hashes: hashes.iter().map(|h| h.to_vec()).collect(),
-      hash_stop: hash_stop.to_owned()
-    }))
+      locator_hashes: hashes.iter().map(|h| {
+        let mut a: [u8; 32] = Default::default();
+        a.copy_from_slice(&h);
+        a
+      }).collect(),
+      hash_stop: a,
+    })})
   )
 );
 
@@ -351,7 +414,6 @@ named!(addr<Message>,
     // list: many0!(addr_part) >>
     (Message::Addr(AddrMessage{addrs: list}))
 ));
-
 
 
 #[cfg(test)]

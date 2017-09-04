@@ -1,6 +1,6 @@
 
 
-//! A BlockheaderPtr is a pointer to a blcokheader in the blockheader-content fileset
+//! A BlockheaderPtr is a pointer to a blockheader in the blockheader-content fileset
 //! It contains a file_number, a file offset that together point to the data
 
 //!

@@ -1,9 +1,10 @@
-use byteorder::{LittleEndian, WriteBytesExt};
+use std::io;
+use Encode;
 
 #[derive(Debug, PartialEq)]
 pub struct InventoryVector {
     flags: InvFlags,
-    pub hash: Vec<u8>,
+    pub hash: [u8; 32],
 }
 
 bitflags! {
@@ -17,19 +18,22 @@ bitflags! {
 }
 
 impl InventoryVector {
-    pub fn encode(&self) -> Vec<u8> {
-        let mut v: Vec<u8> = Vec::with_capacity(36);
-        let _ = v.write_u32::<LittleEndian>(self.flags.bits);
-        for byte in &self.hash {
-            let _ = v.write_u8(*byte);
-        }
-        v
-    }
-
     pub fn new(flags: u32, hash: &[u8]) -> InventoryVector {
+      debug_assert!(hash.len() == 32);
+      let mut a: [u8; 32] = Default::default();
+      a.copy_from_slice(&hash);
         InventoryVector {
             flags: InvFlags { bits: flags },
-            hash: hash.to_owned(),
+            hash: a,
         }
+    }
+}
+
+impl Encode for InventoryVector {
+    fn encode(&self, mut v: &mut Vec<u8>) -> Result<(), io::Error> {
+        // let mut v: Vec<u8> = Vec::with_capacity(36);
+        self.flags.bits.encode(&mut v)?;
+        self.hash.encode(&mut v)?;
+        Ok(())
     }
 }

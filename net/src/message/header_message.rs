@@ -1,31 +1,32 @@
 use std::io;
 
-use inventory_vector::InventoryVector;
 use {Encode, VarInt};
+use block_header::BlockHeader;
 
 #[derive(Debug, PartialEq)]
-pub struct InvMessage {
+pub struct HeaderMessage {
     pub count: VarInt,
-    pub inventory: Vec<InventoryVector>,
+    pub headers: Vec<BlockHeader>,
 }
 
-impl InvMessage {
+impl HeaderMessage {
     #[inline]
     pub fn len(&self) -> usize {
-        8 + (36 * self.inventory.len())
+        8 + (81 * self.headers.len())
     }
 
     #[inline]
     pub fn name(&self) -> &'static str {
-        "inv"
+        "headers"
     }
+
+
 }
 
-
-impl Encode for InvMessage {
+impl Encode for HeaderMessage {
     fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
         let _ = self.count.encode(&mut buff);
-        let _ = self.inventory.encode(&mut buff);
+        let _ = self.headers.encode(&mut buff);
         Ok(())
     }
 }

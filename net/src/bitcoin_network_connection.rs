@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::{self, Debug};
-use std::io::{Error, Read, Write};
-use std::net::TcpStream;
+use std::io::{Error, ErrorKind as IoErrorKind, Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
 use std::time::{Duration};
 
 use circular::Buffer;
@@ -19,10 +19,44 @@ pub struct BitcoinNetworkConnection {
     bad_messages: RefCell<usize>,
 }
 
+pub enum BitcoinNetworkError {
+    BadBytes,
+    Closed,
+    ReadTimeout,
+}
+
 impl BitcoinNetworkConnection {
     pub fn new(host: String) -> Result<BitcoinNetworkConnection, Error> {
         info!("Trying to initialize connection to {}", host);
-        let socket = TcpStream::connect(&host)?;
+        let addrs: Vec<_> = host.to_socket_addrs()?
+            .collect();
+        let mut socket = None;
+        for addr in addrs {
+            let s = TcpStream::connect_timeout(&addr, Duration::from_millis(2000));
+            if let Ok(connected) = s {
+                socket = Some(connected);
+                break;
+            }
+        }
+        if socket.is_none() {
+            return Err(Error::new(IoErrorKind::NotConnected, format!("Couldn't connect to socket for {}", host)));
+        }
+        let socket = socket.unwrap();
+        socket.set_read_timeout(Some(Duration::from_secs(2)))?;
+        // .expect("set_read_timeout call failed");
+        socket.set_write_timeout(Some(Duration::from_secs(2)))?;
+        
+        Ok(BitcoinNetworkConnection {
+            host: host,
+            // Allocate a buffer with 4MB of capacity
+            buffer: RefCell::new(Buffer::with_capacity(1024 * 1024 * 4)),
+            socket: RefCell::new(socket),
+            needed: RefCell::new(0),
+            bad_messages: RefCell::new(0),
+        })
+    }
+
+    pub fn with_stream(host: String, socket: TcpStream) -> Result<BitcoinNetworkConnection, Error> {
         socket.set_read_timeout(Some(Duration::from_secs(2)))?;
         // .expect("set_read_timeout call failed");
         socket.set_write_timeout(Some(Duration::from_secs(2)))?;
@@ -55,14 +89,19 @@ impl BitcoinNetworkConnection {
         unimplemented!()
     }
 
-    pub fn try_recv(&self) -> Option<Result<Message, ()>> {
+    pub fn try_recv(&self) -> Option<Result<Message, BitcoinNetworkError>> {
         let len = self.buffer.borrow().available_data();
         trace!("[{}] Buffer len: {}", self.host, len);
         if let Some(message) = self.try_parse() {
             return Some(message);
         }
 
-        self.read();
+        match self.read() {
+            Ok(_) => {},
+            Err(e) => {
+                return Some(Err(e))
+            }
+        }
         // If we haven't received any more data
         let read = self.buffer.borrow().available_data();
         if read < *self.needed.borrow() || read == 0 || read == len {
@@ -77,7 +116,7 @@ impl BitcoinNetworkConnection {
         None
     }
 
-    fn try_parse(&self) -> Option<Result<Message, ()>> {
+    fn try_parse(&self) -> Option<Result<Message, BitcoinNetworkError>> {
         let available_data = self.buffer.borrow().available_data();
         if available_data == 0 {
             return None;
@@ -116,23 +155,28 @@ impl BitcoinNetworkConnection {
         self.buffer.borrow_mut().consume(consume as usize);
         if trim {
             *self.bad_messages.borrow_mut() += 1;
-            return Some(Err(()))
+            return Some(Err(BitcoinNetworkError::BadBytes))
         }
         None
     }
 
-    fn read(&self) {
+    fn read(&self) -> Result<(),BitcoinNetworkError> {
         let mut buff = [0; 8192];
         let read = match self.socket.borrow_mut().read(&mut buff) {
-            Ok(r) => r,
-            Err(e) => {
-                trace!("Socket read error? {:?}", e);
-                return;
+            Ok(r) => {
+                if r == 0 {
+                    // return Err(())?
+                    return Err(BitcoinNetworkError::Closed)
+                }
+                r
+            },
+            Err(_e) => {
+                return Err(BitcoinNetworkError::ReadTimeout);
             }
         };
-        if read == 0 {
-            return;
-        }
+        // if read == 0 {
+        //     return;
+        // }
         trace!("[{} / {}] Read: {}, Need: {}",
                self.buffer.borrow().available_data(),
                self.buffer.borrow().capacity(),
@@ -145,8 +189,10 @@ impl BitcoinNetworkConnection {
             *self.needed.borrow_mut() -= read;
         } else {
             *self.needed.borrow_mut() = 0;
-            return;
+            return Ok(());
         }
+
+     Ok(())
     }
 }
 

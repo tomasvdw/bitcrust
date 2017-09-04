@@ -1,6 +1,8 @@
 
 target
 /test-lmdb/
+core-blocks
+data-bench
 
 Cargo.lock
 launch.json

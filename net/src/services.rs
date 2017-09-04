@@ -1,4 +1,7 @@
 use std::fmt::{self, Debug};
+use std::io;
+
+use Encode;
 
 bitflags! {
   flags ServiceFlags: u64 {
@@ -34,9 +37,14 @@ impl Debug for Services {
 }
 
 impl Services {
+    pub fn as_i64(&self) -> i64 {
+        self.flags.bits as i64
+    }
+
     pub fn from(input: u64) -> Services {
         Services { flags: ServiceFlags { bits: input } }
     }
+
     pub fn network(&self) -> bool {
         self.flags.contains(NETWORK)
     }
@@ -48,9 +56,11 @@ impl Services {
     pub fn bloom(&self) -> bool {
         self.flags.contains(BLOOM)
     }
+}
 
-    pub fn encode(&self) -> u64 {
-        self.flags.bits()
+impl Encode for Services {
+    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
+        self.flags.bits.encode(&mut buff)
     }
 }
 

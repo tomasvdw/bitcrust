@@ -1,16 +1,22 @@
 use std::collections::HashSet;
 use std::env::home_dir;
-use std::net::Ipv6Addr;
+use std::net::{TcpListener, Ipv6Addr};
+use std::sync::mpsc::{channel, TryRecvError};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use std::str::FromStr;
 use std::thread;
 
 use multiqueue::{BroadcastReceiver, BroadcastSender, broadcast_queue};
 use rusqlite::{Error, Connection};
 
-use bitcrust_net::{ClientMessage, NetAddr, Services};
+use bitcrust_net::{NetAddr, Services};
+use client_message::ClientMessage;
 use peer::Peer;
+use config::Config;
 
 pub struct PeerManager {
+    config: Config,
     addrs: HashSet<NetAddr>,
     database: Connection,
     sender: BroadcastSender<ClientMessage>,
@@ -24,7 +30,7 @@ pub struct PeerManager {
 // pub port: u16,
 
 impl PeerManager {
-    pub fn new() -> PeerManager {
+    pub fn new(config: &Config) -> PeerManager {
         let mut path = home_dir().expect("Can't figure out where your $HOME is");
         path.push(".bitcrust.dat");
         debug!("Connecting to DB at {:?}", path);
@@ -69,6 +75,7 @@ impl PeerManager {
         debug!("Setup peers");
 
         PeerManager {
+            config: config.clone(),
             database: db,
             addrs: addrs,
             receiver: receiver,
@@ -79,23 +86,59 @@ impl PeerManager {
 
     pub fn execute(&mut self) -> ! {
         debug!("Executing!");
-        self.initialize_peers();
-        // self.peers.append(&mut peers);
-        // println!("About to make a scope for a peer");
-        // debug!("Made a crossbeam scope!");
+        let (sender, receiver) = channel();
 
-        // scope.spawn(|| {
-        // debug!("Spawning peer thread");
-        // });
-        // });
+        let peer_sender = self.sender.clone();
+        let peer_receiver = self.receiver.add_stream();
+        let peer_config = self.config.clone();
+        let sleep_duration = Duration::from_millis(200);
+        let connected_peers = Arc::new(Mutex::new(0));
+        let listener_peers = connected_peers.clone();
+        thread::spawn(move || {
+            let sender = sender.clone();
+            info!("Spawning listener");
+            let listener = TcpListener::bind("0.0.0.0:8333").unwrap();
+
+            // accept connections and process them serially
+
+            loop {
+                match listener.accept() {
+                    Ok((socket, addr)) => {
+                        let host = format!("{}", addr);
+                        let addr = NetAddr::from_socket_addr(addr);
+                        match Peer::with_stream(host, socket, &peer_sender, &peer_receiver, &peer_config, ) {
+                            Ok(mut peer) => {
+                                debug!("new client: {:?}", peer);
+                                if let Ok(peers) = listener_peers.try_lock() {
+                                    peer.connected_peers(*peers);
+                                }
+                                let _ = sender.send((addr, peer.run(false)));
+                            }
+                            Err(e) => {
+                                debug!("Some error happened while creating the Peer: {:?}", e);
+                            }
+                        }
+                    }
+                    Err(e) => debug!("couldn't get client: {:?}", e),
+                }
+            }
+        });
+        // self.initialize_peers();
+        let mut recieved = false;
         loop {
-            info!("Currently connected to {}/{} peers",
-                  self.peers.len(),
-                  self.addrs.len());
-            match self.receiver.recv() {
+            trace!("Currently connected to {}/{} peers",
+                   self.peers.len(),
+                   self.addrs.len());
+
+            match self.receiver.try_recv() {
                 Ok(s) => {
+
+                    recieved = true;
                     match s {
                         ClientMessage::Addrs(addrs) => self.addr_message(addrs),
+                        ClientMessage::PeersConnected(_count) => {
+                            recieved = false;
+                        }
                         ClientMessage::Closing(hostname) => {
                             self.peers
                                 .retain(|ref peer| peer.0 != hostname);
@@ -103,14 +146,45 @@ impl PeerManager {
                     }
                 }
                 Err(e) => {
-                    trace!("Some error with thread communication, {:?}", e)
+                    match e {
+                        TryRecvError::Empty => {
+                            // thread::sleep_ms(200);
+                        }
+                        TryRecvError::Disconnected => trace!("Remote end has disconnected?"),
+
+                    }
+
                     // match e {
                     //     Empty => {}
                     //     _ => trace!("Some error with thread communication, {:?}", e),
                     // }
                 }
             }
-            self.initialize_peers();
+            match receiver.try_recv() {
+                Ok((addr, peer_handle)) => {
+                    let _ = self.update_time(&addr);
+                    self.peers.push((addr.to_host(), peer_handle));
+                    debug!("Connected to a new inbound peer");
+                    recieved = true;
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => {}
+                        TryRecvError::Disconnected => trace!("Listener has disconnected?"),
+                    }
+                }
+            }
+            // debug!("Receiver: {:?}", self.receiver.len());
+            if recieved == false {
+                thread::sleep(sleep_duration);
+            }
+            recieved = false;
+            self.initialize_peers(&connected_peers);
+            if let Ok(peers) = connected_peers.try_lock() {
+                if *peers as usize != self.peers.len() {
+                    let _ = self.sender.try_send(ClientMessage::PeersConnected(*peers));
+                }
+            }
         }
     }
 
@@ -124,7 +198,8 @@ impl PeerManager {
         }
     }
 
-    fn initialize_peers(&mut self) {
+    fn initialize_peers(&mut self, connected_peers: &Arc<Mutex<u64>>) {
+        
         if self.peers.len() >= 100 {
             return;
         }
@@ -141,10 +216,14 @@ impl PeerManager {
                 if self.peers.len() >= 100 {
                     break;
                 }
-                match Peer::new(&host[..], &self.sender, &self.receiver) {
+                match Peer::new(&host[..], &self.sender, &self.receiver, &self.config) {
                     Ok(peer) => {
                         let _ = self.update_time(addr);
-                        self.peers.push((host.to_string(), peer.run()));
+                        self.peers.push((host.to_string(), peer.run(true)));
+                        if let Ok(mut peers) = connected_peers.try_lock() {
+                            *peers += 1;
+                        }
+                        debug!("Self.peers.len(): {}", self.peers.len());
                     }
                     Err(e) => {
                         debug!("Failed to connect to peer at {} :: {:?}", addr.ip, e);
@@ -160,14 +239,14 @@ impl PeerManager {
                              "dnsseed.bluematt.me:8333",
                              "dnsseed.bitcoin.dashjr.org:8333",
                              "seed.bitcoinstats.com:8333",
-                             // "seed.bitcoin.jonasschnelli.ch:8333",
-                             // "seed.btc.petertodd.org:8333"
+                             "seed.bitcoin.jonasschnelli.ch:8333",
+                             "seed.btc.petertodd.org:8333"
                              ]
                 .iter() {
                 // info!("Trying to connect")
-                match Peer::new(*hostname, &self.sender, &self.receiver) {
+                match Peer::new(*hostname, &self.sender, &self.receiver, &self.config) {
                     Ok(peer) => {
-                        self.peers.push((hostname.to_string(), peer.run()));
+                        self.peers.push((hostname.to_string(), peer.run(true)));
                     }
                     Err(e) => warn!("Error connecting to {}: {:?}", hostname, e),
                 }
@@ -193,7 +272,7 @@ impl PeerManager {
         let mut stmt = self.database
             .prepare("INSERT INTO peers (time, services, ip, port) VALUES (?, ?, ?, ?)")?;
         stmt.execute(&[&format!("{}", addr.time.unwrap_or(0)),
-                       &format!("{}", addr.services.encode() as i64),
+                       &format!("{}", addr.services.as_i64()),
                        &format!("{}", addr.ip),
                        &format!("{}", addr.port)])?;
         self.addrs.insert(addr.clone());

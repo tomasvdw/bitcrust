@@ -1,13 +1,17 @@
 use std::hash::{Hash, Hasher};
-use std::net::Ipv6Addr;
+use std::io;
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use byteorder::{BigEndian, LittleEndian, NetworkEndian, WriteBytesExt};
+use byteorder::{BigEndian, WriteBytesExt};
 
+use Encode;
 use services::Services;
 
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+    use Encode;
     use super::*;
     #[test]
     fn it_parses_a_net_address() {}
@@ -21,7 +25,8 @@ mod tests {
             port: 8333,
         };
 
-        let encoded = addr.encode();
+        let mut encoded = vec![];
+        addr.encode(&mut encoded).unwrap();
         let expected = vec![
           0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // services
           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x0A, 0x00, 0x00, 0x01, // IP
@@ -40,21 +45,38 @@ pub struct NetAddr {
 }
 
 impl NetAddr {
-    pub fn encode(&self) -> Vec<u8> {
-        let mut v: Vec<u8> = Vec::with_capacity(30);
+    pub fn from_socket_addr(addr: SocketAddr) -> NetAddr {
+        let start = SystemTime::now();
+        let now = start.duration_since(UNIX_EPOCH)
+            .expect("Time went backwards").as_secs();
+        let ip = match addr.ip() {
+            IpAddr::V4(a) => a.to_ipv6_mapped(),
+            IpAddr::V6(a) => a
+        };
+        NetAddr {
+            time: Some(now as u32),
+            services: Services::from(0),
+            ip: ip,
+            port: addr.port(),
+        }
+    }
+
+    pub fn to_host(&self) -> String {
+        format!("{}:{}", self.ip, self.port)
+    }
+}
+
+impl Encode for NetAddr {
+    fn encode(&self, mut v: &mut Vec<u8>) -> Result<(), io::Error> {
         // write time
-        if let Some(t) = self.time {
-            let _ = v.write_u32::<LittleEndian>(t);
-        }
+        self.time.encode(&mut v)?;
         // write services
-        let _ = v.write_u64::<LittleEndian>(self.services.encode());
+        self.services.encode(&mut v)?;
         // write IP
-        for octet in self.ip.segments().iter() {
-            let _ = v.write_u16::<NetworkEndian>(*octet);
-        }
+        self.ip.encode(&mut v)?;
         // write port
-        let _ = v.write_u16::<BigEndian>(self.port);
-        v
+        v.write_u16::<BigEndian>(self.port)?;
+        Ok(())
     }
 }
 

@@ -26,9 +26,23 @@ extern {
         -> i32;
 }
 
+// typedef enum bitcoinconsensus_error_t
+// {
+//     bitcoinconsensus_ERR_OK = 0,
+//     bitcoinconsensus_ERR_TX_INDEX,
+//     bitcoinconsensus_ERR_TX_SIZE_MISMATCH,
+//     bitcoinconsensus_ERR_TX_DESERIALIZE,
+//     bitcoinconsensus_ERR_AMOUNT_REQUIRED,
+//     bitcoinconsensus_ERR_INVALID_FLAGS,
+// } bitcoinconsensus_error;
+
 #[derive(Debug)]
 pub enum VerifyScriptError {
-    UnknownError
+    Index,
+    SizeMismatch,
+    Deserialize,
+    AmountRequired,
+    InvalidFlags,
 }
 
 /// Verifies whether the given `input` of the transaction spends the given `output`
@@ -51,7 +65,14 @@ pub fn verify_script(previous_tx_out: &[u8], transaction: &[u8], input: u32) -> 
         Ok(())
     }
     else {
-        Err(VerifyScriptError::UnknownError)
+        Err(match err {
+            0 => VerifyScriptError::Index,
+            1 => VerifyScriptError::SizeMismatch,
+            2  => VerifyScriptError::Deserialize,
+            3  => VerifyScriptError::AmountRequired,
+            4  => VerifyScriptError::InvalidFlags,
+            _ => unreachable!()
+        })
     }
 }
 
