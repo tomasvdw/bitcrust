@@ -5,7 +5,6 @@ use VarInt;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ::parser;
     use ::Services;
 
     #[test]
@@ -52,7 +51,7 @@ mod tests {
                     ip: "::ffff:10.0.0.1".parse().unwrap(),
                     port: 8333 }] };
         let mut encoded = vec![];
-        addr.encode(&mut encoded);
+        addr.encode(&mut encoded).expect("Failed to encode Addr");
         assert_eq!(input, encoded);
     }
 }

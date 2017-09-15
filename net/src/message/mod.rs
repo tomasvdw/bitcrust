@@ -3,6 +3,7 @@ use sha2::{Sha256, Digest};
 use Encode;
 mod version_message;
 mod addr_message;
+mod getblocks_message;
 mod getheaders_message;
 mod header_message;
 mod inv_message;
@@ -12,6 +13,7 @@ mod bitcrust;
 
 pub use self::version_message::VersionMessage;
 pub use self::addr_message::AddrMessage;
+pub use self::getblocks_message::GetblocksMessage;
 pub use self::getheaders_message::GetheadersMessage;
 pub use self::inv_message::InvMessage;
 pub use self::header_message::HeaderMessage;
@@ -167,6 +169,7 @@ pub enum Message {
     SendHeaders,
     SendCompact(SendCmpctMessage),
     GetAddr,
+    GetBlocks(GetblocksMessage),
     GetHeaders(GetheadersMessage),
     Addr(AddrMessage),
     Header(HeaderMessage),
@@ -238,6 +241,7 @@ impl Message {
             Message::Verack => packet!(testnet, "verack"),
             Message::SendHeaders => packet!(testnet, "sendheaders"),
             Message::GetAddr => packet!(testnet, "getaddr"),
+            Message::GetBlocks(ref msg) => packet!(testnet, msg),
             Message::GetHeaders(ref msg) => packet!(testnet, msg),
             Message::Addr(ref addr) => packet!(testnet, addr),
             Message::Inv(ref inv) => packet!(testnet, inv),
