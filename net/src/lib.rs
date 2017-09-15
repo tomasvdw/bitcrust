@@ -27,6 +27,7 @@ mod message;
 mod inventory_vector;
 mod net_addr;
 mod services;
+mod transactions;
 mod var_int;
 
 use encode::Encode;

@@ -9,6 +9,7 @@ use message::{
     AddrMessage, AuthenticatedBitcrustMessage, GetdataMessage, GetblocksMessage,
     GetheadersMessage, HeaderMessage, InvMessage, SendCmpctMessage, VersionMessage};
 use inventory_vector::InventoryVector;
+use transactions::{Outpoint, TransactionInput, TransactionOutput};
 use {BlockHeader, VarInt};
 use net_addr::NetAddr;
 use services::Services;
@@ -244,6 +245,43 @@ named!(inv_vector <InventoryVector>,
     hash: take!(32) >>
     (
       InventoryVector::new(flags, hash)
+    )
+));
+
+named!(pub transaction_input <TransactionInput>,
+do_parse!(
+    previous: outpoint >>
+    length: compact_size >>
+    script: take_str!(length) >>
+    sequence: le_u32 >>
+    (
+        TransactionInput {
+            previous: previous,
+            script: script.to_string(),
+            sequence: sequence,
+        }
+    )
+));
+
+named!(pub outpoint <Outpoint>,
+  do_parse!(
+    hash: take!(32) >>
+    index: le_u32 >>
+    (
+        Outpoint::new(index, hash)
+    )
+));
+
+named!(pub transaction_output <TransactionOutput>,
+  do_parse!(
+    value: le_i64 >>
+    length: compact_size >>
+    script: take_str!(length) >>
+    (
+        TransactionOutput {
+            value: value,
+            pk_script: script.to_string()
+        }
     )
 ));
 
