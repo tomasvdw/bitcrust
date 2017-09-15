@@ -5,7 +5,9 @@ use nom::{le_u16, le_u32, le_u64, le_i32, le_i64, be_u16, IResult};
 use sha2::{Sha256, Digest};
 
 use message::Message;
-use message::{AddrMessage, AuthenticatedBitcrustMessage, GetblocksMessage, GetheadersMessage, HeaderMessage, InvMessage, SendCmpctMessage, VersionMessage};
+use message::{
+    AddrMessage, AuthenticatedBitcrustMessage, GetdataMessage, GetblocksMessage,
+    GetheadersMessage, HeaderMessage, InvMessage, SendCmpctMessage, VersionMessage};
 use inventory_vector::InventoryVector;
 use {BlockHeader, VarInt};
 use net_addr::NetAddr;
@@ -147,6 +149,7 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
                 "version" => version(raw_message.body),
                 "verack" => IResult::Done(i, Message::Verack),
                 "sendheaders" => IResult::Done(i, Message::SendHeaders),
+                "getdata" => getdata(raw_message.body),
                 "getblocks" => getblocks(raw_message.body),
                 "getheaders" => getheaders(raw_message.body),
                 "sendcmpct" => send_compact(raw_message.body),
@@ -219,7 +222,17 @@ named!(inv <Message>,
     inventory: count!(inv_vector, (count) as usize) >>
     (
 Message::Inv(InvMessage{
-  count: VarInt::new(count),
+  inventory: inventory
+})
+    )
+));
+
+named!(getdata <Message>,
+  do_parse!(
+    count: compact_size >>
+    inventory: count!(inv_vector, (count) as usize) >>
+    (
+Message::GetData(GetdataMessage{
   inventory: inventory
 })
     )
