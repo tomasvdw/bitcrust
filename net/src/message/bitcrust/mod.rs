@@ -38,4 +38,9 @@ impl AuthenticatedBitcrustMessage {
     pub fn len(&self) -> usize {
         40
     }
+
+    #[inline]
+    pub fn name(&self) -> &'static str {
+        "bcr_pcr"
+    }
 }

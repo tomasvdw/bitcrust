@@ -240,17 +240,12 @@ macro_rules! packet {
 impl Message {
     pub fn encode(&self, testnet: bool) -> Vec<u8> {
         match *self {
-            Message::Version(ref message) => packet!(testnet, message),
+            // Empty message types
             Message::Verack => packet!(testnet, "verack"),
             Message::SendHeaders => packet!(testnet, "sendheaders"),
             Message::GetAddr => packet!(testnet, "getaddr"),
-            Message::GetData(ref msg) => packet!(testnet, msg), 
-            Message::GetBlocks(ref msg) => packet!(testnet, msg),
-            Message::GetHeaders(ref msg) => packet!(testnet, msg),
-            Message::Addr(ref addr) => packet!(testnet, addr),
-            Message::Inv(ref inv) => packet!(testnet, inv),
-            Message::Header(ref headers) => packet!(testnet, headers),
-            Message::SendCompact(ref message) => packet!(testnet, message),
+            
+            // Simple Types
             Message::Ping(nonce) => {
                 let mut v = Vec::with_capacity(8);
                 let _ = nonce.encode(&mut v);
@@ -271,7 +266,19 @@ impl Message {
                 let _ = count.encode(&mut v);
                 packet!(testnet, "bcr_pc" => v)
             }
-            Message::BitcrustPeerCountRequest(ref req) =>  packet!(testnet, "bcr_pcr", req),
+
+            // Complex Types
+            Message::BitcrustPeerCountRequest(ref req) =>  packet!(testnet, req),
+            Message::Version(ref message) => packet!(testnet, message),
+            Message::GetData(ref msg) => packet!(testnet, msg), 
+            Message::GetBlocks(ref msg) => packet!(testnet, msg),
+            Message::GetHeaders(ref msg) => packet!(testnet, msg),
+            Message::Addr(ref addr) => packet!(testnet, addr),
+            Message::Inv(ref inv) => packet!(testnet, inv),
+            Message::Header(ref headers) => packet!(testnet, headers),
+            Message::SendCompact(ref message) => packet!(testnet, message),
+
+            // Unparsed messages
             Message::Unparsed(_, ref v) => v.clone(),
         }
     }
