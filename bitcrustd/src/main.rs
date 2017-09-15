@@ -120,7 +120,6 @@ fn connected_peers(_matches: &ArgMatches, config: &Config, host: String) {
         }
     }
     let auth = AuthenticatedBitcrustMessage::create(config.key());
-    println!("About to send {:?}", auth);
     match connection.try_send(Message::BitcrustPeerCountRequest(auth)) {
         Ok(_) => {},
         Err(e) => warn!("Error sending request: {:?}", e),
