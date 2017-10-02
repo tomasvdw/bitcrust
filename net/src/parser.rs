@@ -6,11 +6,11 @@ use sha2::{Sha256, Digest};
 
 use message::Message;
 use message::{
-    AddrMessage, AuthenticatedBitcrustMessage, GetdataMessage, GetblocksMessage,
-    GetheadersMessage, HeaderMessage, InvMessage, SendCmpctMessage, TransactionMessage,
-    VersionMessage};
+    AddrMessage, AuthenticatedBitcrustMessage, BlockMessage, GetdataMessage,
+    GetblocksMessage, GetheadersMessage, HeaderMessage, InvMessage, SendCmpctMessage,
+    TransactionMessage, VersionMessage};
 use inventory_vector::InventoryVector;
-use transactions::{Outpoint, TransactionInput, TransactionOutput};
+use transactions::{Outpoint, TransactionInput, TransactionOutput, Witness};
 use {BlockHeader, VarInt};
 use net_addr::NetAddr;
 use services::Services;
@@ -162,6 +162,7 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
                 "headers" => headers(raw_message.body),
                 "inv" => inv(raw_message.body),
                 "tx" => transaction(raw_message.body),
+                "block" => block(raw_message.body),
                 // Bitcrust Specific Messages
                 "bcr_pcr" => bitcrust_peer_count_request(raw_message.body),
                 "bcr_pc" => bitcrust_peer_count(raw_message.body),
@@ -250,22 +251,31 @@ named!(inv_vector <InventoryVector>,
     )
 ));
 
-/// Field Size	Description	Data type	Comments
-/// 4	version	int32_t	Transaction data format version (note, this is signed)
-/// 0 or 2	flag	optional uint8_t[2]	If present, always 0001, and indicates the presence of witness data
-/// 1+	tx_in count	var_int	Number of Transaction inputs (never zero)
-/// 41+	tx_in	tx_in[]	A list of 1 or more transaction inputs or sources for coins
-/// 1+	tx_out count	var_int	Number of Transaction outputs
-/// 9+	tx_out	tx_out[]	A list of 1 or more transaction outputs or destinations for coins
-/// 0+	tx_witnesses	tx_witness[]	A list of witnesses, one for each input; omitted if flag is omitted above
-/// 4	lock_time	uint32_t	The block number or timestamp at which this transaction is unlocked:
-/// Value	Description
-/// 0	Not locked
-/// < 500000000	Block number at which this transaction is unlocked
-/// >= 500000000	UNIX timestamp at which this transaction is unlocked
-/// If all TxIn inputs have final (0xffffffff) sequence numbers then lock_time is irrelevant. Otherwise, the transaction may not be added to a block until after lock_time (see NLockTime).
+named!(block <Message>,
+    do_parse!(
+        version: le_i32 >>
+        prev_block: take!(32) >>
+        merkle_root: take!(32) >>
+        timestamp: le_u32 >>
+        bits: le_u32 >>
+        nonce: le_u32 >>
+        count: compact_size >>
+        transactions: count!(transaction_message, count as usize) >> 
+        (
+            Message::Block(BlockMessage::new(
+                version,
+                prev_block,
+                merkle_root,
+                timestamp,
+                bits,
+                nonce,
+                transactions,
+            ))
+        )
+    )
+);
 
-named!(transaction <Message>,
+named!(transaction_message <TransactionMessage> ,
     do_parse!(
         version: le_i32 >>
         includes_witness: opt!(tag!([0x00, 0x01])) >>
@@ -273,30 +283,65 @@ named!(transaction <Message>,
         inputs: count!(transaction_input, (input_length) as usize) >>
         output_length: compact_size >>
         outputs: count!(transaction_output, (output_length) as usize) >>
-        witnesses: cond!(includes_witness.is_some(), take!(0)) >> 
+        witnesses: cond!(includes_witness.is_some(), witnesses) >> 
         lock_time: le_u32 >>
         (
-            Message::Tx(TransactionMessage {
+            TransactionMessage {
                 version: version,
                 inputs: inputs,
                 outputs: outputs,
                 witnesses: vec![],
                 lock_time: lock_time,
-            })
+            }
         )
     )
 );
+
+pub fn transaction<'a>(i: &'a [u8]) -> IResult<&'a [u8], Message> {
+    match transaction_message(&i) {
+        IResult::Done(i, tx) => {
+            IResult::Done(i,
+               Message::Tx(tx))
+        }
+        IResult::Incomplete(len) => IResult::Incomplete(len),
+        IResult::Error(e) => IResult::Error(e),
+    }
+}
+
+named!(witnesses <Vec<Witness>>,
+    do_parse!(
+        count: compact_size >>
+        witnesses: count!(witness, count as usize) >>
+        (
+            witnesses
+        )
+    )
+);
+
+named!(witness <Witness>,
+    do_parse!(
+        count: compact_size >>
+        component: take!(count) >>
+        (
+            Witness {
+                component: component.to_vec(),
+            }
+        )
+    )
+);
+
 
 named!(transaction_input <TransactionInput>,
 do_parse!(
     previous: outpoint >>
     length: compact_size >>
-    script: take_str!(length) >>
+    // script: take_str!(length) >>
+    script: take!(length) >>
     sequence: le_u32 >>
     (
         TransactionInput {
             previous: previous,
-            script: script.to_string(),
+            script: script.to_vec(),
             sequence: sequence,
         }
     )
@@ -315,11 +360,11 @@ named!(transaction_output <TransactionOutput>,
   do_parse!(
     value: le_i64 >>
     length: compact_size >>
-    script: take_str!(length) >>
+    script: take!(length) >>
     (
         TransactionOutput {
             value: value,
-            pk_script: script.to_string()
+            pk_script: script.to_vec()
         }
     )
 ));
@@ -532,7 +577,110 @@ named!(pub addr<Message>,
 #[cfg(test)]
 mod parse_tests {
     use std::str::FromStr;
+    use encode::Encode;
     use super::*;
+
+    #[test]
+    fn it_parses_an_outpoint() {
+        let input = [
+            0x6D  ,0xBD  ,0xDB  ,0x08  ,0x5B  ,0x1D  ,0x8A  ,0xF7   ,0x51  ,0x84  ,0xF0  ,0xBC  ,0x01  ,0xFA  ,0xD5  ,0x8D,  // - previous output (outpoint)
+            0x12  ,0x66  ,0xE9  ,0xB6  ,0x3B  ,0x50  ,0x88  ,0x19   ,0x90  ,0xE4  ,0xB4  ,0x0D  ,0x6A  ,0xEE  ,0x36  ,0x29,
+            0x00  ,0x00  ,0x00  ,0x00,
+        ];
+        outpoint(&input).unwrap();
+    }
+
+    #[test]
+    fn it_parses_a_transaction_input() {
+        let input = [
+            // Input 1:
+            0x6D  ,0xBD  ,0xDB  ,0x08  ,0x5B  ,0x1D  ,0x8A  ,0xF7   ,0x51  ,0x84  ,0xF0  ,0xBC  ,0x01  ,0xFA  ,0xD5  ,0x8D,  // - previous output (outpoint)
+            0x12  ,0x66  ,0xE9  ,0xB6  ,0x3B  ,0x50  ,0x88  ,0x19   ,0x90  ,0xE4  ,0xB4  ,0x0D  ,0x6A  ,0xEE  ,0x36  ,0x29,
+            0x00  ,0x00  ,0x00  ,0x00,
+
+            0x8B,                                                 // - script is 139  bytes long
+
+            0x48  ,0x30  ,0x45  ,0x02  ,0x21  ,0x00  ,0xF3  ,0x58   ,0x1E  ,0x19  ,0x72  ,0xAE  ,0x8A  ,0xC7  ,0xC7  ,0x36,   // - signature script (scriptSig)
+            0x7A  ,0x7A  ,0x25  ,0x3B  ,0xC1  ,0x13  ,0x52  ,0x23   ,0xAD  ,0xB9  ,0xA4  ,0x68  ,0xBB  ,0x3A  ,0x59  ,0x23,
+            0x3F  ,0x45  ,0xBC  ,0x57  ,0x83  ,0x80  ,0x02  ,0x20   ,0x59  ,0xAF  ,0x01  ,0xCA  ,0x17  ,0xD0  ,0x0E  ,0x41,
+            0x83  ,0x7A  ,0x1D  ,0x58  ,0xE9  ,0x7A  ,0xA3  ,0x1B   ,0xAE  ,0x58  ,0x4E  ,0xDE  ,0xC2  ,0x8D  ,0x35  ,0xBD,
+            0x96  ,0x92  ,0x36  ,0x90  ,0x91  ,0x3B  ,0xAE  ,0x9A   ,0x01  ,0x41  ,0x04  ,0x9C  ,0x02  ,0xBF  ,0xC9  ,0x7E,
+            0xF2  ,0x36  ,0xCE  ,0x6D  ,0x8F  ,0xE5  ,0xD9  ,0x40   ,0x13  ,0xC7  ,0x21  ,0xE9  ,0x15  ,0x98  ,0x2A  ,0xCD,
+            0x2B  ,0x12  ,0xB6  ,0x5D  ,0x9B  ,0x7D  ,0x59  ,0xE2   ,0x0A  ,0x84  ,0x20  ,0x05  ,0xF8  ,0xFC  ,0x4E  ,0x02,
+            0x53  ,0x2E  ,0x87  ,0x3D  ,0x37  ,0xB9  ,0x6F  ,0x09   ,0xD6  ,0xD4  ,0x51  ,0x1A  ,0xDA  ,0x8F  ,0x14  ,0x04,
+            0x2F  ,0x46  ,0x61  ,0x4A  ,0x4C  ,0x70  ,0xC0  ,0xF1   ,0x4B  ,0xEF  ,0xF5,
+
+            0xFF  ,0xFF  ,0xFF  ,0xFF,                                        // - sequence
+        ];
+        transaction_input(&input).unwrap();
+    }
+
+    #[test]
+    fn it_parses_a_tx_message() {
+        let input = [
+            // Message header:
+            0xF9  ,0xBE  ,0xB4  ,0xD9,                                        // - main network magic bytes
+            0x74  ,0x78  ,0x00  ,0x00  ,0x00  ,0x00  ,0x00  ,0x00  ,0x00  ,0x00  ,0x00  ,0x00,              // - "tx" command
+            0x02  ,0x01  ,0x00  ,0x00,                                        // - payload  is 258  bytes long
+            0xE2  ,0x93  ,0xCD  ,0xBE,                                      // - checksum of payload
+
+            // Transaction:
+            0x01  ,0x00  ,0x00  ,0x00,                                       // - version
+
+            // Inputs:
+            0x01,                                                // - number of transaction inputs
+
+            // Input 1:
+            0x6D  ,0xBD  ,0xDB  ,0x08  ,0x5B  ,0x1D  ,0x8A  ,0xF7   ,0x51  ,0x84  ,0xF0  ,0xBC  ,0x01  ,0xFA  ,0xD5  ,0x8D,  // - previous output (outpoint)
+            0x12  ,0x66  ,0xE9  ,0xB6  ,0x3B  ,0x50  ,0x88  ,0x19   ,0x90  ,0xE4  ,0xB4  ,0x0D  ,0x6A  ,0xEE  ,0x36  ,0x29,
+            0x00  ,0x00  ,0x00  ,0x00,
+
+            0x8B,                                                 // - script is 139  bytes long
+
+            0x48  ,0x30  ,0x45  ,0x02  ,0x21  ,0x00  ,0xF3  ,0x58   ,0x1E  ,0x19  ,0x72  ,0xAE  ,0x8A  ,0xC7  ,0xC7  ,0x36,   // - signature script (scriptSig)
+            0x7A  ,0x7A  ,0x25  ,0x3B  ,0xC1  ,0x13  ,0x52  ,0x23   ,0xAD  ,0xB9  ,0xA4  ,0x68  ,0xBB  ,0x3A  ,0x59  ,0x23,
+            0x3F  ,0x45  ,0xBC  ,0x57  ,0x83  ,0x80  ,0x02  ,0x20   ,0x59  ,0xAF  ,0x01  ,0xCA  ,0x17  ,0xD0  ,0x0E  ,0x41,
+            0x83  ,0x7A  ,0x1D  ,0x58  ,0xE9  ,0x7A  ,0xA3  ,0x1B   ,0xAE  ,0x58  ,0x4E  ,0xDE  ,0xC2  ,0x8D  ,0x35  ,0xBD,
+            0x96  ,0x92  ,0x36  ,0x90  ,0x91  ,0x3B  ,0xAE  ,0x9A   ,0x01  ,0x41  ,0x04  ,0x9C  ,0x02  ,0xBF  ,0xC9  ,0x7E,
+            0xF2  ,0x36  ,0xCE  ,0x6D  ,0x8F  ,0xE5  ,0xD9  ,0x40   ,0x13  ,0xC7  ,0x21  ,0xE9  ,0x15  ,0x98  ,0x2A  ,0xCD,
+            0x2B  ,0x12  ,0xB6  ,0x5D  ,0x9B  ,0x7D  ,0x59  ,0xE2   ,0x0A  ,0x84  ,0x20  ,0x05  ,0xF8  ,0xFC  ,0x4E  ,0x02,
+            0x53  ,0x2E  ,0x87  ,0x3D  ,0x37  ,0xB9  ,0x6F  ,0x09   ,0xD6  ,0xD4  ,0x51  ,0x1A  ,0xDA  ,0x8F  ,0x14  ,0x04,
+            0x2F  ,0x46  ,0x61  ,0x4A  ,0x4C  ,0x70  ,0xC0  ,0xF1   ,0x4B  ,0xEF  ,0xF5,
+
+            0xFF  ,0xFF  ,0xFF  ,0xFF,                                        // - sequence
+
+            // Outputs:
+            0x02,                                                 // - 2 Output Transactions
+
+            // Output 1:
+            0x40  ,0x4B  ,0x4C  ,0x00  ,0x00  ,0x00  ,0x00  ,0x00,                            // - 0.05  BTC (5000000)
+            0x19,                                                // - pk_script is 25  bytes long
+
+            0x76  ,0xA9  ,0x14  ,0x1A  ,0xA0  ,0xCD  ,0x1C  ,0xBE   ,0xA6  ,0xE7  ,0x45  ,0x8A  ,0x7A  ,0xBA  ,0xD5  ,0x12,  // - pk_script
+            0xA9  ,0xD9  ,0xEA  ,0x1A  ,0xFB  ,0x22  ,0x5E  ,0x88   ,0xAC,
+
+            // Output 2:
+            0x80  ,0xFA  ,0xE9  ,0xC7  ,0x00  ,0x00  ,0x00  ,0x00,                            // - 33.54  BTC (3354000000)
+            0x19,                                                // - pk_script is 25  bytes long
+
+            0x76  ,0xA9  ,0x14  ,0x0E  ,0xAB  ,0x5B  ,0xEA  ,0x43   ,0x6A  ,0x04  ,0x84  ,0xCF  ,0xAB  ,0x12  ,0x48  ,0x5E,   // - pk_script
+            0xFD  ,0xA0  ,0xB7  ,0x8B  ,0x4E  ,0xCC  ,0x52  ,0x88   ,0xAC,
+
+            // Locktime:
+            0x00  ,0x00  ,0x00  ,0x00,                                        // - lock time
+        ];
+
+        let parsed = message(&input, &"name".to_string());
+        let (_rest, msg) = parsed.unwrap();
+        match msg {
+            Message::Tx(ref tx) => {
+                assert_eq!(tx.outputs.get(0).unwrap().value, 5000000);
+            },
+            _ => unreachable!()
+        }
+        let encoded = msg.encode(false);
+        assert_eq!(input.to_vec(), encoded);
+    }
 
     #[test]
     fn it_parses_an_ipv6_address() {
@@ -557,6 +705,9 @@ mod parse_tests {
                        ip: Ipv6Addr::from_str("::ffff:10.0.0.1").unwrap(),
                        port: 8333,
                    });
+        let mut encoded = vec![];
+        parsed.encode(&mut encoded).unwrap();
+        assert_eq!(addr_input.to_vec(), encoded);
     }
 
     #[test]
@@ -615,7 +766,17 @@ mod parse_tests {
         });
         let actual = version(&input);
         println!("actual: {:?}", actual);
-        assert_eq!(expected, actual.unwrap().1);
+        let version = actual.unwrap().1;
+        assert_eq!(expected, version);
+        match version {
+            Message::Version(ref v) => {
+                let mut encoded = vec![];
+                v.encode(&mut encoded).unwrap();
+                assert_eq!(input.to_vec(), encoded);
+            },
+            _ => unreachable!()
+        }
+        
     }
 
     #[test]

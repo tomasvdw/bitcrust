@@ -3,6 +3,7 @@ use sha2::{Sha256, Digest};
 use Encode;
 mod version_message;
 mod addr_message;
+mod block_message;
 mod getdata_message;
 mod getblocks_message;
 mod getheaders_message;
@@ -15,6 +16,7 @@ mod bitcrust;
 
 pub use self::version_message::VersionMessage;
 pub use self::addr_message::AddrMessage;
+pub use self::block_message::BlockMessage;
 pub use self::getdata_message::GetdataMessage;
 pub use self::getblocks_message::GetblocksMessage;
 pub use self::getheaders_message::GetheadersMessage;
@@ -171,6 +173,7 @@ pub enum Message {
     Version(VersionMessage),
     Verack,
     SendHeaders,
+    Block(BlockMessage),
     SendCompact(SendCmpctMessage),
     GetAddr,
     GetData(GetdataMessage),
@@ -273,6 +276,7 @@ impl Message {
             // Complex Types
             Message::BitcrustPeerCountRequest(ref req) =>  packet!(testnet, req),
             Message::Version(ref message) => packet!(testnet, message),
+            Message::Block(ref block) => packet!(testnet, block),
             Message::GetData(ref msg) => packet!(testnet, msg), 
             Message::GetBlocks(ref msg) => packet!(testnet, msg),
             Message::GetHeaders(ref msg) => packet!(testnet, msg),

@@ -5,7 +5,7 @@ use VarInt;
 pub struct TransactionInput {
     pub previous: Outpoint,
     #[count]
-    pub script: String,
+    pub script: Vec<u8>,
     pub sequence: u32,
 }
 
@@ -39,7 +39,8 @@ impl Outpoint {
 #[derive(Debug, Encode, PartialEq)]
 pub struct TransactionOutput{
     pub value: i64,
-    pub pk_script: String,
+    #[count]
+    pub pk_script: Vec<u8>,
 }
 
 impl TransactionOutput {
