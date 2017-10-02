@@ -9,6 +9,7 @@ mod getheaders_message;
 mod header_message;
 mod inv_message;
 mod sendcmpct_message;
+mod transaction_message;
 
 mod bitcrust;
 
@@ -20,6 +21,7 @@ pub use self::getheaders_message::GetheadersMessage;
 pub use self::inv_message::InvMessage;
 pub use self::header_message::HeaderMessage;
 pub use self::sendcmpct_message::SendCmpctMessage;
+pub use self::transaction_message::TransactionMessage;
 
 pub use self::bitcrust::*;
 
@@ -181,6 +183,7 @@ pub enum Message {
     Ping(u64),
     Pong(u64),
     FeeFilter(u64),
+    Tx(TransactionMessage),
     // Bitcrust Specific Messages
     BitcrustPeerCount(u64),
     BitcrustPeerCountRequest(AuthenticatedBitcrustMessage),
@@ -277,7 +280,7 @@ impl Message {
             Message::Inv(ref inv) => packet!(testnet, inv),
             Message::Header(ref headers) => packet!(testnet, headers),
             Message::SendCompact(ref message) => packet!(testnet, message),
-
+            Message::Tx(ref tx) => packet!(testnet, tx),
             // Unparsed messages
             Message::Unparsed(_, ref v) => v.clone(),
         }

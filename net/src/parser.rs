@@ -7,7 +7,8 @@ use sha2::{Sha256, Digest};
 use message::Message;
 use message::{
     AddrMessage, AuthenticatedBitcrustMessage, GetdataMessage, GetblocksMessage,
-    GetheadersMessage, HeaderMessage, InvMessage, SendCmpctMessage, VersionMessage};
+    GetheadersMessage, HeaderMessage, InvMessage, SendCmpctMessage, TransactionMessage,
+    VersionMessage};
 use inventory_vector::InventoryVector;
 use transactions::{Outpoint, TransactionInput, TransactionOutput};
 use {BlockHeader, VarInt};
@@ -160,6 +161,7 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
                 "addr" => addr(raw_message.body),
                 "headers" => headers(raw_message.body),
                 "inv" => inv(raw_message.body),
+                "tx" => transaction(raw_message.body),
                 // Bitcrust Specific Messages
                 "bcr_pcr" => bitcrust_peer_count_request(raw_message.body),
                 "bcr_pc" => bitcrust_peer_count(raw_message.body),
@@ -248,7 +250,44 @@ named!(inv_vector <InventoryVector>,
     )
 ));
 
-named!(pub transaction_input <TransactionInput>,
+/// Field Size	Description	Data type	Comments
+/// 4	version	int32_t	Transaction data format version (note, this is signed)
+/// 0 or 2	flag	optional uint8_t[2]	If present, always 0001, and indicates the presence of witness data
+/// 1+	tx_in count	var_int	Number of Transaction inputs (never zero)
+/// 41+	tx_in	tx_in[]	A list of 1 or more transaction inputs or sources for coins
+/// 1+	tx_out count	var_int	Number of Transaction outputs
+/// 9+	tx_out	tx_out[]	A list of 1 or more transaction outputs or destinations for coins
+/// 0+	tx_witnesses	tx_witness[]	A list of witnesses, one for each input; omitted if flag is omitted above
+/// 4	lock_time	uint32_t	The block number or timestamp at which this transaction is unlocked:
+/// Value	Description
+/// 0	Not locked
+/// < 500000000	Block number at which this transaction is unlocked
+/// >= 500000000	UNIX timestamp at which this transaction is unlocked
+/// If all TxIn inputs have final (0xffffffff) sequence numbers then lock_time is irrelevant. Otherwise, the transaction may not be added to a block until after lock_time (see NLockTime).
+
+named!(transaction <Message>,
+    do_parse!(
+        version: le_i32 >>
+        includes_witness: opt!(tag!([0x00, 0x01])) >>
+        input_length: compact_size >>
+        inputs: count!(transaction_input, (input_length) as usize) >>
+        output_length: compact_size >>
+        outputs: count!(transaction_output, (output_length) as usize) >>
+        witnesses: cond!(includes_witness.is_some(), take!(0)) >> 
+        lock_time: le_u32 >>
+        (
+            Message::Tx(TransactionMessage {
+                version: version,
+                inputs: inputs,
+                outputs: outputs,
+                witnesses: vec![],
+                lock_time: lock_time,
+            })
+        )
+    )
+);
+
+named!(transaction_input <TransactionInput>,
 do_parse!(
     previous: outpoint >>
     length: compact_size >>
@@ -263,7 +302,7 @@ do_parse!(
     )
 ));
 
-named!(pub outpoint <Outpoint>,
+named!(outpoint <Outpoint>,
   do_parse!(
     hash: take!(32) >>
     index: le_u32 >>
@@ -272,7 +311,7 @@ named!(pub outpoint <Outpoint>,
     )
 ));
 
-named!(pub transaction_output <TransactionOutput>,
+named!(transaction_output <TransactionOutput>,
   do_parse!(
     value: le_i64 >>
     length: compact_size >>
