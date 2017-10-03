@@ -40,7 +40,7 @@ mod tests {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct VarInt {
     value: u64
 }

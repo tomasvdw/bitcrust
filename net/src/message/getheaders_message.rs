@@ -1,6 +1,18 @@
 use {Encode, VarInt};
 
-#[derive(Debug, Encode, PartialEq)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_implements_types_required_for_protocol() {
+        let m =  GetheadersMessage::default();
+        assert_eq!(m.name(), "getheaders");
+        assert_eq!(m.len(), 45);
+    }
+}
+
+#[derive(Debug, Default, Encode, PartialEq)]
 pub struct GetheadersMessage {
     pub version: u32,
     #[count]

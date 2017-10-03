@@ -4,11 +4,44 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
-use clap::ArgMatches;
+use clap::{App, Arg, ArgMatches, SubCommand};
 use log::LogLevel;
 use ring::{digest, rand, hmac};
 use ring::rand::SecureRandom;
 use toml;
+
+#[cfg(test)]
+mod tests {
+    extern crate tempfile;
+    use self::tempfile::NamedTempFile;
+    use std::fs::File;
+
+    use super::*;
+
+    fn temp_file() -> (File, PathBuf) {
+        let f = NamedTempFile::new().expect("failed to create temporary file");
+        let path = f.path();
+        (f.try_clone().unwrap(), path.to_path_buf())
+    }
+
+    #[test]
+    fn it_generates_a_new_key() {
+        let (_f, path) = temp_file();
+        let config_file = Config::create_default(path.clone());
+        let args = Config::matches().get_matches_from(vec!["bitcrustd", &format!("--config={}", path.to_string_lossy())[..], "stats", "peers"]);
+        let config = Config::from_args(&args);
+        assert_eq!(config_file.key, config.raw_key.to_vec());
+    }
+
+    #[test]
+    fn it_can_be_cloned() {
+        let (_f, path) = temp_file();
+        let _= Config::create_default(path.clone());
+        let args = Config::matches().get_matches_from(vec!["bitcrustd", &format!("--config={}", path.to_string_lossy())[..], "stats", "peers"]);
+        let config = Config::from_args(&args);
+        assert_eq!(config.clone().raw_key, config.raw_key);
+    }
+}
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ConfigFile {
@@ -21,7 +54,7 @@ pub struct Config {
     signing_key: hmac::SigningKey
 }
 
-impl Config {
+impl<'a, 'b> Config {
     pub fn from_args(matches: &ArgMatches) -> Config {
         let mut path = home_dir().expect("Can't figure out where your $HOME is");
         path.push(".bitcrust.toml");
@@ -53,6 +86,40 @@ impl Config {
         }
 
 
+    }
+
+    pub fn matches() -> App<'a, 'b> {
+        App::new("bitcrustd")
+            .version(crate_version!())
+            .author("Chris M., Tomas W.")
+            .arg(Arg::with_name("config")
+                .short("c")
+                .long("config")
+                .takes_value(true)
+                .help("Location of the Bitcrust Config File, default: $HOME/.bitcrust.toml"))
+            .arg(Arg::with_name("debug")
+                .short("d")
+                .long("debug")
+                .multiple(true)
+                .help("Turn debugging information on"))
+            .subcommand(SubCommand::with_name("node").about("Bitcrust peer node"))
+            .subcommand(SubCommand::with_name("stats")
+                .about("Get stats from a running Bitcrust node")
+                .arg(Arg::with_name("host")
+                    .short("h")
+                    .long("host")
+                    .takes_value(true))
+                .subcommand(SubCommand::with_name("peers"))
+            )
+            .subcommand(SubCommand::with_name("balance")
+                .about("Get balance for address")
+                .arg(Arg::with_name("address")
+                    .short("a")
+                    .long("address")
+                    .help("Address to get balance for")
+                    .takes_value(true)
+                    .required(true))
+            )
     }
 
     pub fn create_default(path: PathBuf) -> ConfigFile {

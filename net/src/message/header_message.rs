@@ -1,7 +1,19 @@
 use {Encode, VarInt};
 use block_header::BlockHeader;
 
-#[derive(Debug, Encode, PartialEq)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_implements_types_required_for_protocol() {
+        let m =  HeaderMessage::default();
+        assert_eq!(m.name(), "headers");
+        assert_eq!(m.len(), 8);
+    }
+}
+
+#[derive(Debug, Default, Encode, PartialEq)]
 pub struct HeaderMessage {
     pub count: VarInt,
     pub headers: Vec<BlockHeader>,

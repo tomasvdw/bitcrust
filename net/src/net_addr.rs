@@ -1,6 +1,8 @@
+use std::default::Default;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+    use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use byteorder::{BigEndian, WriteBytesExt};
@@ -85,5 +87,16 @@ impl Hash for NetAddr {
         self.services.hash(state);
         self.ip.hash(state);
         self.port.hash(state);
+    }
+}
+
+impl Default for NetAddr {
+    fn default() -> NetAddr {
+        NetAddr {
+            time: None,
+            services: Services::default(),
+            ip:  Ipv6Addr::from_str("::ffff:10.0.0.1").unwrap(),
+            port: 8333,
+        }
     }
 }

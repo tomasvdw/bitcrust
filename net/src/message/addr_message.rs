@@ -54,10 +54,17 @@ mod tests {
         addr.encode(&mut encoded).expect("Failed to encode Addr");
         assert_eq!(input, encoded);
     }
+
+    #[test]
+    fn it_implements_types_required_for_protocol() {
+        let m =  AddrMessage::default();
+        assert_eq!(m.name(), "addr");
+        assert_eq!(m.len(), 8);
+    }
 }
 
 /// addr message
-#[derive(Debug, Encode, PartialEq)]
+#[derive(Debug, Default, Encode, PartialEq)]
 pub struct AddrMessage {
     #[count]
     pub addrs: Vec<NetAddr>,

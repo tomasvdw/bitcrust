@@ -3,7 +3,19 @@ use ring::hmac;
 
 use Encode;
 
-#[derive(Debug, Encode, PartialEq)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_implements_types_required_for_protocol() {
+        let m =  AuthenticatedBitcrustMessage::default();
+        assert_eq!(m.name(), "bcr_pcr");
+        assert_eq!(m.len(), 40);
+    }
+}
+
+#[derive(Debug, Default, Encode, PartialEq)]
 pub struct AuthenticatedBitcrustMessage {
     nonce: [u8; 8],
     signature: [u8; 32],

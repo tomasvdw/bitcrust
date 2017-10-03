@@ -1,7 +1,19 @@
 use inventory_vector::InventoryVector;
 use {Encode, VarInt};
 
-#[derive(Debug, Encode, PartialEq)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_implements_types_required_for_protocol() {
+        let m =  GetdataMessage::default();
+        assert_eq!(m.name(), "getdata");
+        assert_eq!(m.len(), 8);
+    }
+}
+
+#[derive(Debug, Default, Encode, PartialEq)]
 pub struct GetdataMessage {
     #[count]
     pub inventory: Vec<InventoryVector>,

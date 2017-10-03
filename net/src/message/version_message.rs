@@ -44,9 +44,17 @@ mod tests {
                  1, 0, 0, 0, 0, 0, 0, 0, 8, 98, 105, 116, 99, 114, 117, 115, 116, 0, 0, 0, 0];
         assert_eq!(expected, encoded);
     }
+
+    #[test]
+    fn it_implements_types_required_for_protocol() {
+        let m =  VersionMessage::default();
+        assert_eq!(m.name(), "version");
+        assert_eq!(m.len(), 86);
+    }
+
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct VersionMessage {
     pub version: i32,
     pub services: Services,

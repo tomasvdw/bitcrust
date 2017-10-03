@@ -4,6 +4,18 @@ use Encode;
 use VarInt;
 use transactions::*;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_implements_types_required_for_protocol() {
+        let m =  TransactionMessage::default();
+        assert_eq!(m.name(), "tx");
+        assert_eq!(m.len(), 18);
+    }
+}
+
 ///
 /// Field Size	Description	Data type	Comments
 /// 4	version	int32_t	Transaction data format version (note, this is signed)
@@ -20,7 +32,7 @@ use transactions::*;
 /// >= 500000000	UNIX timestamp at which this transaction is unlocked
 /// If all TxIn inputs have final (0xffffffff) sequence numbers then lock_time is irrelevant. Otherwise, the transaction may not be added to a block until after lock_time (see NLockTime).
 /// 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct TransactionMessage {
     pub version: i32,
     pub inputs: Vec<TransactionInput>,

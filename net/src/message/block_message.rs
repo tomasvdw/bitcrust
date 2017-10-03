@@ -2,7 +2,19 @@ use Encode;
 use VarInt;
 use super::TransactionMessage;
 
-#[derive(Debug, Encode, PartialEq)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_implements_types_required_for_protocol() {
+        let m =  BlockMessage::default();
+        assert_eq!(m.name(), "block");
+        assert_eq!(m.len(), 84);
+    }
+}
+
+#[derive(Debug, Default, Encode, PartialEq)]
 pub struct BlockMessage {
     pub version: i32,
     pub previous_block: [u8; 32],
