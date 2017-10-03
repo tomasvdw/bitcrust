@@ -31,6 +31,6 @@ script:
     cargo test --all
 
 after_success:
-  - cargo coveralls --exclude-pattern tests/,script/,bitcoin/src/
+  - cargo coveralls --exclude-pattern tests/,script/,bitcoin/src/ -- --all
 
 
