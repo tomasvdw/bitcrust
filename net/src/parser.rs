@@ -8,7 +8,7 @@ use message::Message;
 use message::{
     AddrMessage, AuthenticatedBitcrustMessage, BlockMessage, GetdataMessage,
     GetblocksMessage, GetheadersMessage, HeaderMessage, InvMessage, SendCmpctMessage,
-    TransactionMessage, VersionMessage};
+    TransactionMessage, VersionMessage, NotfoundMessage};
 use inventory_vector::InventoryVector;
 use transactions::{Outpoint, TransactionInput, TransactionOutput, Witness};
 use {BlockHeader, VarInt};
@@ -163,6 +163,7 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
                 "inv" => inv(raw_message.body),
                 "tx" => transaction(raw_message.body),
                 "block" => block(raw_message.body),
+                "notfound" => notfound(raw_message.body),
                 // Bitcrust Specific Messages
                 "bcr_pcr" => bitcrust_peer_count_request(raw_message.body),
                 "bcr_pc" => bitcrust_peer_count(raw_message.body),
@@ -226,6 +227,17 @@ named!(inv <Message>,
     inventory: count!(inv_vector, (count) as usize) >>
     (
 Message::Inv(InvMessage{
+  inventory: inventory
+})
+    )
+));
+
+named!(notfound <Message>,
+  do_parse!(
+    count: compact_size >>
+    inventory: count!(inv_vector, (count) as usize) >>
+    (
+Message::NotFound(NotfoundMessage{
   inventory: inventory
 })
     )
