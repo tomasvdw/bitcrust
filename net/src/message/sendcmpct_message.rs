@@ -11,6 +11,11 @@ mod tests {
         assert_eq!(m.len(), 9);
     }
 }
+///
+/// https://github.com/bitcoin/bips/blob/master/bip-0152.mediawiki
+///
+/// Setting the send_compact field to 1 enables the high-bandwidth
+/// mode specified in the above bip.
 
 #[derive(Debug, Default, Encode, PartialEq)]
 pub struct SendCmpctMessage {

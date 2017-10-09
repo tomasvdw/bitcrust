@@ -26,7 +26,7 @@ fn to_hex_string(bytes: &[u8]) -> String {
 #[derive(Debug)]
 struct RawMessage<'a> {
     network: Network,
-    message_type: String,
+    message_type: &'a str,
     len: u32,
     checksum: &'a [u8],
     body: &'a [u8],
@@ -56,19 +56,6 @@ enum Network {
     Main,
     Test,
 }
-
-// impl Network {
-//   pub fn from_slice(slice: &[u8]) -> Network {
-//     println!("Matching on {:?}", slice);
-//     if slice == &[0xF9, 0xBE, 0xB4, 0xD9] {
-//       Network::Main
-//     } else if slice == [0xFA, 0xBF, 0xB5, 0xDA] {
-//       Network::Test
-//     } else {
-//       Network::Unknown
-//     }
-//   }
-// }
 
 #[inline(always)]
 fn slice2tuple(s: &[u8]) -> (u8, u8, u8, u8) {
@@ -101,7 +88,7 @@ fn magic(input: &[u8]) -> IResult<&[u8], Network> {
 #[derive(Debug, Eq, PartialEq)]
 struct Header<'a> {
     network: Network,
-    message_type: String,
+    message_type: &'a str,
     len: u32,
     checksum: &'a [u8],
 }
@@ -170,7 +157,7 @@ pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
                 _ => {
                     trace!("Raw message: {:?}\n\n{:}", raw_message.message_type, to_hex_string(raw_message.body));
                     IResult::Done(i,
-                                  Message::Unparsed(raw_message.message_type,
+                                  Message::Unparsed(raw_message.message_type.into(),
                                                     raw_message.body.into()))
                 }
             }
