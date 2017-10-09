@@ -30,7 +30,7 @@ mod services;
 mod transactions;
 mod var_int;
 
-use encode::Encode;
+pub use encode::Encode;
 pub use message::*;
 pub use net_addr::NetAddr;
 // pub use client_message::ClientMessage;

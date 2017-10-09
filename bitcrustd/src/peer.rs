@@ -221,7 +221,7 @@ impl Peer {
                            to_hex_string(&message))
                 }
             }
-            /// Bitcrust Specific Messages
+            // Bitcrust Specific Messages
             Message::BitcrustPeerCountRequest(msg) => {
                 if msg.valid(&self.config.key()) {
                     let count = self.peers_connected;
