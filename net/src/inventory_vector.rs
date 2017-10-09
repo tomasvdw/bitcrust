@@ -1,13 +1,13 @@
 use Encode;
 
-#[derive(Debug, Encode, PartialEq)]
+#[derive(Debug, Default, Encode, PartialEq)]
 pub struct InventoryVector {
     flags: InvFlags,
     pub hash: [u8; 32],
 }
 
 bitflags! {
-  #[derive(Encode)]
+  #[derive(Default, Encode)]
   flags InvFlags: u32 {
       const ERROR               = 0b0,
       const MSG_TX              = 0b00000001,
