@@ -56,15 +56,17 @@ pub struct Config {
 
 impl<'a, 'b> Config {
     pub fn from_args(matches: &ArgMatches) -> Config {
-        let mut path = home_dir().expect("Can't figure out where your $HOME is");
-        path.push(".bitcrust.toml");
         let log_level = match matches.occurrences_of("debug") {
             0 => LogLevel::Warn,
             1 => LogLevel::Info,
             2 => LogLevel::Debug,
             3 | _ => LogLevel::Trace,
         };
-        let config_file_path: PathBuf = matches.value_of("config").map(|p| PathBuf::from(&p)).unwrap_or(path);
+        let config_file_path: PathBuf = matches.value_of("config").map(|p| PathBuf::from(&p)).unwrap_or_else(|| {
+            let mut path = home_dir().expect("Can't figure out where your $HOME is");
+            path.push(".bitcrust.toml");
+            path
+        });
         let config_from_file: ConfigFile = if config_file_path.exists() {
             let mut f = File::open(config_file_path.clone()).unwrap();
             let mut s = String::new();
