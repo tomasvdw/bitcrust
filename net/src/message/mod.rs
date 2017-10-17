@@ -3,19 +3,29 @@ use sha2::{Sha256, Digest};
 use Encode;
 mod version_message;
 mod addr_message;
+mod block_message;
+mod getdata_message;
+mod getblocks_message;
 mod getheaders_message;
 mod header_message;
 mod inv_message;
 mod sendcmpct_message;
+mod transaction_message;
+mod notfound_message;
 
 mod bitcrust;
 
 pub use self::version_message::VersionMessage;
 pub use self::addr_message::AddrMessage;
+pub use self::block_message::BlockMessage;
+pub use self::getdata_message::GetdataMessage;
+pub use self::getblocks_message::GetblocksMessage;
 pub use self::getheaders_message::GetheadersMessage;
 pub use self::inv_message::InvMessage;
 pub use self::header_message::HeaderMessage;
 pub use self::sendcmpct_message::SendCmpctMessage;
+pub use self::transaction_message::TransactionMessage;
+pub use self::notfound_message::NotfoundMessage;
 
 pub use self::bitcrust::*;
 
@@ -165,8 +175,11 @@ pub enum Message {
     Version(VersionMessage),
     Verack,
     SendHeaders,
+    Block(BlockMessage),
     SendCompact(SendCmpctMessage),
     GetAddr,
+    GetData(GetdataMessage),
+    GetBlocks(GetblocksMessage),
     GetHeaders(GetheadersMessage),
     Addr(AddrMessage),
     Header(HeaderMessage),
@@ -175,6 +188,8 @@ pub enum Message {
     Ping(u64),
     Pong(u64),
     FeeFilter(u64),
+    Tx(TransactionMessage),
+    NotFound(NotfoundMessage),
     // Bitcrust Specific Messages
     BitcrustPeerCount(u64),
     BitcrustPeerCountRequest(AuthenticatedBitcrustMessage),
@@ -234,15 +249,12 @@ macro_rules! packet {
 impl Message {
     pub fn encode(&self, testnet: bool) -> Vec<u8> {
         match *self {
-            Message::Version(ref message) => packet!(testnet, message),
+            // Empty message types
             Message::Verack => packet!(testnet, "verack"),
             Message::SendHeaders => packet!(testnet, "sendheaders"),
             Message::GetAddr => packet!(testnet, "getaddr"),
-            Message::GetHeaders(ref msg) => packet!(testnet, msg),
-            Message::Addr(ref addr) => packet!(testnet, addr),
-            Message::Inv(ref inv) => packet!(testnet, inv),
-            Message::Header(ref headers) => packet!(testnet, headers),
-            Message::SendCompact(ref message) => packet!(testnet, message),
+            
+            // Simple Types
             Message::Ping(nonce) => {
                 let mut v = Vec::with_capacity(8);
                 let _ = nonce.encode(&mut v);
@@ -263,7 +275,21 @@ impl Message {
                 let _ = count.encode(&mut v);
                 packet!(testnet, "bcr_pc" => v)
             }
-            Message::BitcrustPeerCountRequest(ref req) =>  packet!(testnet, "bcr_pcr", req),
+
+            // Complex Types
+            Message::BitcrustPeerCountRequest(ref req) =>  packet!(testnet, req),
+            Message::Version(ref message) => packet!(testnet, message),
+            Message::Block(ref block) => packet!(testnet, block),
+            Message::GetData(ref msg) => packet!(testnet, msg), 
+            Message::GetBlocks(ref msg) => packet!(testnet, msg),
+            Message::GetHeaders(ref msg) => packet!(testnet, msg),
+            Message::Addr(ref addr) => packet!(testnet, addr),
+            Message::Inv(ref inv) => packet!(testnet, inv),
+            Message::Header(ref headers) => packet!(testnet, headers),
+            Message::SendCompact(ref message) => packet!(testnet, message),
+            Message::Tx(ref tx) => packet!(testnet, tx),
+            Message::NotFound(ref notfound) => packet!(testnet, notfound),
+            // Unparsed messages
             Message::Unparsed(_, ref v) => v.clone(),
         }
     }

@@ -176,10 +176,15 @@ impl Peer {
                     }
                 }
             }
+            Message::Verack => {
+                self.acked = true;
+            }
+            Message::FeeFilter(_fee) => {}
             Message::Ping(nonce) => {
                 debug!("[{}] Ping", self.host);
                 let _ = self.send(Message::Pong(nonce));
             }
+            Message::Pong(_nonce) => {}
             Message::SendCompact(msg) => {
                 self.send_compact = msg.send_compact;
             }
@@ -199,20 +204,13 @@ impl Peer {
                 self.send_headers = true;
             }
             Message::GetHeaders(_msg) => {}
-            Message::Verack => {
-                self.acked = true;
-            }
+            Message::Header(_header) => {}
             Message::Inv(_inv) => {}
-            Message::BitcrustPeerCountRequest(msg) => {
-                if msg.valid(&self.config.key()) {
-                    debug!("Self: {:?}", self);
-                    let count = self.peers_connected;
-                    let _ = self.send(Message::BitcrustPeerCount(count));
-                } else {
-                    warn!("Invalid authenticated request!");
-                    self.closed = true;
-                }
-            }
+            Message::Tx(_transaction) => {}
+            Message::GetBlocks(_get_blocks) => {}
+            Message::GetData(_data) => {}
+            Message::Block(_block) => {}
+            Message::NotFound(_not_found) => {}
             Message::Unparsed(name, message) => {
                 // Support for alert messages has been removed from bitcoin core in March 2016.
                 // Read more at https://github.com/bitcoin/bitcoin/pull/7692
@@ -223,6 +221,18 @@ impl Peer {
                            to_hex_string(&message))
                 }
             }
+            // Bitcrust Specific Messages
+            Message::BitcrustPeerCountRequest(msg) => {
+                if msg.valid(&self.config.key()) {
+                    let count = self.peers_connected;
+                    let _ = self.send(Message::BitcrustPeerCount(count));
+                } else {
+                    warn!("Message: {:?}", msg);
+                    warn!("Invalid authenticated request!");
+                    self.closed = true;
+                }
+            }
+            Message::BitcrustPeerCount(_count) => {}
             _ => {
                 debug!("Not handling {:?} yet", message);
             }

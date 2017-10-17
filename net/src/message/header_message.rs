@@ -1,9 +1,19 @@
-use std::io;
-
 use {Encode, VarInt};
 use block_header::BlockHeader;
 
-#[derive(Debug, PartialEq)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_implements_types_required_for_protocol() {
+        let m =  HeaderMessage::default();
+        assert_eq!(m.name(), "headers");
+        assert_eq!(m.len(), 8);
+    }
+}
+
+#[derive(Debug, Default, Encode, PartialEq)]
 pub struct HeaderMessage {
     pub count: VarInt,
     pub headers: Vec<BlockHeader>,
@@ -20,13 +30,4 @@ impl HeaderMessage {
         "headers"
     }
 
-
-}
-
-impl Encode for HeaderMessage {
-    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
-        let _ = self.count.encode(&mut buff);
-        let _ = self.headers.encode(&mut buff);
-        Ok(())
-    }
 }

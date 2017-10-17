@@ -14,9 +14,9 @@ extern crate toml;
 use std::thread;
 use std::time::Duration;
 
-use bitcrust_net::{BitcoinNetworkConnection, BitcoinNetworkError, Message, AuthenticatedBitcrustMessage};
+use clap::ArgMatches;
 
-use clap::{App, Arg, ArgMatches, SubCommand};
+use bitcrust_net::{BitcoinNetworkConnection, BitcoinNetworkError, Message, AuthenticatedBitcrustMessage};
 
 mod client_message;
 mod config;
@@ -27,34 +27,7 @@ use config::Config;
 use peer_manager::PeerManager;
 
 fn main() {
-    let matches = App::new("bitcrustd")
-        .version(crate_version!())
-        .author("Chris M., Tomas W.")
-        .arg(Arg::with_name("config")
-            .short("c")
-            .takes_value(true)
-            .help("Location of the Bitcrust Config File, default: $HOME/.bitcrust.toml"))
-        .arg(Arg::with_name("debug")
-            .short("d")
-            .multiple(true)
-            .help("Turn debugging information on"))
-        .subcommand(SubCommand::with_name("node").about("Bitcrust peer node"))
-        .subcommand(SubCommand::with_name("stats")
-            .about("Get stats from a running Bitcrust node")
-            .arg(Arg::with_name("host")
-                .short("h")
-                .takes_value(true))
-            .subcommand(SubCommand::with_name("peers"))
-        )
-        .subcommand(SubCommand::with_name("balance")
-            .about("Get balance for address")
-            .arg(Arg::with_name("address")
-                .short("a")
-                .help("Address to get balance for")
-                .takes_value(true)
-                .required(true))
-        )
-        .get_matches();
+    let matches = Config::matches().get_matches();
 
     let config = Config::from_args(&matches);
 

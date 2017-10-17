@@ -7,18 +7,18 @@ mod tests {
 
     #[test]
     fn it_implements_types_required_for_protocol() {
-        let m =  InvMessage::default();
-        assert_eq!(m.name(), "inv");
+        let m =  NotfoundMessage::default();
+        assert_eq!(m.name(), "notfound");
         assert_eq!(m.len(), 8);
     }
 }
 #[derive(Debug, Default, Encode, PartialEq)]
-pub struct InvMessage {
+pub struct NotfoundMessage {
     #[count]
     pub inventory: Vec<InventoryVector>,
 }
 
-impl InvMessage {
+impl NotfoundMessage {
     #[inline]
     pub fn len(&self) -> usize {
         8 + (36 * self.inventory.len())
@@ -26,6 +26,6 @@ impl InvMessage {
 
     #[inline]
     pub fn name(&self) -> &'static str {
-        "inv"
+        "notfound"
     }
 }

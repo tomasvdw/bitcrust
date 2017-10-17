@@ -1,6 +1,8 @@
+use std::default::Default;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use byteorder::{BigEndian, WriteBytesExt};
@@ -13,6 +15,8 @@ mod tests {
     use std::str::FromStr;
     use Encode;
     use super::*;
+    use std::net::Ipv4Addr;
+
     #[test]
     fn it_parses_a_net_address() {}
 
@@ -33,6 +37,20 @@ mod tests {
           0x20, 0x8d // port
         ];
         assert_eq!(expected, encoded);
+    }
+
+    #[test]
+    fn it_builds_from_socket_addr() {
+        let socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let addr = NetAddr::from_socket_addr(
+            socket_addr
+        );
+        assert_eq!(addr.port, 8080);
+        match socket_addr.ip() {
+            IpAddr::V4(a) => assert_eq!(addr.ip, a.to_ipv6_mapped()),
+            IpAddr::V6(_) => unreachable!()
+        };
+        
     }
 }
 
@@ -85,5 +103,16 @@ impl Hash for NetAddr {
         self.services.hash(state);
         self.ip.hash(state);
         self.port.hash(state);
+    }
+}
+
+impl Default for NetAddr {
+    fn default() -> NetAddr {
+        NetAddr {
+            time: None,
+            services: Services::default(),
+            ip:  Ipv6Addr::from_str("::ffff:10.0.0.1").unwrap(),
+            port: 8333,
+        }
     }
 }

@@ -44,9 +44,17 @@ mod tests {
                  1, 0, 0, 0, 0, 0, 0, 0, 8, 98, 105, 116, 99, 114, 117, 115, 116, 0, 0, 0, 0];
         assert_eq!(expected, encoded);
     }
+
+    #[test]
+    fn it_implements_types_required_for_protocol() {
+        let m =  VersionMessage::default();
+        assert_eq!(m.name(), "version");
+        assert_eq!(m.len(), 86);
+    }
+
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct VersionMessage {
     pub version: i32,
     pub services: Services,
@@ -82,9 +90,6 @@ impl Encode for VersionMessage {
             let _ = self.nonce.encode(&mut buff);
             let _ = (self.user_agent.bytes().len() as u8).encode(&mut buff);
             let _ = self.user_agent.encode(&mut buff);
-            // for byte in self.user_agent.bytes() {
-            //     let _ = v.write_u8(byte);
-            // }
             let _ = self.start_height.encode(&mut buff);
             if self.version >= 70001 {
                 if self.relay {

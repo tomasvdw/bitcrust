@@ -1,14 +1,32 @@
-use std::io;
-
 use rand::{self, Rng};
 use ring::hmac;
 
 use Encode;
 
-#[derive(Debug, PartialEq)]
+#[cfg(test)]
+mod tests {
+    use ring::digest;
+    use super::*;
+
+    #[test]
+    fn it_implements_types_required_for_protocol() {
+        let m =  AuthenticatedBitcrustMessage::default();
+        assert_eq!(m.name(), "bcr_pcr");
+        assert_eq!(m.len(), 40);
+    }
+
+    #[test]
+    fn it_creates_and_validates() {
+        let key = hmac::SigningKey::new(&digest::SHA256, &[0x00; 32]);
+        let m =  AuthenticatedBitcrustMessage::create(&key);
+        assert!(m.valid(&key));
+    }
+}
+
+#[derive(Debug, Default, Encode, PartialEq)]
 pub struct AuthenticatedBitcrustMessage {
-    signature: [u8; 32],
     nonce: [u8; 8],
+    signature: [u8; 32],
 }
 
 impl AuthenticatedBitcrustMessage {
@@ -23,6 +41,7 @@ impl AuthenticatedBitcrustMessage {
         let signature = hmac::sign(&key, &nonce_vec);
         AuthenticatedBitcrustMessage::with_signature(signature.as_ref(), &nonce_vec)
     }
+
     pub fn with_signature(input: &[u8], nonce: &[u8]) -> AuthenticatedBitcrustMessage{
         let mut a: [u8; 32] = [0; 32];
         a.copy_from_slice(&input);
@@ -40,14 +59,9 @@ impl AuthenticatedBitcrustMessage {
     pub fn len(&self) -> usize {
         40
     }
-}
 
-impl Encode for AuthenticatedBitcrustMessage {
-    fn encode(&self, mut buff: &mut Vec<u8>) -> Result<(), io::Error> {
-        // let mut v = Vec::with_capacity(40);
-
-        let _ = self.nonce.encode(&mut buff);
-        let _ = self.signature.encode(&mut buff);
-        Ok(())
+    #[inline]
+    pub fn name(&self) -> &'static str {
+        "bcr_pcr"
     }
 }

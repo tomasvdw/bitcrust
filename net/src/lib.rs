@@ -15,6 +15,9 @@ extern crate regex;
 extern crate rusqlite;
 extern crate sha2;
 
+#[macro_use]
+extern crate encode_derive;
+
 pub mod bitcoin_network_connection;
 mod block_header;
 mod encode;
@@ -24,9 +27,10 @@ mod message;
 mod inventory_vector;
 mod net_addr;
 mod services;
+mod transactions;
 mod var_int;
 
-use encode::Encode;
+pub use encode::Encode;
 pub use message::*;
 pub use net_addr::NetAddr;
 // pub use client_message::ClientMessage;
