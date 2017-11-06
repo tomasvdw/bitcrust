@@ -8,6 +8,7 @@ use std::str::FromStr;
 use std::time::{UNIX_EPOCH, SystemTime};
 
 use multiqueue::{BroadcastReceiver, BroadcastSender};
+use slog;
 
 use bitcrust_net::{BitcoinNetworkConnection, BitcoinNetworkError, NetAddr, Message, AddrMessage, Services,
                    VersionMessage};
@@ -44,6 +45,7 @@ pub struct Peer {
     closed: bool,
     last_read: Instant,
     thread_speed: Duration,
+    logger: slog::Logger,
 }
 
 impl Debug for Peer {
@@ -79,18 +81,19 @@ impl Peer {
     pub fn new<T: Into<String>>(host: T,
                                 sender: &BroadcastSender<ClientMessage>,
                                 receiver: &BroadcastReceiver<ClientMessage>,
-                                config: &Config)
+                                config: &Config, logger: &slog::Logger)
                                 -> Result<Peer, Error> {
-        Peer::new_with_addrs(host, HashSet::with_capacity(1000), sender, receiver, config)
+        Peer::new_with_addrs(host, HashSet::with_capacity(1000), sender, receiver, config, logger)
     }
 
     pub fn with_stream<T: Into<String>>(host: T,
                                         socket: TcpStream,
                                         sender: &BroadcastSender<ClientMessage>,
                                         receiver: &BroadcastReceiver<ClientMessage>,
-                                        config: &Config) -> Result<Peer, Error> {
+                                        config: &Config, logger: &slog::Logger) -> Result<Peer, Error> {
+        let logger = logger.new(o!("Peer" => 1));
         let host = host.into();
-        debug!("Initialized incoming peer with host: {}", host);
+        debug!(logger, "Initialized incoming peer with host: {}", host);
         let connection = BitcoinNetworkConnection::with_stream(host.clone(), socket)?;
         Ok(Peer {
             config: config.clone(),
@@ -110,6 +113,7 @@ impl Peer {
             last_read: Instant::now(),
             closed: false,
             thread_speed: Duration::from_millis(250),
+            logger: logger,
         })
     }
 
@@ -117,8 +121,9 @@ impl Peer {
                                            addrs: HashSet<NetAddr>,
                                            sender: &BroadcastSender<ClientMessage>,
                                            receiver: &BroadcastReceiver<ClientMessage>,
-                                           config: &Config)
+                                           config: &Config, logger: &slog::Logger)
                                            -> Result<Peer, Error> {
+        let logger = logger.new(o!("Peer" => 1));
         let host = host.into();
         let connection = BitcoinNetworkConnection::new(host.clone())?;
         Ok(Peer {
@@ -139,6 +144,7 @@ impl Peer {
             last_read: Instant::now(),
             closed: false,
             thread_speed: Duration::from_millis(250),
+            logger: logger,
         })
     }
 
@@ -152,7 +158,7 @@ impl Peer {
             match message {
                 Message::Version(_) => {}
                 _ => {
-                    debug!("Received {:?} prior to VERSION", message);
+                    debug!(self.logger, "Received {:?} prior to VERSION", message);
                     return;
                 }
             }
@@ -181,7 +187,7 @@ impl Peer {
             }
             Message::FeeFilter(_fee) => {}
             Message::Ping(nonce) => {
-                debug!("[{}] Ping", self.host);
+                debug!(self.logger, "[{}] Ping", self.host);
                 let _ = self.send(Message::Pong(nonce));
             }
             Message::Pong(_nonce) => {}
@@ -215,7 +221,7 @@ impl Peer {
                 // Support for alert messages has been removed from bitcoin core in March 2016.
                 // Read more at https://github.com/bitcoin/bitcoin/pull/7692
                 if name != "alert" {
-                    debug!("{} : Not handling {} yet ({:?})",
+                    debug!(self.logger, "{} : Not handling {} yet ({:?})",
                            self.host,
                            name,
                            to_hex_string(&message))
@@ -227,14 +233,14 @@ impl Peer {
                     let count = self.peers_connected;
                     let _ = self.send(Message::BitcrustPeerCount(count));
                 } else {
-                    warn!("Message: {:?}", msg);
-                    warn!("Invalid authenticated request!");
+                    warn!(self.logger, "Message: {:?}", msg);
+                    warn!(self.logger, "Invalid authenticated request!");
                     self.closed = true;
                 }
             }
             Message::BitcrustPeerCount(_count) => {}
             _ => {
-                debug!("Not handling {:?} yet", message);
+                debug!(self.logger, "Not handling {:?} yet", message);
             }
         };
     }
@@ -265,7 +271,7 @@ impl Peer {
                     };
                     if self.inbound_messages > 0 {
                         if self.bad_messages >= self.inbound_messages * 2 {
-                            warn!("{} sent us {} requests, and {} bad ones",
+                            warn!(self.logger, "{} sent us {} requests, and {} bad ones",
                                   self.host,
                                   self.inbound_messages,
                                   self.bad_messages);

@@ -9,6 +9,7 @@ use std::thread;
 
 use multiqueue::{BroadcastReceiver, BroadcastSender, broadcast_queue};
 use rusqlite::{Error, Connection};
+use slog;
 
 use bitcrust_net::{NetAddr, Services};
 use client_message::ClientMessage;
@@ -22,6 +23,7 @@ pub struct PeerManager {
     sender: BroadcastSender<ClientMessage>,
     receiver: BroadcastReceiver<ClientMessage>,
     peers: Vec<(String, thread::JoinHandle<()>)>,
+    logger: slog::Logger,
 }
 
 //pub time: Option<u32>,
@@ -32,10 +34,12 @@ pub struct PeerManager {
 impl PeerManager {
     pub fn new(config: &Config) -> PeerManager {
         let mut path = home_dir().expect("Can't figure out where your $HOME is");
+        let logger = config.logger.new(o!("PeerManager" => 1));
+
         path.push(".bitcrust.dat");
-        debug!("Connecting to DB at {:?}", path);
+        debug!(logger, "Connecting to DB at {:?}", path);
         let db = Connection::open(path).expect("Couldn't open SQLite connection");
-        debug!("Have a database connection");
+        debug!(logger, "Have a database connection");
         db.execute("
              CREATE TABLE IF NOT EXISTS peers (
                  time \
@@ -68,13 +72,14 @@ impl PeerManager {
                 .collect();
             addrs
         };
-        info!("Pulled {} addrs from the database", addrs.len());
+        info!(logger, "Pulled {} addrs from the database", addrs.len());
 
         let (sender, receiver) = broadcast_queue(200);
 
-        debug!("Setup peers");
+        debug!(logger, "Setup peers");
 
         PeerManager {
+            logger: logger,
             config: config.clone(),
             database: db,
             addrs: addrs,
@@ -85,7 +90,7 @@ impl PeerManager {
     }
 
     pub fn execute(&mut self) -> ! {
-        debug!("Executing!");
+        debug!(self.logger, "Executing!");
         let (sender, receiver) = channel();
 
         let peer_sender = self.sender.clone();
@@ -94,9 +99,10 @@ impl PeerManager {
         let sleep_duration = Duration::from_millis(200);
         let connected_peers = Arc::new(Mutex::new(0));
         let listener_peers = connected_peers.clone();
+        let logger = self.logger.clone();
         thread::spawn(move || {
             let sender = sender.clone();
-            info!("Spawning listener");
+            info!(logger, "Spawning listener");
             let listener = TcpListener::bind("0.0.0.0:8333").unwrap();
 
             // accept connections and process them serially
@@ -106,27 +112,27 @@ impl PeerManager {
                     Ok((socket, addr)) => {
                         let host = format!("{}", addr);
                         let addr = NetAddr::from_socket_addr(addr);
-                        match Peer::with_stream(host, socket, &peer_sender, &peer_receiver, &peer_config, ) {
+                        match Peer::with_stream(host, socket, &peer_sender, &peer_receiver, &peer_config, &logger) {
                             Ok(mut peer) => {
-                                debug!("new client: {:?}", peer);
+                                debug!(logger, "new client: {:?}", peer);
                                 if let Ok(peers) = listener_peers.try_lock() {
                                     peer.connected_peers(*peers);
                                 }
                                 let _ = sender.send((addr, peer.run(false)));
                             }
                             Err(e) => {
-                                debug!("Some error happened while creating the Peer: {:?}", e);
+                                debug!(logger, "Some error happened while creating the Peer: {:?}", e);
                             }
                         }
                     }
-                    Err(e) => debug!("couldn't get client: {:?}", e),
+                    Err(e) => debug!(logger, "couldn't get client: {:?}", e),
                 }
             }
         });
         // self.initialize_peers();
         let mut recieved = false;
         loop {
-            trace!("Currently connected to {}/{} peers",
+            trace!(self.logger, "Currently connected to {}/{} peers",
                    self.peers.len(),
                    self.addrs.len());
 
@@ -150,7 +156,7 @@ impl PeerManager {
                         TryRecvError::Empty => {
                             // thread::sleep_ms(200);
                         }
-                        TryRecvError::Disconnected => trace!("Remote end has disconnected?"),
+                        TryRecvError::Disconnected => trace!(self.logger, "Remote end has disconnected?"),
 
                     }
 
@@ -164,13 +170,13 @@ impl PeerManager {
                 Ok((addr, peer_handle)) => {
                     let _ = self.update_time(&addr);
                     self.peers.push((addr.to_host(), peer_handle));
-                    debug!("Connected to a new inbound peer");
+                    debug!(self.logger, "Connected to a new inbound peer");
                     recieved = true;
                 }
                 Err(e) => {
                     match e {
                         TryRecvError::Empty => {}
-                        TryRecvError::Disconnected => trace!("Listener has disconnected?"),
+                        TryRecvError::Disconnected => trace!(self.logger, "Listener has disconnected?"),
                     }
                 }
             }
@@ -189,11 +195,11 @@ impl PeerManager {
     }
 
     fn addr_message(&mut self, addrs: Vec<NetAddr>) {
-        info!("Peer sent us {} new addrs", addrs.len());
+        info!(self.logger, "Peer sent us {} new addrs", addrs.len());
         for addr in addrs.into_iter() {
             match self.add_addr(addr) {
                 Ok(_) => {}
-                Err(e) => warn!("Error adding addr: {:?}", e),
+                Err(e) => warn!(self.logger, "Error adding addr: {:?}", e),
             }
         }
     }
@@ -216,19 +222,19 @@ impl PeerManager {
                 if self.peers.len() >= 100 {
                     break;
                 }
-                match Peer::new(&host[..], &self.sender, &self.receiver, &self.config) {
+                match Peer::new(&host[..], &self.sender, &self.receiver, &self.config, &self.logger) {
                     Ok(peer) => {
                         let _ = self.update_time(addr);
                         self.peers.push((host.to_string(), peer.run(true)));
                         if let Ok(mut peers) = connected_peers.try_lock() {
                             *peers += 1;
                         }
-                        debug!("Self.peers.len(): {}", self.peers.len());
+                        debug!(self.logger, "Self.peers.len(): {}", self.peers.len());
                     }
                     Err(e) => {
-                        debug!("Failed to connect to peer at {} :: {:?}", addr.ip, e);
+                        debug!(self.logger, "Failed to connect to peer at {} :: {:?}", addr.ip, e);
                         let r = self.remove_addr(&addr);
-                        debug!("Removing addr res: {:?}", r);
+                        debug!(self.logger, "Removing addr res: {:?}", r);
                     }
                 };
             }
@@ -244,11 +250,11 @@ impl PeerManager {
                              ]
                 .iter() {
                 // info!("Trying to connect")
-                match Peer::new(*hostname, &self.sender, &self.receiver, &self.config) {
+                match Peer::new(*hostname, &self.sender, &self.receiver, &self.config, &self.logger) {
                     Ok(peer) => {
                         self.peers.push((hostname.to_string(), peer.run(true)));
                     }
-                    Err(e) => warn!("Error connecting to {}: {:?}", hostname, e),
+                    Err(e) => warn!(self.logger, "Error connecting to {}: {:?}", hostname, e),
                 }
 
             }
@@ -292,7 +298,7 @@ impl PeerManager {
             .prepare("UPDATE peers SET time = ? WHERE ip = ? AND port = ?") {
             Ok(s) => s,
             Err(e) => {
-                warn!("Couldn't prepare peer: {:?}", e);
+                warn!(self.logger, "Couldn't prepare peer: {:?}", e);
                 return None;
             }
         };
@@ -301,7 +307,7 @@ impl PeerManager {
                                            &format!("{}", addr.port)]) {
             Ok(s) => s,
             Err(e) => {
-                warn!("Couldn't update addr's time: {:?}", e);
+                warn!(self.logger, "Couldn't update addr's time: {:?}", e);
                 return None;
             }
         };
