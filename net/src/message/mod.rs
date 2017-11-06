@@ -34,6 +34,11 @@ mod tests {
     use std::str::FromStr;
     use std::net::Ipv6Addr;
 
+
+    use slog;
+    use slog_term;
+    use slog::DrainExt;
+
     use net_addr::NetAddr;
     use super::*;
     use services::Services;
@@ -41,6 +46,7 @@ mod tests {
     use parser::message;
     #[test]
     fn it_parses_a_version_message() {
+        let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
         // taken from my Satoshi client's response on 25 April, 2017
         let input =
             [0xF9, 0xBE, 0xB4, 0xD9, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6F, 0x6E, 0x00, 0x00, 0x00,
@@ -118,7 +124,7 @@ mod tests {
              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
              0x00, 0x00];
 
-        let res = message(&input, &"test".to_string());
+        let res = message(&input, &"test".to_string(), &l);
         println!("Message: {:?}", res);
         res.unwrap();
         // assert!(res.is_ok())

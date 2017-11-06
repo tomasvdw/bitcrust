@@ -91,10 +91,10 @@ impl Peer {
                                         sender: &BroadcastSender<ClientMessage>,
                                         receiver: &BroadcastReceiver<ClientMessage>,
                                         config: &Config, logger: &slog::Logger) -> Result<Peer, Error> {
-        let logger = logger.new(o!("Peer" => 1));
         let host = host.into();
+        let logger = logger.new(o!("host" => host.clone()));
         debug!(logger, "Initialized incoming peer with host: {}", host);
-        let connection = BitcoinNetworkConnection::with_stream(host.clone(), socket)?;
+        let connection = BitcoinNetworkConnection::with_stream(host.clone(), socket, &logger)?;
         Ok(Peer {
             config: config.clone(),
             host: host,
@@ -123,9 +123,9 @@ impl Peer {
                                            receiver: &BroadcastReceiver<ClientMessage>,
                                            config: &Config, logger: &slog::Logger)
                                            -> Result<Peer, Error> {
-        let logger = logger.new(o!("Peer" => 1));
         let host = host.into();
-        let connection = BitcoinNetworkConnection::new(host.clone())?;
+        let logger = logger.new(o!("host" => host.clone()));
+        let connection = BitcoinNetworkConnection::new(host.clone(), &logger)?;
         Ok(Peer {
             config: config.clone(),
             host: host,
