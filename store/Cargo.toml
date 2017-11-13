@@ -1,0 +1,15 @@
+[package]
+name = "store"
+version = "0.1.0"
+authors = ["Tomas van der Wansem <tomas@tomasvdw.nl>"]
+
+[dependencies]
+
+byteorder = "1"
+itertools = "0.5.1"
+
+
+ring = "0.12.1"
+
+
+hashstore = { path = "../../hashstore" }
