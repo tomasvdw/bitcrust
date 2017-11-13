@@ -7,6 +7,7 @@ use record::Record;
 use ::{ValuePtr};
 use hashstore::SearchDepth;
 use pow::U256;
+use pow;
 
 // two things:
 
@@ -46,12 +47,15 @@ impl DbHeader {
             if (parent.height % 4096) == 0 { parent_ptr } else { parent.previous_ptr[3] }
         ];
 
+        let target = pow::from_compact(header.bits);
+        let work = pow::difficulty_target_to_work(target);
+
         DbHeader {
             records_ptr: 0,
             records_ptr_connected: 0,
             previous_ptr: previous_ptr,
             height: parent.height + 1,
-            acc_work: U256::zero(),
+            acc_work: parent.acc_work + work,
             header: header
         }
     }
