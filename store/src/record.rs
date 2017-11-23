@@ -1,7 +1,5 @@
 
 use std::fmt;
-use ::*;
-use network_encoding::*;
 
 // Record layout
 // -------------
@@ -31,7 +29,7 @@ use network_encoding::*;
 // fileoffset == -1 => script validation failed
 
 
-#[derive(Clone,Copy,PartialEq)]
+#[derive(Clone,Copy,PartialEq, Serialize, Deserialize)]
 pub struct Record(pub u64);
 
 impl fmt::Debug for Record {
@@ -72,12 +70,3 @@ impl Record {
     }
 }
 
-impl<'a> NetworkEncoding<'a> for Record {
-    fn decode(buf: &mut Buffer<'a>) -> Result<Self, EndOfBufferError> {
-        u64::decode(buf).map(|u| Record(u))
-    }
-    fn encode(&self, buf: &mut Vec<u8>) {
-        self.0.encode(buf)
-    }
-
-}

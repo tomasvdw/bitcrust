@@ -5,10 +5,6 @@
 
 extern crate ring;
 
-use network_encoding::*;
-use std::fmt::{Debug,Formatter,Error};
-
-
 
 pub type Hash = [u8; 32];
 
@@ -35,34 +31,6 @@ pub fn double_sha256_from_pair(first: &Hash, second: &Hash) -> Hash {
     v.extend(second.iter());
 
     double_sha256(&v)
-}
-
-/// network encoding from reference
-impl<'a> NetworkEncoding<'a> for &'a [u8;32] {
-
-    fn decode(buffer: &mut Buffer<'a>) -> Result<&'a [u8;32], EndOfBufferError> {
-        let h: &Hash = unsafe { &*(buffer.inner.as_ptr() as *const [_; 32]) };
-        buffer.inner = &buffer.inner[32..];
-        Ok(h)
-    }
-
-    fn encode(&self, buffer: &mut Vec<u8>) {
-        buffer.extend_from_slice(*self);
-    }
-}
-
-/// network encoding from owned
-impl<'a> NetworkEncoding<'a> for [u8;32] {
-
-    fn decode(buffer: &mut Buffer) -> Result<[u8;32], EndOfBufferError> {
-        let h: &Hash = unsafe { &*(buffer.inner.as_ptr() as *const [_; 32]) };
-        buffer.inner = &buffer.inner[32..];
-        Ok(*h)
-    }
-
-    fn encode(&self, buffer: &mut Vec<u8>) {
-        buffer.extend_from_slice(&self[..]);
-    }
 }
 
 

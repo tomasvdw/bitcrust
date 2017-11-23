@@ -14,3 +14,5 @@ data/
 .idea/
 .cargo/
 bitcrust.iml
+
+store/tst-*

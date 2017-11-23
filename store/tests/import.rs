@@ -10,14 +10,6 @@ use std::time::Instant;
 mod util;
 mod blk_file;
 
-fn hash_from_slice(slice: &[u8]) -> [u8;32] {
-    let mut result = [0;32];
-    result.copy_from_slice(&slice[0..32]);
-    result
-}
-
-
-
 
 
 #[test]
@@ -83,13 +75,14 @@ fn test_import() {
         }
 
         let elapsed = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_nanos() as u64 / 1000_000;
-        let ms_block = elapsed / (fileno+1);
+        let ms_file = elapsed / (fileno+1);
+        let ms_block = elapsed / blocks;
         let name = format!("../core-blocks/blk{:05}.dat", fileno);
-        println!("Processed {} in {}ms/file", name, ms_block);
+        println!("Processed {} in {}ms/file and {}ms/block", name, ms_file, ms_block);
 
     }
 
-    let hdr = store::header_get(&mut db,
+    let _ = store::header_get(&mut db,
                                 &util::hash_from_hex("000000000000034a7dedef4a161fa058a2d67a173a90155f3a2fe6fc132e0ebf"))
         .unwrap().unwrap();
 

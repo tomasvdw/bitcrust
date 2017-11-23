@@ -1,22 +1,17 @@
 
 use header::Header;
-use network_encoding::*;
+use serde_network;
 use super::{HashStoreError, Db, DbError};
 use hash::*;
-use record::Record;
 use ::{ValuePtr};
 use hashstore::SearchDepth;
 use pow::U256;
 use pow;
 
-// two things:
-
-// add the records of header x
-
 
 /// DbHeader is a header connected to genesis, with some meta-data
 ///
-/// The meta-data is used
+#[derive(Serialize, Deserialize)]
 pub struct DbHeader {
     // previous_ptr point to the header at height
     // 0 => h-1
@@ -47,9 +42,12 @@ impl DbHeader {
             if (parent.height % 4096) == 0 { parent_ptr } else { parent.previous_ptr[3] }
         ];
 
-        let target = pow::from_compact(header.bits);
-        let work = pow::difficulty_target_to_work(target);
+        // calculate accumulated work
+        let target   = pow::from_compact(header.bits);
+        let work     = pow::difficulty_target_to_work(target);
+        let acc_work = parent.acc_work + work;
 
+        //println!("target: {}, work:{}, parent_work:{}, acc_work:{}, h:{}", target, work, parent.acc_work, acc_work, parent.height+1);
         DbHeader {
             records_ptr: 0,
             records_ptr_connected: 0,
@@ -60,29 +58,41 @@ impl DbHeader {
         }
     }
 
+    pub fn has_transactions(&self) -> bool {
+        self.records_ptr != 0
+    }
+
+    pub fn decode(buf: &[u8]) -> Result<DbHeader, serde_network::Error> {
+        serde_network::deserialize(buf)
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        serde_network::serialize(&mut buf, self);
+        buf
+    }
+
 }
 
-pub fn get_locator(db: &mut Db, blockhash: &[u8;32]) -> Result<Vec<[u8; 32]>, HashStoreError> {
+pub fn get_locator(_db: &mut Db, blockhash: &[u8;32]) -> Result<Vec<[u8; 32]>, HashStoreError> {
     let mut result = Vec::with_capacity(32);
     result.push(*blockhash);
     Ok(result)
 }
 
-pub fn get_best(db: &mut Db) -> Result<[u8;32], HashStoreError> {
+pub fn get_best_header(db: &mut Db) -> Result<[u8;32], DbError> {
 
-    if let Some(key) = db.hdr.get_extremum(::db::EXTREMUM_MOST_WORK)? {
-        Ok(key)
-    }
-    else {
-        Ok([0;32]) // can't really happen cause of hardcoded genesis
-    }
+    db.hdr.get_extremum(::db::EXTREMUM_BEST_HEADER)?.ok_or(
+        // can't really happen cause of hardcoded genesis
+        DbError::HeaderFileCorrupted
+    )
 }
 
 pub fn get(db: &mut Db, hash: &Hash) -> Result<Option<(ValuePtr, DbHeader)>, DbError> {
 
     if let Some((ptr,hdr)) = db.hdr.get(hash, SearchDepth::FullSearch)? {
 
-        Ok(Some((ptr, DbHeader::decode(&mut Buffer::new(&hdr))?)))
+        Ok(Some((ptr, serde_network::deserialize(&hdr)?)))
     }
     else {
         Ok(None)
@@ -90,17 +100,25 @@ pub fn get(db: &mut Db, hash: &Hash) -> Result<Option<(ValuePtr, DbHeader)>, DbE
 }
 
 
-fn update_extrema(db: &mut Db) -> Result<(), HashStoreError> {
-    Ok(())
-}
-
 // Write a blockheader with a parent; no records
-pub fn write_header(db: &mut Db, hash: &Hash, hdr: DbHeader) -> Result<ValuePtr, HashStoreError> {
+pub fn write_header(db: &mut Db, hash: &Hash, hdr: DbHeader) -> Result<ValuePtr, DbError> {
 
     let mut v = vec![];
-    let hdr = hdr.encode(&mut v);
+    serde_network::serialize(&mut v, &hdr)?;
 
-    db.hdr.set(hash, &v, 0)
+    let ptr = db.hdr.set(hash, &v, 0)?;
+
+    db.hdr.update_extremum(ptr, ::db::EXTREMUM_BEST_HEADER,  |other| {
+
+        if let Ok(other) = DbHeader::decode(&other) {
+            other.acc_work < hdr.acc_work
+        } else {
+            false
+        }
+
+    })?;
+    Ok(ptr)
+
 }
 
 
@@ -115,42 +133,15 @@ pub fn write_genesis(db: &mut Db, hash: &Hash, hdr: Header, records_ptr: ValuePt
         acc_work: U256::zero(),
         header: hdr };
 
-    let mut v = vec![];
-    let db_hdr = db_hdr.encode(&mut v);
+    let db_hdr_raw = db_hdr.encode();
 
-    db.hdr.set(hash, &v, 0)
+    let ptr = db.hdr.set(hash, &db_hdr_raw, 0)?;
+
+    db.hdr.update_extremum(ptr, ::db::EXTREMUM_BEST_HEADER, |_| true);
+    db.hdr.update_extremum(ptr, ::db::EXTREMUM_BEST_BLOCK, |_| true);
+    Ok(ptr)
 }
 
 
 
-impl<'a> NetworkEncoding<'a> for DbHeader {
-    fn decode(buffer: &mut Buffer) -> Result<DbHeader, EndOfBufferError> {
-
-        Ok(DbHeader {
-            previous_ptr: [u64::decode(buffer)?, u64::decode(buffer)?,
-            u64::decode(buffer)?, u64::decode(buffer)?,],
-            records_ptr: u64::decode(buffer)?,
-            records_ptr_connected: u64::decode(buffer)?,
-            height:      u64::decode(buffer)?,
-            acc_work:    U256::decode(buffer)?,
-            header:      Header::decode(buffer)?
-        })
-    }
-
-    fn encode(&self, buffer: &mut Vec<u8>) {
-
-        for ptr in self.previous_ptr.iter() {
-            ptr.encode(buffer);
-        }
-        self.records_ptr.encode(buffer);
-        self.records_ptr_connected.encode(buffer);
-        self.height.encode(buffer);
-
-        self.acc_work.low_u32().encode(buffer);
-        self.acc_work.low_u32().encode(buffer);
-        self.header.encode(buffer);
-
-    }
-
-}
 

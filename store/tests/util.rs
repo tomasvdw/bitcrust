@@ -1,6 +1,6 @@
 //! General utility functions
 
-
+#[allow(dead_code)]
 pub fn to_hex(buf: &[u8]) -> String {
     let x = buf
         .iter()
@@ -13,6 +13,7 @@ pub fn to_hex(buf: &[u8]) -> String {
 
 
 
+#[allow(dead_code)]
 pub fn to_hex_rev(buf: &[u8]) -> String {
     let x = buf
         .iter()
@@ -24,6 +25,7 @@ pub fn to_hex_rev(buf: &[u8]) -> String {
     x.to_owned()
 }
 
+#[allow(dead_code)]
 pub fn hash_from_hex(str: &str) -> [u8;32] {
     let mut result = [0;32];
     result.copy_from_slice(&from_hex_rev(str)[..]);
@@ -31,6 +33,7 @@ pub fn hash_from_hex(str: &str) -> [u8;32] {
 }
 
 /// Used mainly for tests; found somewhere (rustc_serialize I think)
+#[allow(dead_code)]
 pub fn from_hex(str: &str) -> Vec<u8> {
 
     // This may be an overestimate if there is any whitespace

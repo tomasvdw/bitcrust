@@ -1,4 +1,3 @@
-use network_encoding::*;
 
 use db::*;
 
@@ -18,6 +17,6 @@ pub enum TransactionPutOk {
     Ok
 }
 
-pub fn transaction_put(tx: ::Transaction ) -> Result<(), DbError> {
+pub fn transaction_put(_tx: ::Transaction ) -> Result<(), DbError> {
     unimplemented!()
 }

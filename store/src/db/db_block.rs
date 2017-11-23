@@ -5,7 +5,5 @@
 //! It is represents as a vector of 64-bit Records
 
 use record::Record;
-use network_encoding::*;
-use hash::*;
 
 type DbBlock = Vec<Record>;

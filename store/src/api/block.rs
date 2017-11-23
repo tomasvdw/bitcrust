@@ -1,8 +1,5 @@
 
-use network_encoding::*;
 use db::*;
-use util;
-use hash::*;
 use Header;
 pub enum BlockAddHeaderOk {
     Invalid,
@@ -50,32 +47,41 @@ pub enum BlockExistsOk {
     FoundHeaderAndData
 }
 
-pub fn block_add_transactions(db: &mut Db, block_data: &[u8], validate: bool) -> Result<(), DbError>
+
+pub fn block_add_transactions(_db: &mut Db, _block_data: &[u8], _validate: bool) -> Result<(), DbError>
 {
     Ok(())
 }
 
 
 
-pub fn block_exists(blockhash: &[u8;32]) -> Result<BlockExistsOk, DbError> {
+pub fn block_exists(_blockhash: &[u8;32]) -> Result<BlockExistsOk, DbError> {
     unimplemented!()
 }
 
 /// Returns the hash of the block header with the most accumulated work
 pub fn header_get_best(db: &mut Db) -> Result<[u8;32], DbError> {
 
-    Ok(db_header::get_best(db)?)
+    Ok(db_header::get_best_header(db)?)
 }
 
-/// Returns the hash of the block header with the most accumulated work
-pub fn block_get_best(db: &mut Db) -> Result<[u8;32], DbError> {
+/// Returns a set of block hashes of which no records are known
+pub fn block_needs_download(_db: &mut Db, _count: usize) -> Result<Vec<[u8;32]>, DbError> {
 
-    Ok(db_header::get_best(db)?)
+    /*let best_header = db_header::get_best_header(db)?;
+    if best_header.has_transactions() {
+        return Ok(vec![]);
+    } else {
+
+    }*/
+
+    unimplemented!() //Ok(db_header::get_best_block(db)?)
 }
 
 
-pub fn header_get(db: &mut Db, hash: &[u8;32]) -> Result<Option<Header>, DbError> {
-    Ok(db_header::get(db, hash)?.map(|(_, db_hdr)| db_hdr.header))
+pub fn header_get(db: &mut Db, hash: &[u8;32]) -> Result<Option<db_header::DbHeader>, DbError> {
+    Ok(db_header::get(db, hash)?
+           .map(|(_, db_hdr)| db_hdr))
 }
 
 

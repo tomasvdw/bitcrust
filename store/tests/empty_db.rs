@@ -1,7 +1,7 @@
 
 
 extern crate store;
-
+extern crate serde_json;
 mod util;
 
 fn hash_from_slice(slice: &[u8]) -> [u8;32] {
@@ -21,7 +21,7 @@ fn test_empty() {
     )).unwrap().unwrap();
 
     let tx = dbtx.as_tx().unwrap();
-
+    println!("{}", serde_json::to_string_pretty(&tx).unwrap());
     assert_eq!(tx.version, 1);
     assert_eq!(tx.txs_out[0].value, 50 * 100_000_000);
 }

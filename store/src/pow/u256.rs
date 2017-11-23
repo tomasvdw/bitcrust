@@ -12,14 +12,14 @@
 //
 
 // Adapted for network_encoding
-use network_encoding::*;
-use hash::*;
 
 use std::convert::{From, Into};
 use std::ops::{Add, Sub, Not, Mul, Div, Shr, Shl};
 use std::cmp::Ordering;
+use std::fmt;
+use std::fmt::{Formatter,Display};
 
-#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+#[derive(Eq, PartialEq, Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct U256([u64; 4]);
 
 impl U256 {
@@ -75,7 +75,7 @@ impl U256 {
 
 impl From<u64> for U256 {
     fn from(val: u64) -> U256 {
-        U256([0, 0, 0, val])
+        U256([val, 0, 0, 0])
     }
 }
 
@@ -150,7 +150,6 @@ impl Add for U256 {
 
     fn add(self, other: U256) -> U256 {
         let (o, v) = self.overflowing_add(other);
-        assert!(v == false);
         o
     }
 }
@@ -161,7 +160,6 @@ impl Sub for U256 {
     #[inline]
     fn sub(self, other: U256) -> U256 {
         let (o, v) = self.overflowing_add(!other);
-        assert!(v == true);
         o + U256::one()
     }
 }
@@ -245,7 +243,7 @@ impl Shl<usize> for U256 {
         let bit_shift = shift % 64;
         for i in 0..4 {
             // Shift
-            if bit_shift < 64 && i + word_shift < 4 {
+            if i + word_shift < 4 {
                 ret[i + word_shift] += original[i] << bit_shift;
             }
             // Carry
@@ -277,28 +275,12 @@ impl Shr<usize> for U256 {
     }
 }
 
-
-
-impl<'a> NetworkEncoding<'a> for U256 {
-
-    /// Parses the block-header
-    fn decode(buffer: &mut Buffer) -> Result<U256, EndOfBufferError> {
-
-        Ok(U256([
-            u64::decode(buffer)?,
-            u64::decode(buffer)?,
-            u64::decode(buffer)?,
-            u64::decode(buffer)?
-        ]))
-    }
-
-    fn encode(&self, buffer: &mut Vec<u8>) {
-        self.0[0].encode(buffer);
-        self.0[1].encode(buffer);
-        self.0[2].encode(buffer);
-        self.0[3].encode(buffer);
+impl Display for U256 {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:016x}{:016x}{:016x}{:016x}", self.0[3], self.0[2], self.0[1], self.0[0])
     }
 }
+
 
 
 #[cfg(test)]

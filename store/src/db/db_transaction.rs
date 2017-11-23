@@ -1,12 +1,11 @@
 extern crate byteorder;
 
-use std::io::Cursor;
-use network_encoding::*;
-use super::{HashStoreError, Db};
+use super::{Db, DbError, DbResult};
 use hashstore::SearchDepth;
-use hash::*;
-use ::*;
+use ::{ValuePtr,Transaction};
 use record::Record;
+use serde_network::{Deserializer,Serializer,deserialize};
+use transaction;
 
 
 /// An owned transaction that owns the data as extracted from the db
@@ -20,10 +19,9 @@ use record::Record;
 pub struct DbTransaction {
     buffer: Vec<u8>,
     sigs: Vec<u8>,
- //   outputs: Cell<Vec<u8>> // space to decompress outputs
 }
 
-
+/*
 pub fn store_transactions(db: &mut Db, txdata: &mut Buffer) -> Result<Vec<Record>, DbError> {
 
     let tx_count = txdata.decode_compact_size()?;
@@ -35,7 +33,7 @@ pub fn store_transactions(db: &mut Db, txdata: &mut Buffer) -> Result<Vec<Record
 
         let txbytes = txdata.consumed_since(org_buffer);
         let hash = double_sha256(txbytes.inner);
-        write_transaction(db, &hash, &parsed, vec![]);
+        write_transaction(db, &hash, &parsed, vec![])?;
 
         //println!("tx: {}, {}", parsed.txs_in.len(), parsed.txs_out.len());
 
@@ -43,71 +41,63 @@ pub fn store_transactions(db: &mut Db, txdata: &mut Buffer) -> Result<Vec<Record
     Ok(vec![])
 }
 
-
+*/
 
 impl DbTransaction {
 
     /// Parses the db-format buffer as a transaction
-    pub fn as_tx<'a>(&'a self) -> Result<::Transaction<'a>, EndOfBufferError> {
+    pub fn as_tx<'a>(&'a self) -> DbResult<Transaction<'a>> {
 
-        type HashRef<'a> = &'a Hash;
-        type Bytes<'a> = &'a [u8];
+        let mut de_tx = Deserializer::new(&self.buffer);
+        let mut de_sigs = Deserializer::new(&self.sigs);
 
-        let mut buffer: Buffer<'a> = Buffer::new(&self.buffer);
-        let mut buffer_sig: Buffer<'a> = Buffer::new(&self.sigs);
-
-        println!("{:?}", buffer);
-
-        let input_count = u32::decode(&mut buffer)?;
-        let output_count = u32::decode(&mut buffer)?;
-        let _ = u64::decode(&mut buffer);
+        let input_count: u32  = de_tx.deserialize()?;
+        let output_count: u32 = de_tx.deserialize()?;
+        let sig_ptr: ValuePtr = de_tx.deserialize()?;
 
         let prev_outs: Vec<Record> = try!((0..input_count).map(|_|
-            Record::decode(&mut buffer)).collect());
+            de_tx.deserialize()).collect());
 
-        let txs_in = try!(prev_outs.iter().map(|rec|
+        let txs_in: Result<Vec<_>,DbError> = prev_outs.iter().map(|rec|
             Ok(transaction::TxInput {
-                script:          Bytes::decode(&mut buffer_sig)?,
-                sequence:        buffer_sig.decode_compact_size()? as u32,
-                prev_tx_out:     HashRef::decode(&mut buffer)?,
+                script:          de_sigs.deserialize().map_err(DbError::from)?,
+                sequence:        de_sigs.deserialize().map_err(DbError::from)?,
+                prev_tx_out:     de_tx.deserialize().map_err(DbError::from)?,
                 prev_tx_out_idx: rec.get_output_index()
             })
-        ).collect());
+        ).collect();
 
-        let txs_out = try!((0..output_count).map(|_|
+        let txs_out: Result<Vec<_>,DbError>  = (0..output_count).map(|_|
             Ok(transaction::TxOutput {
-                value:     buffer.decode_compact_size()? as i64,
-                pk_script: Bytes::decode(&mut buffer)?,
+                value:     de_tx.deserialize().map_err(DbError::from)?,
+                pk_script: de_tx.deserialize().map_err(DbError::from)?,
             })
-        ).collect());
+        ).collect();
 
         Ok(Transaction {
-            version: buffer.decode_compact_size()? as i32,
-            txs_in:  txs_in,
-            txs_out: txs_out,
-            lock_time: buffer.decode_compact_size()? as u32,
+            version: de_tx.deserialize()?,
+            txs_in:  txs_in?,
+            txs_out: txs_out?,
+            lock_time: de_tx.deserialize()?
         })
+
     }
 
 
 }
 
 
-/// Reads the full transaction, and returns as OwnedTransaction
+
+/// Reads the full transaction, and returns as owned DbTransaction
 ///
 /// This does not yet decode the content
-pub fn read_transaction(db: &mut Db, tx_hash: &[u8; 32]) -> Result<Option<DbTransaction>, HashStoreError> {
+pub fn read_transaction(db: &mut Db, tx_hash: &[u8; 32]) -> DbResult<Option<DbTransaction>> {
 
     if let Some((_, b)) = db.tx.get(tx_hash, SearchDepth::FullSearch)? {
 
-        let sig_ptr = {
-
-            let mut sig_ptr = Buffer::new(&b[8..]);
-            u64::decode(&mut sig_ptr).map_err(|_| HashStoreError::Other)? as ValuePtr
-        };
+        let sig_ptr = deserialize(&b[8..])?;
 
         let sigs = db.sig.get_value(sig_ptr)?;
-
 
         Ok(Some(DbTransaction {
             buffer: b,
@@ -124,47 +114,56 @@ pub fn read_transaction(db: &mut Db, tx_hash: &[u8; 32]) -> Result<Option<DbTran
 /// Write the transaction to tx and the signatures to sig
 /// This procedure defines the on-disk format
 pub fn write_transaction(db: &mut Db, tx_hash: &[u8;32], tx: &::Transaction, records: Vec<Record>)
-                         -> Result<::ValuePtr, HashStoreError>
+                         -> DbResult<ValuePtr>
 {
+    let input_count = tx.txs_in.len();
+    let output_count= tx.txs_out.len();
 
-    let input_count = tx.txs_in.len() as u32;
-    let output_count= tx.txs_out.len() as u32;
-
-    // write the signatures
-    let mut buffer_sig = Vec::with_capacity(136 * input_count as usize);
-    for tx_in in tx.txs_in.iter() {
-        tx_in.script.encode(&mut buffer_sig);
-        encode_compact_size(&mut buffer_sig, tx_in.sequence as usize);
-    }
-    let sig_ptr = db.sig.set_value(&buffer_sig)?;
-
-
-    let mut buffer = Vec::with_capacity(102 * output_count as usize);
-    input_count.encode(&mut buffer);
-    output_count.encode(&mut buffer);
-    sig_ptr.encode(&mut buffer);
-    for rec in records.into_iter() {
-        rec.0.encode(&mut buffer);
-    }
-    for tx_in in tx.txs_in.iter() {
-        tx_in.prev_tx_out.encode(&mut buffer);
-    }
-    for tx_out in tx.txs_out.iter() {
-        encode_compact_size(&mut buffer, tx_out.value as usize);
-        tx_out.pk_script.encode(&mut buffer);
+    // serialize signatures
+    let mut buf_sigs = Vec::with_capacity(136 * input_count);
+    {
+        let mut ser_sigs = Serializer::new(&mut buf_sigs);
+        for tx_in in tx.txs_in.iter() {
+            ser_sigs.serialize(&tx_in.script);
+            ser_sigs.serialize(&tx_in.sequence);
+        }
     }
 
-    encode_compact_size(&mut buffer, tx.version as usize);
-    encode_compact_size(&mut buffer, tx.lock_time as usize);
+    // store and get pointer to result
+    let sig_ptr = db.sig.set_value(&buf_sigs)?;
 
+
+    // serialize the rest of the tx
+    let mut buf_tx   = Vec::with_capacity(102 * output_count);
+    {
+        let mut ser_tx = Serializer::new(&mut buf_tx);
+
+        ser_tx.serialize(&(input_count as u32))?;
+        ser_tx.serialize(&(output_count as u32))?;
+        ser_tx.serialize(& sig_ptr)?;
+        for rec in records.into_iter() {
+            ser_tx.serialize(&rec.0)?;
+        }
+        for tx_in in tx.txs_in.iter() {
+            ser_tx.serialize(&tx_in.prev_tx_out)?;
+        }
+        for tx_out in tx.txs_out.iter() {
+            ser_tx.serialize(&tx_out.value)?;
+            ser_tx.serialize(&tx_out.pk_script);
+        }
+
+        ser_tx.serialize(&tx.version)?;
+        ser_tx.serialize(&tx.lock_time)?;
+
+    }
     // minimum size and align at qword
-    let min_size = output_count as usize * 32;
-    while (buffer.len() < min_size || (buffer.len() % 7) > 0) {
-        buffer.push(0);
+    let min_size = (output_count+1) as usize * 32;
+    while buf_tx.len() < min_size || (buf_tx.len() % 7) > 0 {
+        buf_tx.push(0);
     }
-
-    let tx_ptr = db.tx.set(tx_hash, &buffer, 0)?;
+    let tx_ptr = db.tx.set(tx_hash, &buf_tx, 0)?;
 
     Ok(tx_ptr)
+
 }
 

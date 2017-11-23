@@ -2,8 +2,12 @@
 extern crate itertools;
 extern crate hashstore;
 
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 
-mod network_encoding;
+extern crate serde_network;
+
 mod api;
 mod db;
 mod util;
@@ -19,7 +23,6 @@ pub use header::Header;
 pub use db::db_transaction::DbTransaction;
 pub use db::db_header::DbHeader;
 
-pub use network_encoding::NetworkEncoding;
 use hashstore::ValuePtr;
 
 

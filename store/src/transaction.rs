@@ -1,8 +1,7 @@
 
 use std::fmt;
 
-use network_encoding::*;
-use hash;
+use serde_network;
 use hash::*;
 use itertools::*;
 
@@ -27,39 +26,23 @@ pub enum TransactionError {
 /// A transaction represents a decoded transaction
 ///
 /// It always contains a reference to the buffer it was read from
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Transaction<'a> {
     pub version:   i32,
+    #[serde(borrow)]
     pub txs_in:    Vec<TxInput<'a>>,
+    #[serde(borrow)]
     pub txs_out:   Vec<TxOutput<'a>>,
     pub lock_time: u32,
 }
 
 
-impl<'a> NetworkEncoding<'a> for Transaction<'a> {
-
-    /// Parses the raw bytes into individual fields
-    /// and perform basic syntax checks
-    fn decode(buffer: &mut Buffer<'a>) -> Result<Transaction<'a>, EndOfBufferError> {
-
-        Ok(Transaction {
-            version:   i32::decode(buffer)?,
-            txs_in:    Vec::decode(buffer)?,
-            txs_out:   Vec::decode(buffer)?,
-            lock_time: u32::decode(buffer)?,
-        })
-    }
-
-    fn encode(&self, buffer: &mut Vec<u8>) {
-        self.version.encode(buffer);
-        self.txs_in.encode(buffer);
-        self.txs_out.encode(buffer);
-        self.lock_time.encode(buffer);
-    }
-}
-
-
 impl<'a> Transaction<'a> {
+
+    pub fn decode(raw_tx: &'a[u8]) -> Result<Transaction<'a>, serde_network::Error> {
+        println!("Start tx-decode");
+        serde_network::deserialize(raw_tx)
+    }
 
     /// Performs basic syntax checks on the transaction
     pub fn verify_syntax(&self) -> Result<(), TransactionError> {
@@ -86,7 +69,7 @@ impl<'a> Transaction<'a> {
 
     pub fn is_coinbase(&self) -> bool {
 
-        self.txs_in.len() == 1 && *self.txs_in[0].prev_tx_out == [0;32]
+        self.txs_in.len() == 1 && self.txs_in[0].prev_tx_out == [0;32]
     }
 
 
@@ -94,53 +77,20 @@ impl<'a> Transaction<'a> {
 }
 
 /// Transaction input
+#[derive(Serialize, Deserialize)]
+#[repr(C)]
 pub struct TxInput<'a> {
-    pub prev_tx_out: &'a Hash,
+    pub prev_tx_out:     Hash,
     pub prev_tx_out_idx: u32,
     pub script:          &'a[u8],
     pub sequence:        u32,
 }
 
 
-impl<'a> NetworkEncoding<'a> for TxInput<'a> {
-    fn decode(buffer: &mut Buffer<'a>) -> Result<TxInput<'a>, EndOfBufferError> {
-        type HashRef<'a> = &'a Hash;
-        type Bytes<'a> = &'a [u8];
-
-        Ok(TxInput {
-            prev_tx_out:     HashRef::decode(buffer)?,
-            prev_tx_out_idx: u32::decode(buffer)?,
-            script:          Bytes::decode(buffer)?,
-            sequence:        u32::decode(buffer)?
-        })
-    }
-
-    fn encode(&self, buffer: &mut Vec<u8>) {
-        self.prev_tx_out.encode(buffer);
-        self.prev_tx_out_idx.encode(buffer);
-        self.script.encode(buffer);
-        self.sequence.encode(buffer);
-    }
-}
-
-#[derive(PartialEq)]
+#[derive(Serialize, Deserialize,PartialEq)]
 pub struct TxOutput<'a> {
     pub value:     i64,
     pub pk_script: &'a[u8]
-}
-
-impl<'a> NetworkEncoding<'a> for TxOutput<'a> {
-    fn decode(buffer: &mut Buffer<'a>) -> Result<TxOutput<'a>, EndOfBufferError> {
-        Ok(TxOutput {
-            value: i64::decode(buffer)?,
-            pk_script: buffer.decode_compact_size_bytes()?
-        })
-    }
-
-    fn encode(&self, buffer: &mut Vec<u8>) {
-        self.value.encode(buffer);
-        self.pk_script.encode(buffer);
-    }
 }
 
 
@@ -162,13 +112,17 @@ impl<'a> fmt::Debug for TxOutput<'a> {
 }
 
 
+pub trait TransactionIter {
+
+}
+
+
 /// tx-tests are external
 
 #[cfg(test)]
 mod tests {
     use util::*;
     use super::*;
-    use network_encoding;
 
 
     #[test]
@@ -190,10 +144,11 @@ mod tests {
                       fe159bf9df3f210652571c88ac00000000";
 
         let slice = &from_hex(tx_hex);
-        let mut buf = network_encoding::Buffer::new(slice);
 
-        let tx = Transaction::decode(&mut buf);
-
-        let _ = format!("{:?}", tx);
+        let tx = Transaction::decode(slice).unwrap();
+        let mut enc = Vec::new();
+        let raw = serde_network::serialize(&mut enc, &tx);
+        assert_eq!(slice, &enc);
+        println!("{:?}", tx);
     }
 }
