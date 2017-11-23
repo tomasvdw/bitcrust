@@ -5,7 +5,8 @@ extern crate bitflags;
 extern crate byteorder;
 extern crate circular;
 #[macro_use]
-extern crate log;
+extern crate slog;
+extern crate slog_term;
 extern crate multiqueue;
 #[macro_use]
 extern crate nom;

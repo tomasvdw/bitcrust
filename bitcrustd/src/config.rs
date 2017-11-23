@@ -5,9 +5,12 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
-use log::LogLevel;
+use slog::Level;
 use ring::{digest, rand, hmac};
 use ring::rand::SecureRandom;
+use slog;
+use slog_term;
+use slog::DrainExt;
 use toml;
 
 #[cfg(test)]
@@ -49,7 +52,8 @@ pub struct ConfigFile {
 }
 
 pub struct Config {
-    pub log_level: LogLevel,
+    pub logger: slog::Logger,
+    pub log_level: Level,
     raw_key: [u8; 32],
     signing_key: hmac::SigningKey
 }
@@ -57,10 +61,10 @@ pub struct Config {
 impl<'a, 'b> Config {
     pub fn from_args(matches: &ArgMatches) -> Config {
         let log_level = match matches.occurrences_of("debug") {
-            0 => LogLevel::Warn,
-            1 => LogLevel::Info,
-            2 => LogLevel::Debug,
-            3 | _ => LogLevel::Trace,
+            0 => Level::Warning,
+            1 => Level::Info,
+            2 => Level::Debug,
+            3 | _ => Level::Trace,
         };
         let config_file_path: PathBuf = matches.value_of("config").map(|p| PathBuf::from(&p)).unwrap_or_else(|| {
             let mut path = home_dir().expect("Can't figure out where your $HOME is");
@@ -82,6 +86,7 @@ impl<'a, 'b> Config {
         a.copy_from_slice(&config_from_file.key);
 
         Config {
+            logger:  slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!()),
             log_level: log_level,
             raw_key: a,
             signing_key: key,
@@ -148,7 +153,8 @@ impl Clone for Config {
         Config {
             log_level: self.log_level,
             raw_key: self.raw_key,
-            signing_key: hmac::SigningKey::new(&digest::SHA256, &self.raw_key)
+            signing_key: hmac::SigningKey::new(&digest::SHA256, &self.raw_key),
+            logger: self.logger.clone(),
         }
     }
 }

@@ -3,6 +3,7 @@ use std::net::Ipv6Addr;
 use nom;
 use nom::{le_u16, le_u32, le_u64, le_i32, le_i64, be_u16, IResult};
 use sha2::{Sha256, Digest};
+use slog;
 
 use message::Message;
 use message::{
@@ -93,12 +94,12 @@ named!(header <Header>,
     message_type: take_str!(12) >>
     payload_len: le_u32 >>
     checksum: take!(4) >>
-    ({trace!("message_type: {:?}\tpayload len: {}", message_type, payload_len); Header {
+    (Header {
         network: magic,
         message_type: message_type.trim_matches(0x00 as char).into(),
         len: payload_len,
         checksum: checksum,
-    }})
+    })
 ));
 
 #[inline]
@@ -106,23 +107,23 @@ named!(raw_message<RawMessage>,
   do_parse!(
     header: header >>
     body: take!(header.len) >>
-    ({trace!("Body.len: {}", body.len());
+    (
       RawMessage {
         network: header.network,
         message_type: header.message_type, //.trim_matches(0x00 as char).into(),
         len: header.len,
         checksum: header.checksum,
         body: body
-      }}
+      }
     )
 ));
 
-pub fn message<'a>(i: &'a [u8], name: &String) -> IResult<&'a [u8], Message> {
+pub fn message<'a>(i: &'a [u8], name: &String, logger: &slog::Logger) -> IResult<&'a [u8], Message> {
     let raw_message_result = raw_message(&i);
     match raw_message_result {
         IResult::Done(i, raw_message) => {
             if !raw_message.valid() {
-                warn!("Invalid message from {}\n\t{:?}", name, raw_message);
+                warn!(logger, "Invalid message from {}\n\t{:?}", name, raw_message);
                 // return IResult::Error(nom::ErrorKind::Custom(0));
                 return IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(raw_message.len + 20)));
             }
@@ -566,32 +567,37 @@ named!(pub addr<Message>,
 
 #[cfg(test)]
 mod parse_tests {
+    use slog_term;
     use super::*;
 
     mod simple_messages {
+        use slog::DrainExt;
         use super::*;
 
         #[test]
         fn it_parses_ping(){
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input = Message::Ping(12);
             let encoded = input.encode(false);
-            let parsed = message(&encoded, &"".to_string()).unwrap().1;
+            let parsed = message(&encoded, &"".to_string(), &l).unwrap().1;
             assert_eq!(input, parsed);
         }
 
         #[test]
         fn it_parses_pong(){
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input = Message::Pong(12);
             let encoded = input.encode(false);
-            let parsed = message(&encoded, &"".to_string()).unwrap().1;
+            let parsed = message(&encoded, &"".to_string(), &l).unwrap().1;
             assert_eq!(input, parsed);
         }
 
         #[test]
         fn it_parses_feefilter(){
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input = Message::FeeFilter(12);
             let encoded = input.encode(false);
-            let parsed = message(&encoded, &"".to_string()).unwrap().1;
+            let parsed = message(&encoded, &"".to_string(), &l).unwrap().1;
             assert_eq!(input, parsed);
         }
     }
@@ -1084,20 +1090,22 @@ mod parse_tests {
 
     mod bitcrust_messages {
         use super::*;
-        
+        use slog::DrainExt;
         #[test]
         fn it_parses_peer_count() {
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input = Message::BitcrustPeerCount(12);
             let encoded = input.encode(false);
-            let parsed = message(&encoded, &"".to_string()).unwrap().1;
+            let parsed = message(&encoded, &"".to_string(), &l).unwrap().1;
             assert_eq!(input, parsed);
         }
 
         #[test]
         fn it_parses_peer_count_request() {
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input = Message::BitcrustPeerCountRequest(AuthenticatedBitcrustMessage::default());
             let encoded = input.encode(false);
-            let parsed = message(&encoded, &"".to_string()).unwrap().1;
+            let parsed = message(&encoded, &"".to_string(), &l).unwrap().1;
             assert_eq!(input, parsed);
         }
 
@@ -1106,40 +1114,46 @@ mod parse_tests {
     mod messages {
         use super::*;
 
+        use slog::DrainExt;
         #[test]
         fn it_parses_notfound() {
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input_message = Message::NotFound(NotfoundMessage{inventory: vec![InventoryVector::default()]});
             let encoded = input_message.encode(false);
-            let parsed = message(&encoded, &"".to_string()).unwrap().1;
+            let parsed = message(&encoded, &"".to_string(), &l).unwrap().1;
             assert_eq!(input_message, parsed);
         }
 
         #[test]
         fn it_parses_block() {
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input_message = Message::Block(BlockMessage::default());
             let encoded = input_message.encode(false);
-            let parsed = message(&encoded, &"".to_string()).unwrap().1;
+            let parsed = message(&encoded, &"".to_string(), &l).unwrap().1;
             assert_eq!(input_message, parsed);
         }
 
         #[test]
         fn it_parses_sendcompact() {
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input_message = Message::SendCompact(SendCmpctMessage::default());
             let encoded = input_message.encode(false);
-            let parsed = message(&encoded, &"".to_string()).unwrap().1;
+            let parsed = message(&encoded, &"".to_string(), &l).unwrap().1;
             assert_eq!(input_message, parsed);
         }
 
         #[test]
         fn it_parses_getdata() {
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input_message = Message::GetData(GetdataMessage{inventory: vec![InventoryVector::default()]});
             let encoded = input_message.encode(false);
-            let parsed = message(&encoded, &"".to_string()).unwrap().1;
+            let parsed = message(&encoded, &"".to_string(), &l).unwrap().1;
             assert_eq!(input_message, parsed);
         }
 
         #[test]
         fn it_parses_a_tx_message() {
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input = [
                 // Message header:
                 0xF9  ,0xBE  ,0xB4  ,0xD9,                                        // - main network magic bytes
@@ -1193,7 +1207,7 @@ mod parse_tests {
                 0x00  ,0x00  ,0x00  ,0x00,                                        // - lock time
             ];
 
-            let parsed = message(&input, &"name".to_string());
+            let parsed = message(&input, &"name".to_string(), &l);
             let (_rest, msg) = parsed.unwrap();
             match msg {
                 Message::Tx(ref tx) => {
@@ -1207,6 +1221,7 @@ mod parse_tests {
 
         #[test]
         fn it_parses_a_version_message() {
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             // taken from my Satoshi client's response on 25 April, 2017
             let input = [0xF9, 0xBE, 0xB4, 0xD9, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6F, 0x6E, 0x00, 0x00,
                         0x00, 0x00, 0x00, 0x66, 0x00, 0x00, 0x00, 0x7F, 0xA7, 0xD3, 0xE8, 0x7F, 0x11,
@@ -1223,13 +1238,14 @@ mod parse_tests {
                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
-            let res = message(&input, &"test".to_string());
+            let res = message(&input, &"test".to_string(), &l);
             println!("Message: {:?}", res);
             // assert!(res.is_ok())
         }
 
         #[test]
         fn it_parses_version_from_docs() {
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input = [
             // Message Header:
             0xF9, 0xBE, 0xB4, 0xD9,                                                                                                                                    //- Main network magic bytes
@@ -1247,12 +1263,13 @@ mod parse_tests {
             0x0F, 0x2F, 0x53, 0x61, 0x74, 0x6F, 0x73, 0x68, 0x69, 0x3A, 0x30, 0x2E, 0x37, 0x2E, 0x32, 0x2F,                                                             //- "/Satoshi:0.7.2/" sub-version string (string is 15 bytes long)
             0xC0, 0x3E, 0x03, 0x00                                                                                                                                      //- Last block sending node has is block #212672
             ];
-            let output = message(&input, &"test".to_string());
+            let output = message(&input, &"test".to_string(), &l);
             println!("Output: {:?}", output);
         }
 
         #[test]
         fn it_parses_an_addr_from_docs() {
+            let l = slog::Logger::root(slog_term::streamer().compact().build().fuse(), o!());
             let input = [// Message Header:
                         0xF9,
                         0xBE,
@@ -1312,7 +1329,7 @@ mod parse_tests {
                         0x20,
                         0x8D];
 
-            let parsed = message(&input, &"test".to_string());
+            let parsed = message(&input, &"test".to_string(), &l);
             println!("Parsed addr: {:?}", parsed.unwrap());
         }
     }

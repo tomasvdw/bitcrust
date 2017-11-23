@@ -6,11 +6,13 @@ use std::time::{Duration};
 
 use circular::Buffer;
 use nom::{ErrorKind, Err, IResult, Needed};
+use slog;
 
 use message::Message;
 use parser::message;
 
 pub struct BitcoinNetworkConnection {
+    logger: slog::Logger,
     host: String,
     buffer: RefCell<Buffer>,
     socket: RefCell<TcpStream>,
@@ -26,8 +28,9 @@ pub enum BitcoinNetworkError {
 }
 
 impl BitcoinNetworkConnection {
-    pub fn new(host: String) -> Result<BitcoinNetworkConnection, Error> {
-        info!("Trying to initialize connection to {}", host);
+    pub fn new(host: String, logger: &slog::Logger) -> Result<BitcoinNetworkConnection, Error> {
+        let logger = logger.new(o!("host" => host.clone()));
+        info!(logger, "Trying to initialize connection to {}", host);
         let addrs: Vec<_> = host.to_socket_addrs()?
             .collect();
         let mut socket = None;
@@ -45,18 +48,12 @@ impl BitcoinNetworkConnection {
         socket.set_read_timeout(Some(Duration::from_secs(2)))?;
         // .expect("set_read_timeout call failed");
         socket.set_write_timeout(Some(Duration::from_secs(2)))?;
-        
-        Ok(BitcoinNetworkConnection {
-            host: host,
-            // Allocate a buffer with 4MB of capacity
-            buffer: RefCell::new(Buffer::with_capacity(1024 * 1024 * 4)),
-            socket: RefCell::new(socket),
-            needed: RefCell::new(0),
-            bad_messages: RefCell::new(0),
-        })
+
+        BitcoinNetworkConnection::with_stream(host, socket, &logger)
     }
 
-    pub fn with_stream(host: String, socket: TcpStream) -> Result<BitcoinNetworkConnection, Error> {
+    pub fn with_stream(host: String, socket: TcpStream, logger: &slog::Logger) -> Result<BitcoinNetworkConnection, Error> {
+        let logger = logger.new(o!("host" => host.clone()));
         socket.set_read_timeout(Some(Duration::from_secs(2)))?;
         // .expect("set_read_timeout call failed");
         socket.set_write_timeout(Some(Duration::from_secs(2)))?;
@@ -68,6 +65,7 @@ impl BitcoinNetworkConnection {
             socket: RefCell::new(socket),
             needed: RefCell::new(0),
             bad_messages: RefCell::new(0),
+            logger: logger,
         })
     }
 
@@ -79,9 +77,9 @@ impl BitcoinNetworkConnection {
     //   }
 
     pub fn try_send(&self, message: Message) -> Result<(), Error> {
-          trace!("{} About to write: {:?}", self.host, message);
+          trace!(self.logger, "{} About to write: {:?}", self.host, message);
           let written = self.socket.borrow_mut().write(&message.encode(false))?;
-          trace!("{} Written: {:}", self.host, written);
+          trace!(self.logger, "{} Written: {:}", self.host, written);
           Ok(())
     }
 
@@ -91,7 +89,7 @@ impl BitcoinNetworkConnection {
 
     pub fn try_recv(&self) -> Option<Result<Message, BitcoinNetworkError>> {
         let len = self.buffer.borrow().available_data();
-        trace!("[{}] Buffer len: {}", self.host, len);
+        trace!(self.logger, "[{}] Buffer len: {}", self.host, len);
         if let Some(message) = self.try_parse() {
             return Some(message);
         }
@@ -123,7 +121,7 @@ impl BitcoinNetworkConnection {
         }
         let mut trim = false;
         let mut consume = 0;
-        let parsed = match message(&self.buffer.borrow().data(), &self.host) {
+        let parsed = match message(&self.buffer.borrow().data(), &self.host, &self.logger) {
             IResult::Done(remaining, msg) => Some((msg, remaining.len())),
             IResult::Incomplete(len) => {
                 if let Needed::Size(s) = len {
@@ -134,7 +132,7 @@ impl BitcoinNetworkConnection {
             IResult::Error(e) => {
                 match e {
                     Err::Code(ErrorKind::Custom(i)) => {
-                        warn!("{} Gave us bad data!", self.host);
+                        warn!(self.logger, "{} Gave us bad data!", self.host);
                         consume = i;
                         trim = true;
                     }
@@ -177,7 +175,7 @@ impl BitcoinNetworkConnection {
         // if read == 0 {
         //     return;
         // }
-        trace!("[{} / {}] Read: {}, Need: {}",
+        trace!(self.logger, "[{} / {}] Read: {}, Need: {}",
                self.buffer.borrow().available_data(),
                self.buffer.borrow().capacity(),
                read,

@@ -1,9 +1,9 @@
 #[macro_use]
 extern crate clap;
 #[macro_use]
-extern crate log;
+extern crate slog;
+extern crate slog_term;
 extern crate bitcrust_net;
-extern crate simple_logger;
 extern crate multiqueue;
 extern crate ring;
 extern crate rusqlite;
@@ -33,7 +33,7 @@ fn main() {
 
     match matches.subcommand() {
         ("node", Some(node_matches)) => {
-            simple_logger::init_with_level(config.log_level).expect("Couldn't initialize logger");
+            // simple_logger::init_with_level(config.log_level).expect("Couldn't initialize logger");
             node(node_matches, &config);
         }
         ("balance", Some(balance_matches)) => {
@@ -70,7 +70,7 @@ fn stats(matches: &ArgMatches, config: &Config) {
 }
 
 fn connected_peers(_matches: &ArgMatches, config: &Config, host: String) {
-    let connection = BitcoinNetworkConnection::new(host.clone())
+    let connection = BitcoinNetworkConnection::new(host.clone(), &config.logger)
         .expect(&format!("Couldn't connect to a node running on {}", host));
     let _ = connection.try_send(peer::Peer::version());
     loop {
@@ -95,7 +95,7 @@ fn connected_peers(_matches: &ArgMatches, config: &Config, host: String) {
     let auth = AuthenticatedBitcrustMessage::create(config.key());
     match connection.try_send(Message::BitcrustPeerCountRequest(auth)) {
         Ok(_) => {},
-        Err(e) => warn!("Error sending request: {:?}", e),
+        Err(e) => warn!(config.logger, "Error sending request: {:?}", e),
     }
     loop {
         if let Some(msg) = connection.try_recv() {
