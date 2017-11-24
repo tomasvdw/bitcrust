@@ -9,6 +9,8 @@ use pow::U256;
 use pow;
 
 
+const SKIP_STEPS: [u64;4] = [1, 16, 256, 4096];
+
 /// DbHeader is a header connected to genesis, with some meta-data
 ///
 #[derive(Serialize, Deserialize)]
@@ -37,9 +39,9 @@ impl DbHeader {
     pub fn new(parent: DbHeader, parent_ptr: ValuePtr, header: Header) -> DbHeader {
         let previous_ptr = [
             parent_ptr,
-            if (parent.height % 16) == 0 { parent_ptr } else { parent.previous_ptr[1] },
-            if (parent.height % 256) == 0 { parent_ptr } else { parent.previous_ptr[2] },
-            if (parent.height % 4096) == 0 { parent_ptr } else { parent.previous_ptr[3] }
+            if (parent.height % SKIP_STEPS[1]) == 0 { parent_ptr } else { parent.previous_ptr[1] },
+            if (parent.height % SKIP_STEPS[2]) == 0 { parent_ptr } else { parent.previous_ptr[2] },
+            if (parent.height % SKIP_STEPS[3]) == 0 { parent_ptr } else { parent.previous_ptr[3] }
         ];
 
         // calculate accumulated work
@@ -71,12 +73,38 @@ impl DbHeader {
         serde_network::serialize(&mut buf, self);
         buf
     }
-
 }
 
-pub fn get_locator(_db: &mut Db, blockhash: &[u8;32]) -> Result<Vec<[u8; 32]>, HashStoreError> {
+
+fn skip_back(db: &mut Db, hdr: DbHeader, count: u64) -> Result<DbHeader, DbError> {
+    assert!(hdr.height >= count);
+    let mut target_height = hdr.height - count;
+    let mut target_hdr = hdr;
+    while target_hdr.height != target_height
+    {
+        let prev = target_height - 1;
+        let jump_ptr =
+                 if prev % SKIP_STEPS[3] >= target_height { target_hdr.previous_ptr[3] }
+            else if prev % SKIP_STEPS[2] >= target_height { target_hdr.previous_ptr[2] }
+            else if prev % SKIP_STEPS[1] >= target_height { target_hdr.previous_ptr[1] }
+            else { target_hdr.previous_ptr[0] };
+
+        target_hdr = DbHeader::decode(&db.hdr.get_by_ptr(jump_ptr)?)?;
+    }
+    return Ok(target_hdr);
+}
+
+
+pub fn get_locator(db: &mut Db, blockhash: &[u8;32]) -> Result<Vec<[u8; 32]>, DbError> {
     let mut result = Vec::with_capacity(32);
     result.push(*blockhash);
+    let  (_,mut hdr) = get(db, blockhash)?.ok_or(DbError::ParentNotFound)?;
+
+    if hdr.height != 0 {
+        // add genesis
+
+        return Ok(result);
+    }
     Ok(result)
 }
 
@@ -104,7 +132,7 @@ pub fn get(db: &mut Db, hash: &Hash) -> Result<Option<(ValuePtr, DbHeader)>, DbE
 pub fn write_header(db: &mut Db, hash: &Hash, hdr: DbHeader) -> Result<ValuePtr, DbError> {
 
     let mut v = vec![];
-    serde_network::serialize(&mut v, &hdr)?;
+    serde_network::serialize(&mut v, &hdr);
 
     let ptr = db.hdr.set(hash, &v, 0)?;
 
@@ -137,8 +165,8 @@ pub fn write_genesis(db: &mut Db, hash: &Hash, hdr: Header, records_ptr: ValuePt
 
     let ptr = db.hdr.set(hash, &db_hdr_raw, 0)?;
 
-    db.hdr.update_extremum(ptr, ::db::EXTREMUM_BEST_HEADER, |_| true);
-    db.hdr.update_extremum(ptr, ::db::EXTREMUM_BEST_BLOCK, |_| true);
+    db.hdr.update_extremum(ptr, ::db::EXTREMUM_BEST_HEADER, |_| true)?;
+    db.hdr.update_extremum(ptr, ::db::EXTREMUM_BEST_BLOCK, |_| true)?;
     Ok(ptr)
 }
 

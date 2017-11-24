@@ -118,7 +118,7 @@ fn add_genesis(db: &mut Db) -> Result<(), DbError> {
 
     let blk_ptr = db.blk.set_value(Record::to_bytes(&records))?;
 
-    let hdr_ptr = db_header::write_genesis(db, &block_hash, hdr, blk_ptr)?;
+    let _ = db_header::write_genesis(db, &block_hash, hdr, blk_ptr)?;
 
     Ok(())
 }

@@ -124,8 +124,8 @@ pub fn write_transaction(db: &mut Db, tx_hash: &[u8;32], tx: &::Transaction, rec
     {
         let mut ser_sigs = Serializer::new(&mut buf_sigs);
         for tx_in in tx.txs_in.iter() {
-            ser_sigs.serialize(&tx_in.script);
-            ser_sigs.serialize(&tx_in.sequence);
+            ser_sigs.serialize(&tx_in.script)?;
+            ser_sigs.serialize(&tx_in.sequence)?;
         }
     }
 
@@ -149,7 +149,7 @@ pub fn write_transaction(db: &mut Db, tx_hash: &[u8;32], tx: &::Transaction, rec
         }
         for tx_out in tx.txs_out.iter() {
             ser_tx.serialize(&tx_out.value)?;
-            ser_tx.serialize(&tx_out.pk_script);
+            ser_tx.serialize(&tx_out.pk_script)?;
         }
 
         ser_tx.serialize(&tx.version)?;
