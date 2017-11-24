@@ -24,7 +24,8 @@ fn test_get() {
 }
 
 #[test]
-fn test_get_best_header() {
+fn test_get_all_headers() {
+    // just browse through all imported headers;
     let db = &mut store::init("tst-import").unwrap();
 
     let mut hash = store::header_get_best(db).unwrap();
@@ -36,13 +37,31 @@ fn test_get_best_header() {
         if hdr.height == 0 {
             break;
         }
-        //println!("{}", serde_json::to_string_pretty(&hdr.header).unwrap());
 
         hash = hdr.header.prev_hash;
 
     }
 }
 
+#[test]
+fn test_locator() {
+    // just browse through all imported headers;
+    let db = &mut store::init("tst-import").unwrap();
+
+    let mut hash = store::header_get_best(db).unwrap();
+
+    println!("{:?}", hash);
+    loop {
+        let hdr = store::header_get(db, &hash).unwrap().unwrap();
+
+        if hdr.height == 0 {
+            break;
+        }
+
+        hash = hdr.header.prev_hash;
+
+    }
+}
 
 
 
