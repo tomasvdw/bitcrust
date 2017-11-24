@@ -13,11 +13,12 @@ pub use ser::encode_compact_size;
 pub use de::decode_compact_size;
 
 
-pub fn serialize<T>(out: &mut Vec<u8>, value: &T) -> Result<()>
+pub fn serialize<T>(out: &mut Vec<u8>, value: &T)
     where T: Serialize
 {
     let mut ser = Serializer::new(out);
     Serialize::serialize(value, &mut ser)
+        .expect("Internal error in serializer"); // can't happen writing to buffer
 }
 
 pub fn deserialize<'de, T>(bytes: &'de [u8]) -> Result<T>

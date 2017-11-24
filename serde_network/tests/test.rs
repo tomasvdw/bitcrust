@@ -33,7 +33,7 @@ fn test_encode_decode() {
     };
 
     let buf = &mut Vec::new();
-    serde_network::serialize(buf, &val).unwrap();
+    serde_network::serialize(buf, &val);
     assert_eq!(buf[0], 17u8);
     assert_eq!(buf[1], 0);
 
