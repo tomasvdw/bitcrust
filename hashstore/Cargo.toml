@@ -1,0 +1,14 @@
+[package]
+name = "hashstore"
+version = "0.1.0"
+authors = ["Tomas van der Wansem <tomas@tomasvdw.nl>"]
+
+[dependencies]
+memmap = "0.5"
+bincode = "*"
+serde = "*"
+serde_derive = "*"
+
+[dev-dependencies]
+rand = "0.3"
+
