@@ -15,4 +15,4 @@ serde_derive = "*"
 serde_json = { path = "../serde_json" }
 serde_network = { path = "../serde_network" }
 
-hashstore = { path = "../../hashstore" }
+hashstore = { path = "../hashstore" }
