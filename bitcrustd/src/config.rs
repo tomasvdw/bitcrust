@@ -10,6 +10,9 @@ use ring::{digest, rand, hmac};
 use ring::rand::SecureRandom;
 use toml;
 
+
+const DEFAULT_DATA_DIR: &'static str = "~/bitcrust";
+
 #[cfg(test)]
 mod tests {
     extern crate tempfile;
@@ -45,13 +48,15 @@ mod tests {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ConfigFile {
-    key: Vec<u8>
+    key: Vec<u8>,
+    data_dir: String
 }
 
 pub struct Config {
     pub log_level: LogLevel,
+    pub data_dir: PathBuf,
     raw_key: [u8; 32],
-    signing_key: hmac::SigningKey
+    signing_key: hmac::SigningKey,
 }
 
 impl<'a, 'b> Config {
@@ -77,14 +82,17 @@ impl<'a, 'b> Config {
         };
 
         let key = hmac::SigningKey::new(&digest::SHA256, &config_from_file.key);
+        let data_dir = PathBuf::from(&config_from_file.data_dir);
 
         let mut a: [u8; 32] = [0; 32];
         a.copy_from_slice(&config_from_file.key);
+
 
         Config {
             log_level: log_level,
             raw_key: a,
             signing_key: key,
+            data_dir: data_dir
         }
 
 
@@ -129,7 +137,8 @@ impl<'a, 'b> Config {
         let mut key = [0; 32];
         rng.fill(&mut key).unwrap();
         let c = ConfigFile {
-            key: key.to_vec()
+            key: key.to_vec(),
+            data_dir: DEFAULT_DATA_DIR.to_owned()
         };
         let s = toml::to_string(&c).unwrap();
         println!("Making a new config file with: {}", s);
@@ -148,7 +157,8 @@ impl Clone for Config {
         Config {
             log_level: self.log_level,
             raw_key: self.raw_key,
-            signing_key: hmac::SigningKey::new(&digest::SHA256, &self.raw_key)
+            signing_key: hmac::SigningKey::new(&digest::SHA256, &self.raw_key),
+            data_dir: self.data_dir.clone()
         }
     }
 }

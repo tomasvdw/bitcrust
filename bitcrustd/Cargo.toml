@@ -5,6 +5,7 @@ authors = ["Chris MacNaughton <chris@centaurisolutions.nl>"]
 
 [dependencies]
 bitcrust-net = {path = "../net"}
+store = {path = "../store"}
 clap = "~2.25"
 simple_logger = "*"
 log = "0.3"

@@ -200,7 +200,7 @@ impl PeerManager {
 
     fn initialize_peers(&mut self, connected_peers: &Arc<Mutex<u64>>) {
         
-        if self.peers.len() >= 100 {
+        if self.peers.len() >= 10 {
             return;
         }
 
@@ -213,7 +213,7 @@ impl PeerManager {
                     (addr, s)
                 })
                 .filter(|a| !connected_addrs.contains(&a.1)) {
-                if self.peers.len() >= 100 {
+                if self.peers.len() >= 10 {
                     break;
                 }
                 match Peer::new(&host[..], &self.sender, &self.receiver, &self.config) {
@@ -235,12 +235,8 @@ impl PeerManager {
         }
 
         if self.peers.len() == 0 {
-            for hostname in ["seed.bitcoin.sipa.be:8333",
-                             "dnsseed.bluematt.me:8333",
-                             "dnsseed.bitcoin.dashjr.org:8333",
-                             "seed.bitcoinstats.com:8333",
-                             "seed.bitcoin.jonasschnelli.ch:8333",
-                             "seed.btc.petertodd.org:8333"
+            for hostname in ["seed.bitcoinabc.org:8333",
+                             "btccash-seeder.bitcoinunlimited.info:8333",
                              ]
                 .iter() {
                 // info!("Trying to connect")

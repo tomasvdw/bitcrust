@@ -12,6 +12,8 @@ use multiqueue::{BroadcastReceiver, BroadcastSender};
 use bitcrust_net::{BitcoinNetworkConnection, BitcoinNetworkError, NetAddr, Message, AddrMessage, Services,
                    VersionMessage};
 
+use store;
+
 use client_message::ClientMessage;
 use config::Config;
 #[cfg(test)]
@@ -28,6 +30,7 @@ mod tests {}
 /// After the handshake, other communication can occur
 pub struct Peer {
     config: Config,
+    db: store::Db,
     host: String,
     network_connection: BitcoinNetworkConnection,
     send_compact: bool,
@@ -94,6 +97,7 @@ impl Peer {
         let connection = BitcoinNetworkConnection::with_stream(host.clone(), socket)?;
         Ok(Peer {
             config: config.clone(),
+            db: store::init(&config.data_dir).unwrap(),
             host: host,
             network_connection: connection,
             send_compact: false,
@@ -123,6 +127,7 @@ impl Peer {
         let connection = BitcoinNetworkConnection::new(host.clone())?;
         Ok(Peer {
             config: config.clone(),
+            db: store::init(&config.data_dir).unwrap(),
             host: host,
             network_connection: connection,
             send_compact: false,
@@ -336,7 +341,7 @@ impl Peer {
     pub fn version() -> Message {
         Message::Version(VersionMessage {
             version: 70015,
-            services: Services::from(1),
+            services: Services::from(1 + 1<<5),
             timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64,
             addr_recv: Peer::addr(Ipv6Addr::from_str("::ffff:127.0.0.1").unwrap(), 8333, None),
             addr_send: Peer::addr(Ipv6Addr::from_str("::ffff:127.0.0.1").unwrap(), 8333, None),

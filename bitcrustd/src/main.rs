@@ -11,6 +11,8 @@ extern crate rusqlite;
 extern crate serde;
 extern crate toml;
 
+extern crate store;
+
 use std::thread;
 use std::time::Duration;
 
