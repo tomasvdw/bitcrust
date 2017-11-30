@@ -16,5 +16,7 @@ serde = "1.0"
 toml = "0.4"
 rusqlite = "~0.11"
 
+serde_json = {path = "../serde_json"}
+
 [dev-dependencies]
 tempfile = "2.2"

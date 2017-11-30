@@ -130,6 +130,19 @@ impl<'a, 'b> Config {
                     .takes_value(true)
                     .required(true))
             )
+            .subcommand(SubCommand::with_name("db")
+                .about("Query the database")
+                .subcommand(SubCommand::with_name("get-transaction")
+                    .about("Finds a transaction")
+                    .arg(Arg::with_name("tx-hash")
+                        .required(true))
+                )
+                .subcommand(SubCommand::with_name("get-block")
+                    .about("Finds a block")
+                    .arg(Arg::with_name("block-hash")
+                        .required(true))
+                )
+            )
     }
 
     pub fn create_default(path: PathBuf) -> ConfigFile {

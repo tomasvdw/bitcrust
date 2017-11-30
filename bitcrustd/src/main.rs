@@ -12,6 +12,7 @@ extern crate serde;
 extern crate toml;
 
 extern crate store;
+extern crate serde_json;
 
 use std::thread;
 use std::time::Duration;
@@ -24,6 +25,8 @@ mod client_message;
 mod config;
 mod peer_manager;
 mod peer;
+mod db_query;
+mod util;
 
 use config::Config;
 use peer_manager::PeerManager;
@@ -40,7 +43,10 @@ fn main() {
         }
         ("balance", Some(balance_matches)) => {
             balance(balance_matches, &config);
-        }
+        },
+        ("db", Some(db_query_matches)) => {
+            db_query::db_query(db_query_matches, &config);
+        },
         ("stats", Some(stats_matches)) => {
             stats(stats_matches, &config);
         }
