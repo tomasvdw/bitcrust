@@ -17,7 +17,7 @@ mod tests {
 
     #[test]
     fn it_creates_and_validates() {
-        let key = hmac::SigningKey::new(&digest::SHA256, &[0x00; 32]);
+        let key = hmac::Key::new(&digest::SHA256, &[0x00; 32]);
         let m =  AuthenticatedBitcrustMessage::create(&key);
         assert!(m.valid(&key));
     }
@@ -30,7 +30,7 @@ pub struct AuthenticatedBitcrustMessage {
 }
 
 impl AuthenticatedBitcrustMessage {
-    pub fn create(key: &hmac::SigningKey) ->
+    pub fn create(key: &hmac::Key) ->
      AuthenticatedBitcrustMessage {
         let mut rng = rand::thread_rng();
 
@@ -52,7 +52,7 @@ impl AuthenticatedBitcrustMessage {
             signature: a
         }
     }
-    pub fn valid(&self, key: &hmac::SigningKey) -> bool {
+    pub fn valid(&self, key: &hmac::Key) -> bool {
         hmac::verify(key, &self.nonce, &self.signature).is_ok()
     }
 

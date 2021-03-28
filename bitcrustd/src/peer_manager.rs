@@ -55,13 +55,13 @@ impl PeerManager {
                     .unwrap();
 
             let addrs: HashSet<NetAddr> = stmt.query_map(&[], |row| {
-                    NetAddr {
-                        time: Some(row.get(0)),
-                        services: Services::from(row.get::<_, i64>(1) as u64),
-                        ip: Ipv6Addr::from_str(&row.get::<_, String>(2))
+                    Ok( NetAddr {
+                        time: Some(row.get(0).unwrap_or(0u32)),
+                        services: Services::from(row.get::<_, i64>(1).unwrap_or(0i64) as u64),
+                        ip: Ipv6Addr::from_str(&row.get::<_, String>(2).unwrap_or("".to_string()))
                             .unwrap_or(Ipv6Addr::from_str("::").unwrap()),
-                        port: row.get(3),
-                    }
+                        port: row.get(3).unwrap_or(0u16),
+                    })
                 })
                 .unwrap()
                 .filter_map(|l| l.ok())
