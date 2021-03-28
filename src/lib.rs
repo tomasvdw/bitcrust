@@ -1,7 +1,7 @@
 
 
 #![feature(link_args)]
-#![feature(custom_derive, plugin)]
+#![feature(plugin)]
 #![feature(integer_atomics)]
 
 

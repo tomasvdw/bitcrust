@@ -7,7 +7,7 @@ authors = ["Tomas van der Wansem <tomas@tomasvdw.nl>"]
 
 byteorder = "1"
 itertools = "0.5.1"
-ring = "0.12.1"
+ring = "0.16"
 
 serde = "*"
 serde_derive = "*"

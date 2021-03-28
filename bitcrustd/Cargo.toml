@@ -10,11 +10,12 @@ clap = "~2.25"
 simple_logger = "*"
 log = "0.3"
 multiqueue = "~0.3.2"
-ring = "0.12"
+ring = "0.16"
 serde_derive = "1.0"
 serde = "1.0"
 toml = "0.4"
-rusqlite = "~0.11"
+# rusqlite = "~0.11"
+rusqlite = "0.24.2"
 
 serde_json = {path = "../serde_json"}
 

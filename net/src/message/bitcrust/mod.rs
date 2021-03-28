@@ -53,7 +53,7 @@ impl AuthenticatedBitcrustMessage {
         }
     }
     pub fn valid(&self, key: &hmac::SigningKey) -> bool {
-        hmac::verify_with_own_key(key, &self.nonce, &self.signature).is_ok()
+        hmac::verify(key, &self.nonce, &self.signature).is_ok()
     }
 
     pub fn len(&self) -> usize {

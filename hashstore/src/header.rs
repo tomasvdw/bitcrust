@@ -48,12 +48,12 @@ impl Header {
     }
 
     pub fn read<R : Read>(rdr: &mut R) -> Result<Header, io::Error> {
-        bincode::deserialize_from(rdr, bincode::Infinite)
+        bincode::deserialize_from(rdr)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
     }
 
     pub fn write<W : Write>(wrt: &mut W, hdr: &Header) -> Result<(), io::Error> {
-        bincode::serialize_into(wrt, hdr, bincode::Infinite)
+        bincode::serialize_into(wrt, hdr)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
     }
 }

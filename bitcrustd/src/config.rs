@@ -5,7 +5,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
-use log::LogLevel;
+use log::Level;
 use ring::{digest, rand, hmac};
 use ring::rand::SecureRandom;
 use toml;
@@ -81,7 +81,7 @@ impl<'a, 'b> Config {
             Config::create_default(config_file_path)
         };
 
-        let key = hmac::SigningKey::new(&digest::SHA256, &config_from_file.key);
+        let key = hmac::Key::new(hmac::HMAC_SHA256, &config_from_file.key);
         let data_dir = PathBuf::from(&config_from_file.data_dir);
 
         let mut a: [u8; 32] = [0; 32];
@@ -170,7 +170,7 @@ impl Clone for Config {
         Config {
             log_level: self.log_level,
             raw_key: self.raw_key,
-            signing_key: hmac::SigningKey::new(&digest::SHA256, &self.raw_key),
+            signing_key: hmac::Key::new(hmac::HMAC_SHA256, &self.raw_key),
             data_dir: self.data_dir.clone()
         }
     }
