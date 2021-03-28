@@ -8,7 +8,7 @@ bitcrust-net = {path = "../net"}
 store = {path = "../store"}
 clap = "~2.25"
 simple_logger = "*"
-log = "0.3"
+log = "0.4"
 multiqueue = "~0.3.2"
 ring = "0.16"
 serde_derive = "1.0"
