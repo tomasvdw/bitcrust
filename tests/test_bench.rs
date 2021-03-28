@@ -26,7 +26,7 @@ fn load_bench_init() {
         let f = File::open(name).unwrap();
         let mut rdr = BufReader::new(f);
 
-        let mut blocks = 0;
+        let mut _blocks = 0;
         loop {
             let blk = blk_file::read_block(&mut rdr).unwrap();
 
@@ -36,7 +36,7 @@ fn load_bench_init() {
 
             bitcrust_lib::add_block(&mut store, &blk.unwrap());
 
-            blocks += 1;
+            _blocks += 1;
        }
     }
 

@@ -18,7 +18,7 @@ regex = "*"
 ring = "0.16"
 #rusqlite = "~0.11"
 rusqlite = "0.24.2"
-sha2 = "0.5"
+sha2 = "*"
 encode-derive = {path = "../encode-derive"}
 
 [dependencies.nom]
