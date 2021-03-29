@@ -8,7 +8,7 @@ use std::str::FromStr;
 use std::thread;
 
 use multiqueue::{BroadcastReceiver, BroadcastSender, broadcast_queue};
-use rusqlite::{Error, Connection};
+use rusqlite::{Error, Connection, NO_PARAMS};
 
 use bitcrust_net::{NetAddr, Services};
 use client_message::ClientMessage;
@@ -45,7 +45,7 @@ impl PeerManager {
                  \
                       port INTEGER
              );",
-                     &[])
+                   NO_PARAMS)
             .unwrap();
 
         let addrs: HashSet<NetAddr> = {
@@ -54,7 +54,7 @@ impl PeerManager {
                               limit 1000")
                     .unwrap();
 
-            let addrs: HashSet<NetAddr> = stmt.query_map(&[], |row| {
+            let addrs: HashSet<NetAddr> = stmt.query_map(NO_PARAMS, |row| {
                     Ok( NetAddr {
                         time: Some(row.get(0).unwrap_or(0u32)),
                         services: Services::from(row.get::<_, i64>(1).unwrap_or(0i64) as u64),
