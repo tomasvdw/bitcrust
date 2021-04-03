@@ -67,7 +67,7 @@ impl<'a> buffer::Parse<'a> for Hash32<'a> {
             // we must transmute as rustc doesn't trust the slice is exactly 32 bytes
             // (transmuting &[u8] -> &[u8;32])
             unsafe { mem::transmute(
-                try!(buffer.parse_bytes(32)).as_ptr()) }
+                buffer.parse_bytes(32)?.as_ptr()) }
         ))
     }
 }

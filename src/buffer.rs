@@ -70,7 +70,7 @@ impl<'a> Buffer<'a> {
         let mut result_idx: Vec<u32> = Vec::with_capacity(count);
         for _ in 0..count {
             result_idx.push(original_len - self.inner.len() as u32);
-            result.push(try!(T::parse(self)));
+            result.push(T::parse(self)?);
         }
         Ok((result, result_idx))
 
@@ -79,11 +79,11 @@ impl<'a> Buffer<'a> {
     /// Parse a compact size
     /// This can be 1-8 bytes; see bitcoin-spec for details
     pub fn parse_compact_size(&mut self) -> Result<usize, EndOfBufferError> {
-        let byte1 = { try!(u8::parse(self)) };
+        let byte1 = { u8::parse(self)? };
         Ok(match byte1 {
-            0xff => { try!(u64::parse(self)) as usize },
-            0xfe => { try!(u32::parse(self)) as usize },
-            0xfd => { try!(u16::parse(self)) as usize },
+            0xff => { u64::parse(self)? as usize },
+            0xfe => { u32::parse(self)? as usize },
+            0xfd => { u16::parse(self)? as usize },
             _ => byte1 as usize
         })
     }
@@ -102,7 +102,7 @@ impl<'a> Buffer<'a> {
     }
 
     pub fn parse_compact_size_bytes(&mut self) -> Result<&'a[u8], EndOfBufferError> {
-        let count = try!(self.parse_compact_size());
+        let count = self.parse_compact_size()?;
 
         self.parse_bytes(count)
     }
@@ -116,10 +116,10 @@ impl<'a, T : Parse<'a>> Parse<'a> for Vec<T> {
     /// Parses a compact-size prefix vector of parsable stuff
     fn parse(buffer: &mut Buffer<'a>) -> Result<Vec<T>, EndOfBufferError> {
 
-        let count = try!(buffer.parse_compact_size());
+        let count = buffer.parse_compact_size()?;
         let mut result: Vec<T> = Vec::with_capacity(count);
         for _ in 0..count {
-            result.push(try!(T::parse(buffer)));
+            result.push(T::parse(buffer)?);
         }
         Ok(result)
     }

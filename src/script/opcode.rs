@@ -22,7 +22,7 @@ pub struct OpCode {
     pub name:        &'static str,
     pub execute:     fn(&mut Context) -> Result<(), ScriptError>,
     pub skip:        fn(ctx: &mut Context) -> Result<(), ScriptError>,
-    pub display:     fn(ctx: &mut Context, writer: &mut io::Write) -> io::Result<()>    
+    pub display:     fn(ctx: &mut Context, writer: &mut dyn io::Write) -> io::Result<()>
 }
 
 
@@ -35,12 +35,12 @@ fn skip_invalid(_: &mut Context) -> Result<(), ScriptError> {
 }
 
 
-fn disp_name(ctx: &mut Context, writer: &mut io::Write) -> io::Result<()> {
+fn disp_name(ctx: &mut Context, writer: &mut dyn io::Write) -> io::Result<()> {
     let opcode = &OPCODES[ctx.script1[ctx.ip] as usize];
     write!(writer, "{} ", opcode.name)
 }
 
-fn disp_invalid(_: &mut Context, writer: &mut io::Write) -> io::Result<()> {
+fn disp_invalid(_: &mut Context, writer: &mut dyn io::Write) -> io::Result<()> {
     write!(writer, " [INVALID-OPCODE] ")
 }
 
@@ -56,8 +56,8 @@ fn op_nop(_: &mut Context) -> Result<(), ScriptError> {
 }
 
 fn op_add(ctx: &mut Context) -> Result<(), ScriptError> {
-    let n1 = { try!(ctx.stack.pop_scriptnum()) };
-    let n2 = { try!(ctx.stack.pop_scriptnum()) };
+    let n1 = { ctx.stack.pop_scriptnum()? };
+    let n2 = { ctx.stack.pop_scriptnum()? };
      
     ctx.stack.push_scriptnum(n1 + n2)   
     

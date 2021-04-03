@@ -37,7 +37,7 @@ pub fn skip_pushdata_count_by_opcode(ctx: &mut Context) -> Result<(), ScriptErro
 }
 
 /// Renders the next `n` bytes to `writer` where `n` is the current opcode
-pub fn disp_pushdata_count_by_opcode(ctx: &mut Context,  writer: &mut io::Write) -> io::Result<()> {
+pub fn disp_pushdata_count_by_opcode(ctx: &mut Context,  writer: &mut dyn io::Write) -> io::Result<()> {
     
     let count = ctx.script1[ctx.ip] as u64;
     
@@ -52,7 +52,7 @@ pub fn op_pushdata_value_by_opcode(ctx: &mut Context) -> Result<(), ScriptError>
 
 
 
-pub fn disp_pushdata_value_by_opcode(ctx: &mut Context,  writer: &mut io::Write) -> io::Result<()> {
+pub fn disp_pushdata_value_by_opcode(ctx: &mut Context,  writer: &mut dyn io::Write) -> io::Result<()> {
     let value = ctx.script1[ctx.ip] as i32 - 0x80_i32;
     write!(writer, "{:02x}", value)
 }
@@ -73,7 +73,7 @@ fn size_from_opcode(ctx: &Context) -> u64 {
 ///
 pub fn skip_pushdata_count_by_next_bytes(ctx: &mut Context) -> Result<(), ScriptError> {
     let size = { size_from_opcode(ctx) };
-    let bytecount = try!(ctx.next_uint(size));
+    let bytecount = ctx.next_uint(size)?;
 
     ctx.ip += bytecount as usize;
 
@@ -82,7 +82,7 @@ pub fn skip_pushdata_count_by_next_bytes(ctx: &mut Context) -> Result<(), Script
 
 /// Displays the pushdata for OP_PUSHDATA1, OP_PUSHDATA2 and OP_PUSHDATA4 as hex
 ///
-pub fn disp_pushdata_count_by_next_bytes(ctx: &mut Context,  writer: &mut io::Write) -> io::Result<()> {
+pub fn disp_pushdata_count_by_next_bytes(ctx: &mut Context,  writer: &mut dyn io::Write) -> io::Result<()> {
     let size = { size_from_opcode(ctx) };
     let bytecount = ctx.next_uint(size);
     
@@ -94,7 +94,7 @@ pub fn disp_pushdata_count_by_next_bytes(ctx: &mut Context,  writer: &mut io::Wr
 /// The number of bytes depends on the opcode being OP_PUSHDATA1, OP_PUSHDATA2, OP_PUSHDATA4
 pub fn op_pushdata_count_by_next_bytes(ctx: &mut Context) -> Result<(), ScriptError> {
     let size = { size_from_opcode(ctx) };
-    let bytecount = try!(ctx.next_uint(size));
+    let bytecount = ctx.next_uint(size)?;
 
     op_pushdata_next_bytes(ctx, bytecount)
 }
@@ -109,7 +109,7 @@ fn op_pushdata_next_bytes(ctx: &mut Context,  count: u64) -> Result<(), ScriptEr
 
     // grab next bytes and box them
     // this means copying as we need ownership on the stack
-    let bytes = try!(ctx.next_bytes(count))
+    let bytes = ctx.next_bytes(count)?
         .to_vec()
         .into_boxed_slice();
     
@@ -138,11 +138,11 @@ fn disp_pushdata_next_bytes(ctx: &mut Context,  writer: &mut io::Write, count: R
     match ctx.next_bytes(count_val) {
         Ok(bytes) => {
             for byte in bytes {
-                try!(write!(writer, "{:02x}", byte));
+                write!(writer, "{:02x}", byte)?;
             }
         }
         Err(_) => {
-            try!(write!(writer, "{}", UNEXPECTED_EOS));
+            write!(writer, "{}", UNEXPECTED_EOS)?;
         }
     }
 
