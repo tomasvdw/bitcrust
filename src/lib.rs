@@ -3,7 +3,7 @@
 #![feature(link_args)]
 #![feature(plugin)]
 #![feature(integer_atomics)]
-#![feature(rustc_private)]
+
 
 
 

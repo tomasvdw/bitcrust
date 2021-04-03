@@ -160,7 +160,7 @@ mod test {
     fn test_pushdata(
         script:    Vec<u8>, 
         expected:  &'static str,
-        disp_func: fn(ctx: &mut Context, writer: &mut io::Write) -> io::Result<()>) 
+        disp_func: fn(ctx: &mut Context, writer: &mut dyn io::Write) -> io::Result<()>)
     {
         let buf: Vec<u8> = Vec::new();
     
