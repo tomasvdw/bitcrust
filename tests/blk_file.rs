@@ -16,7 +16,7 @@ const MAGIC: u32 = 0xD9B4BEF9;
 
 /// Reads a block from a blk_file as used by
 /// bitcoin-core and various other implementations
-pub fn read_block(rdr: &mut io::Read) -> Result<Option<Vec<u8>>, io::Error> {
+pub fn read_block(rdr: &mut dyn io::Read) -> Result<Option<Vec<u8>>, io::Error> {
 
     loop {
         let magicnr = rdr.read_u32::<LittleEndian>();
@@ -40,11 +40,11 @@ pub fn read_block(rdr: &mut io::Read) -> Result<Option<Vec<u8>>, io::Error> {
     }
 
 
-    let length     = try!(rdr.read_u32::<LittleEndian>());
+    let length     = rdr.read_u32::<LittleEndian>()?;
     let mut buffer = vec![0; length as usize];
 
 
-    try!(rdr.read_exact(&mut buffer));
+    rdr.read_exact(&mut buffer)?;
 
 
     Ok(Some(buffer))

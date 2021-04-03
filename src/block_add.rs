@@ -400,7 +400,7 @@ mod tests {
 
         // some rust experimenting; ignore
 
-        struct X { data: Vec<u32> };
+        struct X { data: Vec<u32> }
         impl Clone for X {
             fn clone(&self) -> X { X { data: self.data.clone() } }
         }
