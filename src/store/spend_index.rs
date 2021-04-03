@@ -77,7 +77,7 @@ impl SpendIndex
             let org = self.bitvector[idx].load(Ordering::Acquire);
             let new = org | (1 << (hash & 0x3F));
 
-            if self.bitvector[idx].compare_and_swap(org, new, Ordering::Release) == org {
+            if self.bitvector[idx].compare_exchange(org, new, Ordering::Release, Ordering::Release) == Ok(org) {
                 break;
             }
         }
