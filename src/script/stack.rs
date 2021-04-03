@@ -42,7 +42,7 @@ impl Stack {
     /// Can return a stack-underflow if no items are on the stack
     ///
     pub fn pop_scriptnum(&mut self) -> Result<i64, ScriptError> {
-        let bytes = try!(self.pop());
+        let bytes = self.pop()?;
         
         if bytes.len() == 0 {
             return Ok(0);
