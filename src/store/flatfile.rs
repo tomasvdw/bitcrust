@@ -17,7 +17,7 @@ use std::fmt::{Debug,Formatter,Error};
 
 use std::path::{Path};
 use memmap;
-use std::cmp::Ordering;
+//use std::cmp::Ordering;
 
 const WRITEPOS_OFFSET  : isize = 8;
 const MAGIC_FILEID     : u64   = 0x62634D4B_00000000;
