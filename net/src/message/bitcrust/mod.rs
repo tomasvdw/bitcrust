@@ -5,7 +5,7 @@ use Encode;
 
 #[cfg(test)]
 mod tests {
-    use ring::digest;
+    //use ring::digest;
     use super::*;
 
     #[test]
@@ -17,7 +17,7 @@ mod tests {
 
     #[test]
     fn it_creates_and_validates() {
-        let key = hmac::Key::new(&digest::SHA256, &[0x00; 32]);
+        let key = hmac::Key::new(hmac::HMAC_SHA256, &[0x00; 32]);
         let m =  AuthenticatedBitcrustMessage::create(&key);
         assert!(m.valid(&key));
     }

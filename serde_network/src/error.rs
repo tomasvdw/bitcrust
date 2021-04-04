@@ -15,10 +15,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 impl error::Error for Error {
     fn description(&self) -> &str {
-        match *self {
+        let x = match *self {
             Error::EndOfBufferError => "Unexpected end of buffer",
-            Error::IOError(ref io)  => io.description()
-        }
+            Error::IOError(ref _io) => "io error", // TODO need to get the error message out of io
+        };
+        return x;
     }
 }
 

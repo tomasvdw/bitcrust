@@ -1,4 +1,4 @@
-#![feature(integer_atomics)]
+//#![feature(integer_atomics)]
 //!
 //! Key/value store with specific design properties
 //! optimized for storing the transactions of a blockchain

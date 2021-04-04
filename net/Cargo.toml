@@ -7,7 +7,7 @@ authors = [
 ]
 
 [dependencies]
-bitflags = "0.7"
+bitflags = "*"
 circular = "~0.2"
 byteorder = "1"
 log = "0.3"

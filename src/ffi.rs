@@ -76,8 +76,6 @@ pub fn verify_script(previous_tx_out: &[u8], transaction: &[u8], input: u32) -> 
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
 

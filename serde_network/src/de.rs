@@ -35,11 +35,11 @@ impl<'de> Deserializer<'de> {
 
     fn decode_compact_size(&mut self) -> Result<usize> {
 
-        let byte1: u8 = try!(Deserialize::deserialize(&mut *self));
+        let byte1: u8 = Deserialize::deserialize(&mut *self)?;
         let result = match byte1 {
-            0xff => { let u: u64 = try!(Deserialize::deserialize(&mut *self)); u as usize },
-            0xfe => { let u: u32 = try!(Deserialize::deserialize(&mut *self)); u as usize },
-            0xfd => { let u: u16 = try!(Deserialize::deserialize(&mut *self)); u as usize },
+            0xff => { let u: u64 = Deserialize::deserialize(&mut *self)?; u as usize },
+            0xfe => { let u: u32 = Deserialize::deserialize(&mut *self)?; u as usize },
+            0xfd => { let u: u16 = Deserialize::deserialize(&mut *self)?; u as usize },
             _ => byte1 as usize
         };
         Ok(result)
@@ -47,7 +47,7 @@ impl<'de> Deserializer<'de> {
 
     #[inline]
     fn read_slice(&mut self) -> Result<&'de [u8]> {
-        let len = try!(self.decode_compact_size());
+        let len = self.decode_compact_size()?;
         let (slice, rest) = self.bytes.split_at(len);
         self.bytes = rest;
         Ok(slice)
@@ -61,7 +61,7 @@ macro_rules! impl_nums {
         fn $dser_method<V>(self, visitor: V) -> Result<V::Value>
             where V: Visitor<'de>
         {
-            let value = try!(self.bytes.$reader_method::<LittleEndian>());
+            let value = self.bytes.$reader_method::<LittleEndian>()?;
             visitor.$visitor_method(value)
         }
     };
@@ -104,14 +104,14 @@ impl<'de, 'a> serde::Deserializer<'de> for &'a mut Deserializer<'de> {
     fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
         where V: Visitor<'de>
     {
-        visitor.visit_u8(try!(self.bytes.read_u8()))
+        visitor.visit_u8(self.bytes.read_u8()?)
     }
 
     #[inline]
     fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
         where V: Visitor<'de>
     {
-        visitor.visit_i8(try!(self.bytes.read_i8()))
+        visitor.visit_i8(self.bytes.read_i8()?)
     }
 
 
@@ -120,14 +120,14 @@ impl<'de, 'a> serde::Deserializer<'de> for &'a mut Deserializer<'de> {
     fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
         where V: Visitor<'de>
     {
-        visitor.visit_borrowed_bytes(try!(self.read_slice()))
+        visitor.visit_borrowed_bytes(self.read_slice()?)
     }
 
     #[inline]
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
         where V: Visitor<'de>
     {
-        visitor.visit_borrowed_bytes(try!(self.read_slice()))
+        visitor.visit_borrowed_bytes(self.read_slice()?)
     }
 
     #[inline]
@@ -176,7 +176,7 @@ impl<'de, 'a> serde::Deserializer<'de> for &'a mut Deserializer<'de> {
             }
         }
 
-        let len = try!(self.decode_compact_size());
+        let len = self.decode_compact_size()?;
 
         visitor.visit_seq(SeqAccess {
             deserializer: self,
