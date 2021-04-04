@@ -151,14 +151,14 @@ impl<'a, W> serde::Serializer for &'a mut Serializer<W>
     fn serialize_some<T: ?Sized>(self, v: &T) -> Result<()>
         where T: serde::Serialize
     {
-        try!(self.writer.write_u8(1));
+        self.writer.write_u8(1)?;
         v.serialize(self)
     }
 
     #[inline]
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
         let len = len.expect("do not know how to serialize a sequence with no length");
-        try!(encode_compact_size(&mut self.writer, len));
+        encode_compact_size(&mut self.writer, len)?;
         Ok(self)
     }
 
@@ -182,7 +182,7 @@ impl<'a, W> serde::Serializer for &'a mut Serializer<W>
                                _variant: &'static str,
                                _len: usize)
                                -> Result<Self::SerializeTupleVariant> {
-        try!(self.serialize_u32(variant_index));
+        self.serialize_u32(variant_index)?;
         Ok(self)
     }
 
@@ -203,7 +203,7 @@ impl<'a, W> serde::Serializer for &'a mut Serializer<W>
                                 _variant: &'static str,
                                 _len: usize)
                                 -> Result<Self::SerializeStructVariant> {
-        try!(self.serialize_u32(variant_index));
+        self.serialize_u32(variant_index)?;
         Ok(self)
     }
 
@@ -223,7 +223,7 @@ impl<'a, W> serde::Serializer for &'a mut Serializer<W>
                                             -> Result<()>
         where T: serde::ser::Serialize
     {
-        try!(self.serialize_u32(variant_index));
+        self.serialize_u32(variant_index)?;
         value.serialize(self)
     }
 

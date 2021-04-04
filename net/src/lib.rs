@@ -1,4 +1,4 @@
-#![feature(tcpstream_connect_timeout)]
+
 
 #[macro_use]
 extern crate bitflags;

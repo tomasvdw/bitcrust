@@ -54,7 +54,7 @@ mod tests {
         for n in 0..2000000 {
             let dp = ptr_new(0, n);
             let sz = ptr_size_est(dp);
-            assert!(sz >= n, format!("n={}", n));
+            assert!(sz >= n, "n={}", n);
         }
     }
 }
