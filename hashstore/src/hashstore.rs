@@ -292,7 +292,7 @@ impl HashStore {
             let new_ptr = write_value(&mut self.append_file, prefix, value)?;
 
             if self.root[idx].compare_exchange
-            (old_ptr, new_ptr, atomic::Ordering::Release, atomic::Ordering::Release).is_ok() {
+            (old_ptr, new_ptr, atomic::Ordering::Release, atomic::Ordering::Relaxed).is_ok() {
                 self.stats_add(HashStoreStats::Elements, 1);
                 return Ok(new_ptr);
             }
@@ -338,7 +338,7 @@ impl HashStore {
                 }
             }
 
-            if self.extrema[extremum].compare_exchange(current_ptr, ptr, atomic::Ordering::Release, atomic::Ordering::Release).is_ok() {
+            if self.extrema[extremum].compare_exchange(current_ptr, ptr, atomic::Ordering::Release, atomic::Ordering::Relaxed).is_ok() {
                 return Ok(());
             }
         }
