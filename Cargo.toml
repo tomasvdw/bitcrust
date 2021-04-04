@@ -42,5 +42,5 @@ default = []
 
 [workspace]
 # members = [ "bitcrustd", "monitor", "net", "encode-derive", "store", "hashstore"]
-members = [ "monitor", "store", "hashstore"]
+members = [ "store", "hashstore"]
 
