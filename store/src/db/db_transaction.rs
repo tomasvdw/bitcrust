@@ -6,6 +6,7 @@ use ::{ValuePtr,Transaction};
 use record::Record;
 use serde_network::{Deserializer,Serializer,deserialize};
 use transaction;
+//use std::iter::Map;
 
 
 /// An owned transaction that owns the data as extracted from the db
@@ -55,8 +56,8 @@ impl DbTransaction {
         let output_count: u32 = de_tx.deserialize()?;
         let sig_ptr: ValuePtr = de_tx.deserialize()?;
 
-        let prev_outs: Vec<Record> = try!((0..input_count).map(|_|
-            de_tx.deserialize()).collect());
+        let prev_outs: Vec<Record> = (0..input_count).map(|_|
+            de_tx.deserialize()).collect()?;
 
         let txs_in: Result<Vec<_>,DbError> = prev_outs.iter().map(|rec|
             Ok(transaction::TxInput {

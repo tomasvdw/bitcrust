@@ -5,7 +5,7 @@ use Encode;
 
 #[cfg(test)]
 mod tests {
-    use ring::digest;
+    //use ring::digest;
     use super::*;
 
     #[test]
@@ -17,7 +17,7 @@ mod tests {
 
     #[test]
     fn it_creates_and_validates() {
-        let key = hmac::SigningKey::new(&digest::SHA256, &[0x00; 32]);
+        let key = hmac::Key::new(hmac::HMAC_SHA256, &[0x00; 32]);
         let m =  AuthenticatedBitcrustMessage::create(&key);
         assert!(m.valid(&key));
     }
@@ -30,7 +30,7 @@ pub struct AuthenticatedBitcrustMessage {
 }
 
 impl AuthenticatedBitcrustMessage {
-    pub fn create(key: &hmac::SigningKey) ->
+    pub fn create(key: &hmac::Key) ->
      AuthenticatedBitcrustMessage {
         let mut rng = rand::thread_rng();
 
@@ -52,8 +52,8 @@ impl AuthenticatedBitcrustMessage {
             signature: a
         }
     }
-    pub fn valid(&self, key: &hmac::SigningKey) -> bool {
-        hmac::verify_with_own_key(key, &self.nonce, &self.signature).is_ok()
+    pub fn valid(&self, key: &hmac::Key) -> bool {
+        hmac::verify(key, &self.nonce, &self.signature).is_ok()
     }
 
     pub fn len(&self) -> usize {

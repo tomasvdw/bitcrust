@@ -7,7 +7,7 @@ authors = [
 ]
 
 [dependencies]
-bitflags = "0.7"
+bitflags = "*"
 circular = "~0.2"
 byteorder = "1"
 log = "0.3"
@@ -15,9 +15,10 @@ multiqueue = "~0.3.2"
 # nom = "^2.2"
 rand = "0.3"
 regex = "*"
-ring = "0.12"
-rusqlite = "~0.11"
-sha2 = "0.5"
+ring = "0.16"
+#rusqlite = "~0.11"
+rusqlite = "0.24.2"
+sha2 = "*"
 encode-derive = {path = "../encode-derive"}
 
 [dependencies.nom]

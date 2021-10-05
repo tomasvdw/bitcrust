@@ -53,7 +53,7 @@ impl<'a> Context<'a> {
     }
 
     pub fn next_uint(&mut self, count: u64) -> Result<u64, ScriptError> { 
-        let bytes = try!(self.next_bytes(count));
+        let bytes = self.next_bytes(count)?;
 
         // parse as little endian
         Ok(bytes.iter().enumerate().fold(0, 

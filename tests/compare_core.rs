@@ -25,7 +25,7 @@ mod blk_file;
 const SKIP_FILES: usize = 0;
 
 fn blk_file_name(file_number: usize) -> String {
-    format!("/home/tomas/.bitcoin/blocks/blk{:05}.dat", file_number)
+    format!("~/.bitcoin/blocks/blk{:05}.dat", file_number)
 }
 
 /// A reference to a position in a blk file

@@ -20,13 +20,13 @@
 
 
 
-use std::path::{Path,PathBuf};
+use std::path::{PathBuf};
 use std::fs;
-use std::fs::File;
+//use std::fs::File;
 use std::io;
-use std::io::prelude::*;
+//use std::io::prelude::*;
 
-use util::*;
+//use util::*;
 use hash::*;
 use config;
 
@@ -39,7 +39,7 @@ pub struct Tips {
 pub fn add_tip(
     tips: &Tips,
     block_hash: Hash32Buf,
-    previous_hash: Option<Hash32Buf>,
+    _previous_hash: Option<Hash32Buf>,
     difficulty: u64,
     height: u64)
 {
@@ -87,7 +87,7 @@ impl Tips {
         unimplemented!()
     }
 
-    pub fn remove_tip(tip: Tip) {
+    pub fn remove_tip(_tip: Tip) {
         unimplemented!()
     }
 

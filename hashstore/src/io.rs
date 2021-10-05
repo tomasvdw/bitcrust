@@ -14,7 +14,7 @@ pub fn write_value<W: io::Write + io::Seek>(wr: &mut W, prefix: ValuePrefix, con
     -> Result<ValuePtr, HashStoreError>
 {
 
-    let mut buffer: Vec<u8> = bincode::serialize(&prefix, bincode::Infinite)?;
+    let mut buffer: Vec<u8> = bincode::serialize(&prefix)?;
     debug_assert!(buffer.len() == mem::size_of::<ValuePrefix>());
     buffer.extend_from_slice(content);
 

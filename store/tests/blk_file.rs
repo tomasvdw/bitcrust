@@ -92,7 +92,7 @@ fn read_block(rdr: &mut io::Read) -> Result<Option<Vec<u8>>, io::Error> {
     let mut buffer = vec![0; length as usize];
 
 
-    try!(rdr.read_exact(&mut buffer));
+    rdr.read_exact(&mut buffer)?;
 
 
     Ok(Some(buffer))

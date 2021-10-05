@@ -111,7 +111,7 @@ impl FlatFile {
             }
             thread::sleep(time::Duration::from_millis(50));
         }
-        panic!(format!("Data file '{:?}' exists but has invalid size", path))
+        panic!("Data file '{:?}' exists but has invalid size", path)
     }
 
 
@@ -177,12 +177,12 @@ impl FlatFile {
                 return None;
             }
 
-            let old_write_pos = write_ptr.compare_and_swap
-                (write_pos, write_pos + size, atomic::Ordering::Relaxed);
+            let old_write_pos = write_ptr.compare_exchange
+                (write_pos, write_pos + size, atomic::Ordering::Relaxed, atomic::Ordering::Relaxed);
 
             // Only if we are overwriting the old value we are ok; otherwise retry
-            if old_write_pos == write_pos {
-                return Some(old_write_pos)
+            if old_write_pos == Ok(write_pos) {
+                return Some(old_write_pos.unwrap())
             }
         }
 

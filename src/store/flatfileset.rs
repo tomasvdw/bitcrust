@@ -89,9 +89,9 @@ fn filename_to_fileno(prefix: &str, name: &Path) -> Result<i16, FilenameParseErr
 
     fn char_to_hex(byte: u8) -> Result<i16, FilenameParseError> {
         Ok(match byte {
-            b'A' ... b'F' => byte - b'A' + 10,
-            b'a' ... b'f' => byte - b'a' + 10,
-            b'0' ... b'9' => byte - b'0',
+            b'A' ..= b'F' => byte - b'A' + 10,
+            b'a' ..= b'f' => byte - b'a' + 10,
+            b'0' ..= b'9' => byte - b'0',
             _             => return Err(FilenameParseError)
         } as i16)
     }

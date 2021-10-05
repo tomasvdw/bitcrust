@@ -36,9 +36,9 @@ pub fn from_hex(str: &str) -> Vec<u8> {
         buf <<= 4;
 
         match byte {
-            b'A'...b'F' => buf |= byte - b'A' + 10,
-            b'a'...b'f' => buf |= byte - b'a' + 10,
-            b'0'...b'9' => buf |= byte - b'0',
+            b'A'..=b'F' => buf |= byte - b'A' + 10,
+            b'a'..=b'f' => buf |= byte - b'a' + 10,
+            b'0'..=b'9' => buf |= byte - b'0',
             b' '|b'\r'|b'\n'|b'\t' => {
                 buf >>= 4;
                 continue

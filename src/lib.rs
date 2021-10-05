@@ -1,11 +1,5 @@
 
 
-#![feature(link_args)]
-#![feature(custom_derive, plugin)]
-#![feature(integer_atomics)]
-
-
-
 
 extern crate memmap;
 extern crate itertools;
@@ -43,6 +37,7 @@ mod config;
 mod merkle_tree;
 mod block_add;
 mod api;
+
 
 
 pub use store::Store;

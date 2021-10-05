@@ -346,10 +346,10 @@ impl<'a> Parse<'a> for TxInput<'a> {
     fn parse(buffer: &mut Buffer<'a>) -> Result<TxInput<'a>, EndOfBufferError> {
 
         Ok(TxInput {
-            prev_tx_out:     try!(Hash32::parse(buffer)),
-            prev_tx_out_idx: try!(u32::parse(buffer)),
-            script:          try!(buffer.parse_compact_size_bytes()),
-            sequence:        try!(u32::parse(buffer))
+            prev_tx_out: Hash32::parse(buffer)?,
+            prev_tx_out_idx: u32::parse(buffer)?,
+            script: buffer.parse_compact_size_bytes()?,
+            sequence: u32::parse(buffer)?
         })
 
     }
@@ -377,10 +377,10 @@ impl<'a> Parse<'a> for TxOutput<'a> {
 
 impl<'a> fmt::Debug for TxInput<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        try!(write!(fmt, "Prev-TX:{:?}, idx={:?}, seq={:?} script=",
+        write!(fmt, "Prev-TX:{:?}, idx={:?}, seq={:?} script=",
             self.prev_tx_out,
             self.prev_tx_out_idx,
-            self.sequence));
+            self.sequence)?;
         
         let ctx = context::Context::new(&self.script);
         write!(fmt, "{:?}", ctx)
@@ -392,7 +392,7 @@ impl<'a> fmt::Debug for TxInput<'a> {
 impl<'a> fmt::Debug for TxOutput<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 
-        try!(write!(fmt, "v:{:?} ", self.value));
+        write!(fmt, "v:{:?} ", self.value)?;
         
         let ctx = context::Context::new(&self.pk_script);
         write!(fmt, "{:?}", ctx)
@@ -448,7 +448,7 @@ impl ::std::iter::Sum for TransactionStats {
 impl ::std::fmt::Debug for TransactionStats {
     fn fmt(&self, fmt: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
 
-        fn disp(d: Duration) -> u64 { d.as_secs() * 1_000_000 + d.subsec_nanos() as u64 / 1_000};
+        fn disp(d: Duration) -> u64 { d.as_secs() * 1_000_000 + d.subsec_nanos() as u64 / 1_000}
 
         write!(fmt, "m,c,h: {},{},{} | wr:{},{} | rd:{},{} | s:{}, bt:{}",
                disp(self.merkle), disp(self.cloning), disp(self.hashing),

@@ -119,14 +119,13 @@ impl IndexPtr {
 
         let atomic_self: *mut atomic::AtomicU64 = unsafe { mem::transmute( self ) };
 
-        let prev = unsafe {
-            (*atomic_self).compare_and_swap(
+        unsafe {
+            (*atomic_self).compare_exchange(
                 mem::transmute(current_value),
                 mem::transmute(new_value),
-                atomic::Ordering::Relaxed)
-        };
-
-        prev == unsafe { mem::transmute(current_value) }
+                atomic::Ordering::Relaxed,
+                atomic::Ordering::Relaxed).is_ok()
+        }
 
     }
 }
