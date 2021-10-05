@@ -54,10 +54,10 @@ impl DbTransaction {
 
         let input_count: u32  = de_tx.deserialize()?;
         let output_count: u32 = de_tx.deserialize()?;
-     //   let sig_ptr: ValuePtr = de_tx.deserialize()?;
+        let sig_ptr: ValuePtr = de_tx.deserialize()?;
 
-        let prev_outs: Vec<Record> = r#try!((0..input_count).map(|_|
-            de_tx.deserialize()).collect());
+        let prev_outs: Vec<Record> = (0..input_count).map(|_|
+            de_tx.deserialize()).collect()?;
 
         let txs_in: Result<Vec<_>,DbError> = prev_outs.iter().map(|rec|
             Ok(transaction::TxInput {

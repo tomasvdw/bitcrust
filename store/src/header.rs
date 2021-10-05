@@ -1,7 +1,7 @@
 
 use hash::*;
 
-//use serde_network;
+use serde_network;
 
 /// Header represents the header of a block
 #[derive(Debug, Clone, Serialize, Deserialize)]

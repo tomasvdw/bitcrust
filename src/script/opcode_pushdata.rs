@@ -47,7 +47,9 @@ pub fn disp_pushdata_count_by_opcode(ctx: &mut Context,  writer: &mut dyn io::Wr
 
 pub fn op_pushdata_value_by_opcode(ctx: &mut Context) -> Result<(), ScriptError> {
     let value = ctx.script1[ctx.ip] as i32 - 0x80_i32;
-    ctx.stack.push(Box::new([[value as u8][0]])) // DJC TODO: need to check this fix. used to be just [value as u8], but value is [u8,1]
+    let instr = [value as u8;1];
+    ctx.stack.push(Box::new(*instr))
+
 }
 
 

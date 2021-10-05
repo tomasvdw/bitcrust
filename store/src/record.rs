@@ -48,7 +48,7 @@ impl Record {
 
     pub fn new_coinbase() -> Record {
 
-        Record(1<<63)
+        Record((1<<63))
     }
 
     pub fn new_output(tx_ptr: ::ValuePtr, output: u32) -> Record {
