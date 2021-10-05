@@ -46,9 +46,8 @@ pub fn disp_pushdata_count_by_opcode(ctx: &mut Context,  writer: &mut dyn io::Wr
 }
 
 pub fn op_pushdata_value_by_opcode(ctx: &mut Context) -> Result<(), ScriptError> {
-    let value = ctx.script1[ctx.ip] as i32 - 0x80_i32;
-    let instr = [value as u8;1];
-    ctx.stack.push(Box::new(*instr))
+    let value = (ctx.script1[ctx.ip] as i32 - 0x80_i32) as u8;
+    ctx.stack.push(Box::new([value]))
 
 }
 
