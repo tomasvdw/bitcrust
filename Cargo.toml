@@ -41,7 +41,7 @@ opt-level = 3
 default = []
 
 [workspace]
-# members = [ "bitcrustd", "monitor", "net", "encode-derive", "store", "hashstore"]
-members = [ "store", "hashstore"]
+members = [ "bitcrustd", "monitor", "net", "encode-derive", "store", "hashstore"]
+
 
 
